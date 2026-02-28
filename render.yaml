@@ -11,11 +11,5 @@ services:
         value: production
       - key: TRUST_PROXY
         value: "true"
-      - key: STS_DATA_DIR
-        value: /var/data
       - key: ADMIN_ACCESS_KEY
         sync: false
-    disk:
-      name: sts-data
-      mountPath: /var/data
-      sizeGB: 5
