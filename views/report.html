@@ -21,7 +21,7 @@
     <div class="card">
       <div class="card-title">สาเหตุการขาดเรียน</div>
       <div class="form-group">
-        <label>ประเภทสาเหตุ *</label>
+        <label for="cause_category">ประเภทสาเหตุ *</label>
         <select id="cause_category">
           <option value="">-- เลือกสาเหตุ --</option>
           <option value="POVERTY">ปัญหาความยากจน</option>
@@ -32,7 +32,7 @@
         </select>
       </div>
       <div class="form-group">
-        <label>รายละเอียดเพิ่มเติม</label>
+        <label for="cause_detail">รายละเอียดเพิ่มเติม</label>
         <textarea id="cause_detail" placeholder="อธิบายสาเหตุเพิ่มเติม..."></textarea>
       </div>
     </div>
@@ -44,12 +44,13 @@
         📷 เลือกรูปจากอัลบั้ม / ถ่ายรูป
       </label>
       <div class="preview-list" id="preview-list"></div>
-      <small style="display:block;margin-top:4px;color:var(--gray-400);">รองรับสูงสุด 5 รูป (เลือกจากแกลลอรี่ หรือถ่ายรูปใหม่ได้)</small>
+      <small>รองรับสูงสุด 5 รูป (เลือกจากแกลลอรี่ หรือถ่ายรูปใหม่ได้)</small>
     </div>
 
     <div class="card">
       <div class="card-title">ข้อเสนอแนะ</div>
       <div class="form-group">
+        <label for="recommendation">รายละเอียดข้อเสนอแนะ</label>
         <textarea id="recommendation" placeholder="เช่น แนะนำให้ส่งต่อขอทุนการศึกษา..."></textarea>
       </div>
     </div>

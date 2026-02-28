@@ -46,7 +46,34 @@
         <div class="card-title">ข้อมูลรายงานการลงพื้นที่</div>
         <div id="submission-detail"></div>
         <div id="submission-photos" class="photo-grid"></div>
-        <div id="submission-map" style="height:250px;border-radius:var(--radius);margin-top:12px;"></div>
+        <div id="submission-map" class="submission-map"></div>
+      </div>
+
+      <div id="review-card" class="card hidden">
+        <div class="card-title">การประเมินโดยผู้ดูแล/ผอ.</div>
+        <div id="review-status" class="mb-16"></div>
+        <div class="form-group">
+          <label for="reviewed-by">ผู้ประเมิน</label>
+          <input type="text" id="reviewed-by" placeholder="เช่น ผอ. โรงเรียนบ้านหนองไผ่" value="ผอ.">
+        </div>
+        <div class="form-group">
+          <label for="review-action">ผลการประเมิน</label>
+          <select id="review-action">
+            <option value="ASSIST">ให้ความช่วยเหลือ</option>
+            <option value="FORWARD">ส่งต่อหน่วยงาน/ผู้เกี่ยวข้อง</option>
+            <option value="CLOSE">ปิดเคส</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="review-note">หมายเหตุการประเมิน</label>
+          <textarea id="review-note" placeholder="ระบุแนวทางช่วยเหลือ/เหตุผลการปิดเคส"></textarea>
+        </div>
+        <button id="review-submit-btn" class="btn btn-primary">บันทึกผลการประเมิน</button>
+      </div>
+
+      <div id="review-history-card" class="card hidden">
+        <div class="card-title">ประวัติการประเมิน</div>
+        <div id="review-history"></div>
       </div>
     </div>
 

@@ -126,6 +126,8 @@ CREATE TABLE task_submissions (
 | `GET` | `/api/tasks/:token` | ดึงข้อมูลภารกิจจาก token |
 | `POST` | `/api/tasks/:token/delegate` | ส่งต่อภารกิจ |
 | `POST` | `/api/tasks/:token/submit` | ส่งรายงาน + อัปโหลดรูป |
+| `POST` | `/api/cases/:caseId/review` | ผอ./ผู้ดูแลบันทึกผลประเมิน (ASSIST/FORWARD/CLOSE) |
+| `GET` | `/api/cases/:caseId/reviews` | ดูประวัติการประเมินเคส |
 | `GET` | `/api/tasks/:taskId/chain` | ดึง Delegation Chain |
 | `GET` | `/api/cases` | ดึงรายการเคสทั้งหมด (Dashboard) |
 
@@ -144,7 +146,7 @@ CREATE TABLE task_submissions (
 2. เห็นข้อมูลเด็ก + แผนที่ตำแหน่งบ้าน
 3. กด "ลงพื้นที่เอง" → เปิดหน้า Report Form
 4. กรอกสาเหตุ + ถ่ายรูป + ระบบดึง GPS
-5. กด "ส่งรายงาน" → เปลี่ยนสถานะเป็น COMPLETED
+5. กด "ส่งรายงาน" → เคสเข้า `PENDING_REVIEW` เพื่อรอ ผอ.ประเมิน
 
 ### Flow C: รับลิงก์ + ส่งต่อให้คนอื่น
 1. ผู้รับกดลิงก์ → เปิดหน้า Task View
@@ -157,6 +159,13 @@ CREATE TABLE task_submissions (
 1. ผอ. เปิด Dashboard → เห็นสถานะเคสอัปเดต
 2. คลิกดูรายละเอียด → เห็น Delegation Chain (Timeline)
 3. เห็นว่าใครส่งต่อให้ใคร + ข้อมูลรายงาน + รูปถ่าย + พิกัด
+
+### Flow E: ผอ. ประเมินผลหลังลงพื้นที่
+1. เคสที่มีรายงานแล้วจะขึ้นสถานะ `PENDING_REVIEW`
+2. ผอ. เปิดหน้า Task Detail แล้วเลือกผลประเมิน
+3. เลือกได้ 3 ทาง: `ASSIST` / `FORWARD` / `CLOSE`
+4. บันทึกหมายเหตุการประเมิน
+5. ถ้าเลือก `CLOSE` เคสเป็น `RESOLVED`, หากเลือกอื่นเคสกลับไป `IN_PROGRESS`
 
 ---
 
@@ -243,6 +252,16 @@ CREATE TABLE task_submissions (
 - [x] ทดสอบบนมือถือจริง (หรือ Chrome DevTools mobile mode)
 - [x] UI สวยงาม อ่านง่าย ใช้สีและ icon สื่อความหมาย
 
+### Phase 9: Director Review Workflow (ผอ.ประเมินหลังรายงาน)
+- [x] เพิ่มสถานะเคส `PENDING_REVIEW`
+- [x] ปรับ submit flow: ส่งรายงานแล้วเข้ารอประเมิน (ไม่ปิดเคสทันที)
+- [x] เพิ่มตาราง `case_reviews` เก็บผลประเมิน + หมายเหตุ + ผู้ประเมิน + เวลา
+- [x] เพิ่ม API `POST /api/cases/:caseId/review` (ASSIST/FORWARD/CLOSE)
+- [x] เพิ่ม API `GET /api/cases/:caseId/reviews`
+- [x] เพิ่ม UI หน้า Task Detail ให้ผอ.เลือกผลประเมินและดูประวัติ
+- [x] อัปเดต Dashboard badge/stats รองรับเคสรอประเมิน
+- [x] ทดสอบ e2e flow ใหม่ร่วมกับ flow เดิม
+
 ---
 
 ## 8. โครงสร้างโฟลเดอร์ (Proposed)
@@ -316,4 +335,4 @@ node server.js
 
 ---
 
-*Last updated: February 28, 2026*
+*Last updated: February 28, 2026 (Director Review workflow added)*

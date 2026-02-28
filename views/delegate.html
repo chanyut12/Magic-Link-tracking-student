@@ -16,15 +16,15 @@
     <div id="form-section">
       <div class="card">
         <div class="form-group">
-          <label>ชื่อผู้รับงานคนใหม่ *</label>
+          <label for="new_assignee_name">ชื่อผู้รับงานคนใหม่ *</label>
           <input type="text" id="new_assignee_name" placeholder="เช่น อสม. สมหญิง">
         </div>
         <div class="form-group">
-          <label>เบอร์โทรศัพท์</label>
+          <label for="new_assignee_phone">เบอร์โทรศัพท์</label>
           <input type="tel" id="new_assignee_phone" placeholder="เช่น 089-876-5432">
         </div>
         <div class="form-group">
-          <label>อายุลิงก์ใหม่</label>
+          <label for="expires_value">อายุลิงก์ใหม่</label>
           <div class="expiry-row">
             <input type="number" id="expires_value" value="1" min="1" max="90">
             <select id="expires_unit">
@@ -43,7 +43,7 @@
     <div id="result-section" class="hidden">
       <div class="card">
         <div class="alert alert-success">ส่งต่อภารกิจสำเร็จ!</div>
-        <p style="font-size:0.9rem;color:var(--gray-500);margin-bottom:12px;">กรุณาส่งลิงก์ด้านล่างให้ผู้รับงานคนใหม่</p>
+        <p class="hint-text mb-12">กรุณาส่งลิงก์ด้านล่างให้ผู้รับงานคนใหม่</p>
         <div class="card-title">Magic Link ใหม่</div>
         <div class="magic-link-box" id="magic-link"></div>
         <button id="copy-btn" class="btn btn-outline">📋 คัดลอกลิงก์</button>

@@ -5,11 +5,15 @@ const multer = require('multer');
 const path = require('path');
 const QRCode = require('qrcode');
 const db = require('../db/database');
+const { requireAdminApi } = require('../utils/admin-auth');
+const { getUploadsDir, ensureDir } = require('../utils/storage-paths');
 
 const router = express.Router();
+const uploadsDir = getUploadsDir();
+ensureDir(uploadsDir);
 
 const storage = multer.diskStorage({
-  destination: path.join(__dirname, '..', 'uploads'),
+  destination: uploadsDir,
   filename: (req, file, cb) => {
     const ext = path.extname(file.originalname);
     cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
@@ -90,11 +94,29 @@ function ensureTaskLinkAdminColumns() {
 
 ensureTaskLinkAdminColumns();
 
+function ensureCaseReviewsTable() {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS case_reviews (
+      id TEXT PRIMARY KEY,
+      case_id INTEGER REFERENCES cases(id) ON DELETE CASCADE,
+      review_action TEXT NOT NULL,
+      review_note TEXT,
+      reviewed_by TEXT,
+      reviewed_at TEXT DEFAULT (datetime('now','localtime'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_case_reviews_case_id ON case_reviews(case_id);
+    CREATE INDEX IF NOT EXISTS idx_case_reviews_reviewed_at ON case_reviews(reviewed_at);
+  `);
+}
+
+ensureCaseReviewsTable();
+
 // GET /api/stats
-router.get('/stats', (req, res) => {
+router.get('/stats', requireAdminApi, (req, res) => {
   const total = db.prepare(`SELECT COUNT(*) as count FROM cases`).get().count;
   const open = db.prepare(`SELECT COUNT(*) as count FROM cases WHERE status = 'OPEN'`).get().count;
   const inProgress = db.prepare(`SELECT COUNT(*) as count FROM cases WHERE status = 'IN_PROGRESS'`).get().count;
+  const pendingReview = db.prepare(`SELECT COUNT(*) as count FROM cases WHERE status = 'PENDING_REVIEW'`).get().count;
   const resolved = db.prepare(`SELECT COUNT(*) as count FROM cases WHERE status = 'RESOLVED'`).get().count;
   const activeDelegations = db.prepare(`SELECT COUNT(*) as count FROM task_links WHERE status = 'ACTIVE' AND COALESCE(admin_locked, 0) = 0`).get().count;
   const totalDelegations = db.prepare(`SELECT COUNT(*) as count FROM task_links WHERE delegation_depth > 0`).get().count;
@@ -103,11 +125,20 @@ router.get('/stats', (req, res) => {
   todayStart.setHours(0, 0, 0, 0);
   const createdToday = db.prepare(`SELECT COUNT(*) as count FROM cases WHERE created_at >= ?`).get(todayStart.toISOString()).count;
 
-  res.json({ total, open, in_progress: inProgress, resolved, active_delegations: activeDelegations, total_delegations: totalDelegations, created_today: createdToday });
+  res.json({
+    total,
+    open,
+    in_progress: inProgress,
+    pending_review: pendingReview,
+    resolved,
+    active_delegations: activeDelegations,
+    total_delegations: totalDelegations,
+    created_today: createdToday
+  });
 });
 
 // GET /api/cases
-router.get('/cases', (req, res) => {
+router.get('/cases', requireAdminApi, (req, res) => {
   const cases = db.prepare(`
     SELECT c.*, t.id as task_id, t.status as task_status,
       tl.id as active_link_id,
@@ -115,7 +146,35 @@ router.get('/cases', (req, res) => {
       tl.assigned_to_name as link_assigned_to,
       COALESCE(tl.admin_locked, 0) as active_link_locked,
       tl.admin_lock_reason as active_link_lock_reason,
-      tl.admin_lock_at as active_link_lock_at
+      tl.admin_lock_at as active_link_lock_at,
+      (
+        SELECT cr.review_action
+        FROM case_reviews cr
+        WHERE cr.case_id = c.id
+        ORDER BY datetime(cr.reviewed_at) DESC
+        LIMIT 1
+      ) as latest_review_action,
+      (
+        SELECT cr.review_note
+        FROM case_reviews cr
+        WHERE cr.case_id = c.id
+        ORDER BY datetime(cr.reviewed_at) DESC
+        LIMIT 1
+      ) as latest_review_note,
+      (
+        SELECT cr.reviewed_by
+        FROM case_reviews cr
+        WHERE cr.case_id = c.id
+        ORDER BY datetime(cr.reviewed_at) DESC
+        LIMIT 1
+      ) as latest_reviewed_by,
+      (
+        SELECT cr.reviewed_at
+        FROM case_reviews cr
+        WHERE cr.case_id = c.id
+        ORDER BY datetime(cr.reviewed_at) DESC
+        LIMIT 1
+      ) as latest_reviewed_at
     FROM cases c
     LEFT JOIN tasks t ON t.case_id = c.id
     LEFT JOIN task_links tl ON tl.task_id = t.id AND tl.status = 'ACTIVE'
@@ -125,7 +184,7 @@ router.get('/cases', (req, res) => {
 });
 
 // POST /api/tasks
-router.post('/tasks', async (req, res) => {
+router.post('/tasks', requireAdminApi, async (req, res) => {
   const studentName = clean(req.body.student_name);
   const assignedName = clean(req.body.assigned_to_name);
 
@@ -322,7 +381,7 @@ router.post('/tasks/:token/submit', upload.array('photos', 5), (req, res) => {
 
     db.prepare(`UPDATE task_links SET status = 'COMPLETED' WHERE id = ?`).run(link.id);
     db.prepare(`UPDATE tasks SET status = 'COMPLETED' WHERE id = ?`).run(link.task_id);
-    db.prepare(`UPDATE cases SET status = 'RESOLVED' WHERE id = (SELECT case_id FROM tasks WHERE id = ?)`).run(link.task_id);
+    db.prepare(`UPDATE cases SET status = 'PENDING_REVIEW' WHERE id = (SELECT case_id FROM tasks WHERE id = ?)`).run(link.task_id);
   });
   submitTx();
 
@@ -330,7 +389,7 @@ router.post('/tasks/:token/submit', upload.array('photos', 5), (req, res) => {
 });
 
 // POST /api/task-links/:linkId/admin-lock
-router.post('/task-links/:linkId/admin-lock', (req, res) => {
+router.post('/task-links/:linkId/admin-lock', requireAdminApi, (req, res) => {
   const { linkId } = req.params;
   const action = String(req.body.action || '').trim();
   const reason = clean(req.body.reason);
@@ -366,11 +425,69 @@ router.post('/task-links/:linkId/admin-lock', (req, res) => {
   return res.json({ message: 'Link unlocked by admin', link_id: linkId, admin_locked: 0 });
 });
 
+// POST /api/cases/:caseId/review
+router.post('/cases/:caseId/review', requireAdminApi, (req, res) => {
+  const caseId = parseInt(req.params.caseId);
+  const reviewAction = String(req.body.review_action || '').trim().toUpperCase();
+  const reviewNote = clean(req.body.review_note);
+  const reviewedBy = clean(req.body.reviewed_by) || 'ผอ.';
+  const validActions = ['ASSIST', 'FORWARD', 'CLOSE'];
+
+  if (!caseId) return res.status(400).json({ error: 'Invalid case id' });
+  if (!validActions.includes(reviewAction)) {
+    return res.status(400).json({ error: 'review_action must be ASSIST, FORWARD, or CLOSE' });
+  }
+
+  const caseRow = db.prepare(`SELECT * FROM cases WHERE id = ?`).get(caseId);
+  if (!caseRow) return res.status(404).json({ error: 'Case not found' });
+  if (caseRow.status !== 'PENDING_REVIEW' && caseRow.status !== 'IN_PROGRESS') {
+    return res.status(400).json({ error: 'Case is not in reviewable status' });
+  }
+
+  const reviewId = uuidv4();
+  const reviewedAt = new Date().toISOString();
+  const nextStatus = reviewAction === 'CLOSE' ? 'RESOLVED' : 'IN_PROGRESS';
+
+  const tx = db.transaction(() => {
+    db.prepare(`
+      INSERT INTO case_reviews (id, case_id, review_action, review_note, reviewed_by, reviewed_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(reviewId, caseId, reviewAction, reviewNote, reviewedBy, reviewedAt);
+    db.prepare(`UPDATE cases SET status = ? WHERE id = ?`).run(nextStatus, caseId);
+  });
+  tx();
+
+  res.json({
+    message: 'Case review saved',
+    case_id: caseId,
+    review_id: reviewId,
+    review_action: reviewAction,
+    case_status: nextStatus
+  });
+});
+
+// GET /api/cases/:caseId/reviews
+router.get('/cases/:caseId/reviews', requireAdminApi, (req, res) => {
+  const caseId = parseInt(req.params.caseId);
+  if (!caseId) return res.status(400).json({ error: 'Invalid case id' });
+  const rows = db.prepare(`
+    SELECT * FROM case_reviews
+    WHERE case_id = ?
+    ORDER BY datetime(reviewed_at) DESC
+  `).all(caseId);
+  res.json({ case_id: caseId, reviews: rows });
+});
+
 // GET /api/tasks/:taskId/chain
-router.get('/tasks/:taskId/chain', (req, res) => {
+router.get('/tasks/:taskId/chain', requireAdminApi, (req, res) => {
   const { taskId } = req.params;
 
-  const task = db.prepare(`SELECT t.*, c.student_name, c.student_school, c.reason_flagged FROM tasks t JOIN cases c ON c.id = t.case_id WHERE t.id = ?`).get(taskId);
+  const task = db.prepare(`
+    SELECT t.*, c.student_name, c.student_school, c.reason_flagged, c.status as case_status
+    FROM tasks t
+    JOIN cases c ON c.id = t.case_id
+    WHERE t.id = ?
+  `).get(taskId);
   if (!task) return res.status(404).json({ error: 'Task not found' });
 
   const links = db.prepare(`
@@ -384,6 +501,12 @@ router.get('/tasks/:taskId/chain', (req, res) => {
     return { ...link, submission: submission || null };
   });
 
+  const reviews = db.prepare(`
+    SELECT * FROM case_reviews
+    WHERE case_id = ?
+    ORDER BY datetime(reviewed_at) DESC
+  `).all(task.case_id);
+
   res.json({
     task_id: task.id,
     case_id: task.case_id,
@@ -391,7 +514,9 @@ router.get('/tasks/:taskId/chain', (req, res) => {
     student_school: task.student_school,
     reason_flagged: task.reason_flagged,
     task_status: task.status,
-    chain
+    case_status: task.case_status,
+    chain,
+    reviews
   });
 });
 

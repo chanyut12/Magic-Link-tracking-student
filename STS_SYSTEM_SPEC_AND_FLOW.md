@@ -76,7 +76,7 @@ flowchart LR
 2. ไปหน้ารายงาน `/task/:token/report`
 3. กรอกข้อมูล + แนบรูป + GPS
 4. ระบบบันทึก submission
-5. อัปเดตสถานะลิงก์เป็น `COMPLETED`, เคสเป็น `RESOLVED`
+5. อัปเดตสถานะลิงก์เป็น `COMPLETED`, เคสเป็น `PENDING_REVIEW`
 
 ### Flow C: ผู้รับงานเลือก "ส่งต่อ"
 1. เปิดลิงก์เดิม (ต้อง ACTIVE)
@@ -91,6 +91,13 @@ flowchart LR
 3. ลิงก์ถูก block ทันที (แม้ยังไม่หมดเวลา)
 4. หากต้องการ กด `เปิดลิงก์` เพื่อใช้งานต่อ
 
+### Flow E: ผอ./ผู้ดูแลประเมินผลหลังลงพื้นที่
+1. เคสที่รายงานเสร็จจะขึ้นสถานะ `PENDING_REVIEW`
+2. ผอ.เข้า Task Detail แล้วเลือกผลประเมิน
+3. เลือกได้ 3 ทาง: `ASSIST`, `FORWARD`, `CLOSE`
+4. บันทึกหมายเหตุ + ผู้ประเมิน + เวลาประเมิน
+5. ถ้าเลือก `CLOSE` เคสจะเป็น `RESOLVED`, หากเลือกอื่นจะกลับไป `IN_PROGRESS`
+
 ---
 
 ## 6) Flow Diagram (End-to-End)
@@ -103,7 +110,10 @@ flowchart TD
   U -->|ส่งต่อ| D1[ปิดลิงก์เดิมเป็น DELEGATED]
   D1 --> L2[สร้างลิงก์ใหม่ ACTIVE]
   L2 --> U
-  R --> C[เคส RESOLVED]
+  R --> PR[เคส PENDING_REVIEW]
+  PR --> ADM{ผอ.ประเมิน}
+  ADM -->|ASSIST/FORWARD| IP[เคส IN_PROGRESS]
+  ADM -->|CLOSE| C[เคส RESOLVED]
 ```
 
 ---
@@ -145,6 +155,9 @@ stateDiagram-v2
 - `status` (ACTIVE/DELEGATED/COMPLETED/EXPIRED) คือ lifecycle หลักของลิงก์
 - `admin_locked` เป็น gate เพิ่มเติมที่ block การใช้งาน แม้ status ยังเป็น ACTIVE
 
+Case status lifecycle:
+- `OPEN` -> `IN_PROGRESS` -> `PENDING_REVIEW` -> (`IN_PROGRESS` หรือ `RESOLVED`)
+
 ---
 
 ## 9) API Summary (สำคัญ)
@@ -153,6 +166,8 @@ stateDiagram-v2
 - `GET /api/tasks/:token` — เปิดดูงานจาก token (validate หมดอายุ/ถูกปิด/ถูกใช้แล้ว)
 - `POST /api/tasks/:token/delegate` — ส่งต่อภารกิจ
 - `POST /api/tasks/:token/submit` — ส่งรายงานภาคสนาม
+- `POST /api/cases/:caseId/review` — ผอ.บันทึกผลประเมิน (ASSIST/FORWARD/CLOSE)
+- `GET /api/cases/:caseId/reviews` — ดึงประวัติการประเมินเคส
 - `GET /api/tasks/:taskId/chain` — ดู delegation chain
 - `GET /api/cases` — ข้อมูล dashboard รวม active link
 - `GET /api/stats` — ตัวเลข summary
@@ -167,6 +182,7 @@ stateDiagram-v2
 - `task_links` — ลิงก์แต่ละทอด (self-reference ผ่าน `parent_link_id`)
   - ฟิลด์สำคัญเพิ่มล่าสุด: `admin_locked`, `admin_lock_reason`, `admin_lock_at`
 - `task_submissions` — รายงานที่ส่งจากลิงก์ปลายทาง
+- `case_reviews` — ประวัติผลประเมินของผอ./ผู้ดูแลต่อแต่ละเคส
 
 ---
 
@@ -181,6 +197,7 @@ stateDiagram-v2
 - ✅ รองรับมือถือ
 - ✅ แชร์ผ่าน LINE (เว็บแชร์ + mobile flow)
 - ✅ ผู้ดูแลปิด/เปิดลิงก์ + เหตุผล
+- ✅ ผอ./ผู้ดูแลประเมินผลหลังลงพื้นที่ (ASSIST/FORWARD/CLOSE)
 - ✅ ทดสอบ end-to-end หลักครบ
 
 ---

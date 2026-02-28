@@ -44,6 +44,10 @@
         <span class="stat-pill-value badge badge-open" id="stat-open">-</span>
       </div>
       <div class="stat-pill">
+        <span class="stat-pill-label">รอผอ.ประเมิน</span>
+        <span class="stat-pill-value badge badge-progress" id="stat-pending-review">-</span>
+      </div>
+      <div class="stat-pill">
         <span class="stat-pill-label">ลิงก์ที่ยัง Active</span>
         <span class="stat-pill-value badge badge-active" id="stat-active-links">-</span>
       </div>
@@ -53,15 +57,36 @@
       </div>
     </div>
 
-    <div class="card" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
-      <h2 class="card-title" style="margin:0;">รายการเคสทั้งหมด</h2>
-      <a href="/create" class="btn btn-primary" style="width:auto;">+ สร้างภารกิจใหม่</a>
+    <div class="card dashboard-toolbar">
+      <h2 class="card-title dashboard-toolbar-title">รายการเคสทั้งหมด</h2>
+      <a href="/create" class="btn btn-primary btn-auto">+ สร้างภารกิจใหม่</a>
+    </div>
+
+    <div class="card dashboard-filter-card">
+      <div class="dashboard-filter-row">
+        <div class="dashboard-filter-mode">
+          <button type="button" id="filter-mode-all" class="filter-chip filter-chip-active">ทั้งหมด</button>
+          <button type="button" id="filter-mode-exec" class="filter-chip">โหมดผู้บริหาร/ผอ.</button>
+        </div>
+        <div class="dashboard-filter-select">
+          <label for="status-filter">สถานะ</label>
+          <select id="status-filter">
+            <option value="ALL">ทุกสถานะ</option>
+            <option value="PENDING_REVIEW">รอผอ.ประเมิน</option>
+            <option value="OPEN">เปิดเคส</option>
+            <option value="IN_PROGRESS">กำลังดำเนินการ</option>
+            <option value="RESOLVED">ปิดเคสแล้ว</option>
+            <option value="COMPLETED">ลงพื้นที่สำเร็จ (สถานะเดิม)</option>
+          </select>
+        </div>
+      </div>
+      <div id="filter-summary" class="filter-summary">แสดงทั้งหมด</div>
     </div>
 
     <div id="loading" class="loader"><div class="spinner"></div></div>
     <div id="empty" class="empty-state hidden">
       <div class="icon">📋</div>
-      <p>ยังไม่มีเคส — กด "สร้างภารกิจใหม่" เพื่อเริ่มต้น</p>
+      <p id="empty-message">ยังไม่มีเคส — กด "สร้างภารกิจใหม่" เพื่อเริ่มต้น</p>
     </div>
 
     <div id="table-wrap" class="table-wrap hidden">
@@ -82,6 +107,8 @@
         <tbody id="cases-body"></tbody>
       </table>
     </div>
+
+    <div id="mobile-list" class="mobile-case-list hidden"></div>
   </div>
 
   <script src="/js/dashboard.js"></script>
