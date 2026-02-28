@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>STS — ภารกิจลงพื้นที่</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+</head>
+<body>
+  <div class="header">
+    <h1>ภารกิจลงพื้นที่</h1>
+    <div class="header-sub" id="header-assignee"></div>
+  </div>
+
+  <div class="container">
+    <div id="loading" class="loader"><div class="spinner"></div></div>
+    <div id="error-section" class="hidden"></div>
+
+    <div id="content" class="hidden">
+      <div class="card">
+        <div class="card-title">ข้อมูลนักเรียน</div>
+        <div class="info-row">
+          <span class="label">ชื่อ</span>
+          <span class="value" id="student-name"></span>
+        </div>
+        <div class="info-row">
+          <span class="label">โรงเรียน</span>
+          <span class="value" id="student-school"></span>
+        </div>
+        <div class="info-row">
+          <span class="label">ที่อยู่</span>
+          <span class="value" id="student-address"></span>
+        </div>
+        <div class="info-row">
+          <span class="label">สาเหตุ</span>
+          <span class="value" id="reason-flagged"></span>
+        </div>
+        <div class="info-row">
+          <span class="label">ส่งต่อแล้ว</span>
+          <span class="value" id="depth-info"></span>
+        </div>
+      </div>
+
+      <div id="map-card" class="card hidden">
+        <div class="card-title">ตำแหน่งบ้านนักเรียน</div>
+        <div id="map"></div>
+        <a id="gmaps-link" class="btn btn-outline mt-8" target="_blank" rel="noopener">
+          🗺️ เปิดใน Google Maps
+        </a>
+      </div>
+
+      <div class="btn-group" id="actions">
+        <a id="btn-execute" class="btn btn-success">📍 ลงพื้นที่เอง</a>
+        <a id="btn-delegate" class="btn btn-warning">🔄 มอบหมายให้ผู้อื่น</a>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="/js/task-view.js"></script>
+</body>
+</html>

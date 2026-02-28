@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>STS — สร้างภารกิจ</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+</head>
+<body>
+  <div class="header">
+    <h1>สร้างภารกิจลงพื้นที่</h1>
+    <div class="header-sub">กรอกข้อมูลเด็กและผู้รับงาน</div>
+  </div>
+
+  <div class="container">
+    <!-- Form -->
+    <div id="form-section">
+      <div class="card">
+        <div class="card-title">ข้อมูลนักเรียน</div>
+        <div class="form-group">
+          <label>ชื่อ-สกุล นักเรียน *</label>
+          <input type="text" id="student_name" placeholder="เช่น ด.ช. สมชาย ดีใจ" required>
+        </div>
+        <div class="form-group">
+          <label>โรงเรียน</label>
+          <input type="text" id="student_school" placeholder="เช่น โรงเรียนบ้านหนองไผ่">
+        </div>
+        <div class="form-group">
+          <label>ที่อยู่</label>
+          <textarea id="student_address" placeholder="ที่อยู่บ้านนักเรียน"></textarea>
+        </div>
+        <div class="form-group">
+          <label>พิกัดบ้านนักเรียน (คลิกบนแผนที่ หรือพิมพ์เอง)</label>
+          <button type="button" id="locate-btn" class="map-locate-btn">📍 ใช้ตำแหน่งของฉัน</button>
+          <div id="picker-map"></div>
+          <div class="expiry-row">
+            <input type="number" step="any" id="student_lat" placeholder="Latitude">
+            <input type="number" step="any" id="student_lng" placeholder="Longitude">
+          </div>
+          <small>คลิกบนแผนที่เพื่อวางหมุด หรือกรอกพิกัดด้วยตัวเอง</small>
+        </div>
+        <div class="form-group">
+          <label>สาเหตุที่ถูก Flag</label>
+          <input type="text" id="reason_flagged" placeholder="เช่น ขาดเรียนติดต่อกัน 5 วัน">
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">ผู้รับภารกิจ</div>
+        <div class="form-group">
+          <label>ชื่อผู้รับงาน *</label>
+          <input type="text" id="assigned_to_name" placeholder="เช่น ผู้ใหญ่บ้าน สมชาย">
+        </div>
+        <div class="form-group">
+          <label>เบอร์โทรศัพท์</label>
+          <input type="tel" id="assigned_to_phone" placeholder="เช่น 081-234-5678">
+        </div>
+        <div class="form-group">
+          <label>อายุลิงก์</label>
+          <div class="expiry-row">
+            <input type="number" id="expires_value" value="1" min="1" max="90">
+            <select id="expires_unit">
+              <option value="hours">ชั่วโมง</option>
+              <option value="days" selected>วัน</option>
+              <option value="weeks">สัปดาห์</option>
+            </select>
+          </div>
+          <small>ค่าเริ่มต้น 1 วัน (สูงสุด 90 วัน)</small>
+        </div>
+      </div>
+
+      <button id="submit-btn" class="btn btn-primary">สร้างภารกิจ</button>
+      <a href="/" class="btn btn-secondary mt-8">กลับหน้าหลัก</a>
+    </div>
+
+    <!-- Result -->
+    <div id="result-section" class="hidden">
+      <div class="card">
+        <div class="alert alert-success">สร้างภารกิจสำเร็จ!</div>
+        <div class="card-title">Magic Link</div>
+        <div class="magic-link-box" id="magic-link"></div>
+        <button id="copy-btn" class="btn btn-outline">📋 คัดลอกลิงก์</button>
+        <a id="line-share-btn" class="btn btn-line mt-8" target="_blank" rel="noopener">
+          <img src="https://scdn.line-apps.com/n/line_add_friends/btn/th.png" alt="LINE" style="width:22px;height:22px;display:none;">
+          💬 ส่งลิงก์ผ่าน LINE
+        </a>
+      </div>
+      <div class="card qr-section">
+        <div class="card-title">QR Code</div>
+        <img id="qr-img" alt="QR Code">
+        <p style="font-size:0.8rem;color:var(--gray-400);">สแกน QR หรือส่งลิงก์ผ่าน LINE</p>
+      </div>
+      <a href="/" class="btn btn-secondary">กลับหน้าหลัก</a>
+      <a href="/create" class="btn btn-outline mt-8">สร้างภารกิจอีกรายการ</a>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="/js/create-task.js"></script>
+</body>
+</html>

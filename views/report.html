@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>STS — ส่งรายงานลงพื้นที่</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="header">
+    <h1>รายงานผลการลงพื้นที่</h1>
+    <div class="header-sub">กรอกข้อมูลและแนบหลักฐาน</div>
+  </div>
+
+  <div class="container">
+    <div class="gps-status" id="gps-status">
+      <div class="gps-dot" id="gps-dot"></div>
+      <span id="gps-text">กำลังดึงตำแหน่ง GPS...</span>
+    </div>
+
+    <div class="card">
+      <div class="card-title">สาเหตุการขาดเรียน</div>
+      <div class="form-group">
+        <label>ประเภทสาเหตุ *</label>
+        <select id="cause_category">
+          <option value="">-- เลือกสาเหตุ --</option>
+          <option value="POVERTY">ปัญหาความยากจน</option>
+          <option value="ILLNESS">เจ็บป่วย</option>
+          <option value="FAMILY_ISSUE">ปัญหาครอบครัว</option>
+          <option value="TRANSPORTATION">ปัญหาการเดินทาง</option>
+          <option value="OTHER">อื่นๆ</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>รายละเอียดเพิ่มเติม</label>
+        <textarea id="cause_detail" placeholder="อธิบายสาเหตุเพิ่มเติม..."></textarea>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">รูปถ่าย</div>
+      <label class="file-label">
+        <input type="file" id="photos" accept="image/*" multiple>
+        📷 เลือกรูปจากอัลบั้ม / ถ่ายรูป
+      </label>
+      <div class="preview-list" id="preview-list"></div>
+      <small style="display:block;margin-top:4px;color:var(--gray-400);">รองรับสูงสุด 5 รูป (เลือกจากแกลลอรี่ หรือถ่ายรูปใหม่ได้)</small>
+    </div>
+
+    <div class="card">
+      <div class="card-title">ข้อเสนอแนะ</div>
+      <div class="form-group">
+        <textarea id="recommendation" placeholder="เช่น แนะนำให้ส่งต่อขอทุนการศึกษา..."></textarea>
+      </div>
+    </div>
+
+    <button id="submit-btn" class="btn btn-success">✅ บันทึกและส่งรายงาน</button>
+    <button id="back-btn" class="btn btn-secondary mt-8">ย้อนกลับ</button>
+  </div>
+
+  <input type="hidden" id="visit_lat">
+  <input type="hidden" id="visit_lng">
+
+  <script src="/js/report.js"></script>
+</body>
+</html>

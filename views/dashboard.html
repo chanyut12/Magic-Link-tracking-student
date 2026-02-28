@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>STS — Dashboard</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="header">
+    <h1>Student Tracking System</h1>
+    <div class="header-sub">ระบบติดตามผู้เรียน — Task Delegation Chain</div>
+  </div>
+
+  <div class="container container--wide">
+
+    <!-- Summary Stats -->
+    <div class="stats-grid" id="stats-grid">
+      <div class="stat-card stat-card--total">
+        <div class="stat-label">เคสทั้งหมด</div>
+        <div class="stat-value" id="stat-total">-</div>
+        <div class="stat-sub">รายการ</div>
+      </div>
+      <div class="stat-card stat-card--progress">
+        <div class="stat-label">กำลังติดตาม</div>
+        <div class="stat-value" id="stat-progress">-</div>
+        <div class="stat-sub">รายการ</div>
+      </div>
+      <div class="stat-card stat-card--resolved">
+        <div class="stat-label">ปิดเคสสำเร็จ</div>
+        <div class="stat-value" id="stat-resolved">-</div>
+        <div class="stat-sub">รายการ</div>
+      </div>
+      <div class="stat-card stat-card--today">
+        <div class="stat-label">เคสวันนี้</div>
+        <div class="stat-value" id="stat-today">-</div>
+        <div class="stat-sub">รายการ</div>
+      </div>
+    </div>
+
+    <div class="stats-row-secondary" id="stats-secondary">
+      <div class="stat-pill">
+        <span class="stat-pill-label">รอดำเนินการ</span>
+        <span class="stat-pill-value badge badge-open" id="stat-open">-</span>
+      </div>
+      <div class="stat-pill">
+        <span class="stat-pill-label">ลิงก์ที่ยัง Active</span>
+        <span class="stat-pill-value badge badge-active" id="stat-active-links">-</span>
+      </div>
+      <div class="stat-pill">
+        <span class="stat-pill-label">ส่งต่อแล้วทั้งหมด</span>
+        <span class="stat-pill-value badge badge-delegated" id="stat-delegations">-</span>
+      </div>
+    </div>
+
+    <div class="card" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+      <h2 class="card-title" style="margin:0;">รายการเคสทั้งหมด</h2>
+      <a href="/create" class="btn btn-primary" style="width:auto;">+ สร้างภารกิจใหม่</a>
+    </div>
+
+    <div id="loading" class="loader"><div class="spinner"></div></div>
+    <div id="empty" class="empty-state hidden">
+      <div class="icon">📋</div>
+      <p>ยังไม่มีเคส — กด "สร้างภารกิจใหม่" เพื่อเริ่มต้น</p>
+    </div>
+
+    <div id="table-wrap" class="table-wrap hidden">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>ชื่อนักเรียน</th>
+            <th>โรงเรียน</th>
+            <th>สาเหตุ</th>
+            <th>สถานะ</th>
+            <th>ลิงก์</th>
+            <th>จัดการลิงก์</th>
+            <th>วันที่สร้าง</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="cases-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="/js/dashboard.js"></script>
+</body>
+</html>

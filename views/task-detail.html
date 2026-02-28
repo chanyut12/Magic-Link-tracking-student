@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>STS — รายละเอียดภารกิจ</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+</head>
+<body>
+  <div class="header">
+    <h1>Audit Trail — รายละเอียดภารกิจ</h1>
+    <div class="header-sub" id="header-info"></div>
+  </div>
+
+  <div class="container">
+    <div id="loading" class="loader"><div class="spinner"></div></div>
+
+    <div id="content" class="hidden">
+      <div class="card">
+        <div class="card-title">ข้อมูลเคส</div>
+        <div class="info-row">
+          <span class="label">ชื่อนักเรียน</span>
+          <span class="value" id="student-name"></span>
+        </div>
+        <div class="info-row">
+          <span class="label">โรงเรียน</span>
+          <span class="value" id="student-school"></span>
+        </div>
+        <div class="info-row">
+          <span class="label">สาเหตุ</span>
+          <span class="value" id="reason-flagged"></span>
+        </div>
+        <div class="info-row">
+          <span class="label">สถานะ</span>
+          <span id="task-status"></span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">เส้นทางการมอบหมาย (Delegation Chain)</div>
+        <div class="timeline" id="timeline"></div>
+      </div>
+
+      <div id="submission-card" class="card hidden">
+        <div class="card-title">ข้อมูลรายงานการลงพื้นที่</div>
+        <div id="submission-detail"></div>
+        <div id="submission-photos" class="photo-grid"></div>
+        <div id="submission-map" style="height:250px;border-radius:var(--radius);margin-top:12px;"></div>
+      </div>
+    </div>
+
+    <a href="/" class="btn btn-secondary mt-16">กลับหน้า Dashboard</a>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="/js/task-detail.js"></script>
+</body>
+</html>
