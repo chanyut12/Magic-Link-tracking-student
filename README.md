@@ -16,6 +16,7 @@ Student Tracking System (STS) แบบ Prototype สำหรับงานต
   - `FORWARD` ส่งต่อหน่วยงาน/ผู้เกี่ยวข้อง
   - `CLOSE` ปิดเคส
 - ผู้ดูแลสามารถ `lock/unlock` ลิงก์ได้ทันที พร้อมเหตุผล
+- Dashboard กรองเคสตามวันที่ / โรงเรียน / สถานะลิงก์ + โหมดผู้บริหาร
 
 ## Tech stack
 

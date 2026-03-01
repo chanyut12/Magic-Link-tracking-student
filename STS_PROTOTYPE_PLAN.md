@@ -105,7 +105,7 @@ CREATE TABLE task_submissions (
 
 | # | หน้า | URL | ผู้ใช้ | คำอธิบาย |
 |---|------|-----|--------|----------|
-| 1 | **Dashboard** | `/` | ผอ./ครู | ดูรายการเคสทั้งหมด + สถานะ |
+| 1 | **Dashboard** | `/` | ผอ./ครู | ดูรายการเคสทั้งหมด + สถานะ + กรองตามวันที่/โรงเรียน/สถานะลิงก์ |
 | 2 | **สร้างภารกิจ** | `/create` | ผอ./ครู | สร้างเคส + ภารกิจ → ได้ Magic Link + QR |
 | 3 | **ดูภารกิจ** | `/task/:token` | ผู้รับลิงก์ | ดูข้อมูลเด็ก + แผนที่ + เลือก "ทำเอง" หรือ "ส่งต่อ" |
 | 4 | **ส่งต่อภารกิจ** | `/task/:token/delegate` | ผู้รับลิงก์ | กรอกชื่อคนรับงานใหม่ → ได้ลิงก์ใหม่ |
@@ -262,6 +262,14 @@ CREATE TABLE task_submissions (
 - [x] อัปเดต Dashboard badge/stats รองรับเคสรอประเมิน
 - [x] ทดสอบ e2e flow ใหม่ร่วมกับ flow เดิม
 
+### Phase 10: Dashboard Filter Enhancements
+- [x] เพิ่ม filter ช่วงวันที่ (date range)
+- [x] เพิ่ม filter โรงเรียน (dropdown สร้างจากข้อมูลจริง)
+- [x] เพิ่ม filter สถานะลิงก์ (Active / ถูกล็อก / ไม่มีลิงก์)
+- [x] เพิ่มปุ่ม "ล้างตัวกรอง" สำหรับ reset ทุก filter
+- [x] แก้ไข `isExecutiveCase()` ให้โหมดผู้บริหารแสดงเฉพาะเคสที่ต้องดำเนินการ
+- [x] Responsive: filter ใหม่ใช้ได้ดีบนมือถือ
+
 ---
 
 ## 8. โครงสร้างโฟลเดอร์ (Proposed)
@@ -335,4 +343,4 @@ node server.js
 
 ---
 
-*Last updated: February 28, 2026 (Director Review workflow added)*
+*Last updated: March 1, 2026 (Dashboard filter enhancements + executive filter fix)*

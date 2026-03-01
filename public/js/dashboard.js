@@ -8,11 +8,20 @@
   var filterModeAllBtn = document.getElementById('filter-mode-all');
   var filterModeExecBtn = document.getElementById('filter-mode-exec');
   var statusFilterSelect = document.getElementById('status-filter');
+  var datePresetFilterSelect = document.getElementById('date-preset-filter');
+  var schoolFilterSelect = document.getElementById('school-filter');
+  var linkFilterSelect = document.getElementById('link-filter');
+  var sortFilterSelect = document.getElementById('sort-filter');
+  var btnResetFilters = document.getElementById('btn-reset-filters');
   var filterSummary = document.getElementById('filter-summary');
 
   var allCases = [];
   var currentMode = 'ALL';
   var currentStatusFilter = 'ALL';
+  var currentDatePreset = 'ALL';
+  var currentSchool = 'ALL';
+  var currentLinkFilter = 'ALL';
+  var currentSort = 'DEFAULT';
 
   function copyText(text, onSuccess) {
     if (navigator.clipboard && window.isSecureContext) {
@@ -58,22 +67,18 @@
 
   function statusBadge(status) {
     var map = {
-      OPEN: 'badge-open',
       IN_PROGRESS: 'badge-progress',
-      PENDING_REVIEW: 'badge-progress',
-      RESOLVED: 'badge-resolved',
-      COMPLETED: 'badge-completed'
+      PENDING_REVIEW: 'badge-pending',
+      RESOLVED: 'badge-resolved'
     };
     var labels = {
-      OPEN: 'เปิดเคส',
       IN_PROGRESS: 'กำลังดำเนินการ',
       PENDING_REVIEW: 'รอผอ.ประเมิน',
-      RESOLVED: 'ปิดเคสแล้ว',
-      COMPLETED: 'ลงพื้นที่สำเร็จ'
+      RESOLVED: 'ปิดเคสแล้ว'
     };
     var cls = map[status] || 'badge-pending';
     var label = labels[status] || status;
-    return '<span class="badge ' + cls + '">' + label + '</span>';
+    return `<span class="badge ${cls}">${label}</span>`;
   }
 
   function formatDate(d) {
@@ -89,10 +94,10 @@
     if (c.active_link_locked) {
       return '<td><span class="badge badge-expired">ปิดโดยผู้ดูแล</span></td>';
     }
-    return '<td style="white-space:nowrap">' +
-      '<button class="btn-copy-link" data-link="' + publicLink + '" title="คัดลอกลิงก์">📋</button> ' +
-      '<a href="' + lineUrl + '" target="_blank" rel="noopener" class="btn-copy-link btn-line-share" style="background:#06C755;color:#fff;border-color:#06C755;text-decoration:none;" title="ส่งผ่าน LINE">💬</a>' +
-      '</td>';
+    return `<td style="white-space:nowrap">` +
+      `<button class="btn-copy-link" data-link="${publicLink}" title="คัดลอกลิงก์">📋</button> ` +
+      `<a href="${lineUrl}" target="_blank" rel="noopener" class="btn-copy-link btn-line-share" style="background:#06C755;color:#fff;border-color:#06C755;text-decoration:none;" title="ส่งผ่าน LINE">💬</a>` +
+      `</td>`;
   }
 
   function mobileLinkCell(c) {
@@ -101,31 +106,31 @@
     var publicLink = normalizePublicLink(c.active_link);
     var lineUrl = buildLineShareUrl(publicLink);
     return (
-      '<button class="btn-copy-link" data-link="' + publicLink + '" title="คัดลอกลิงก์">📋</button>' +
-      '<a href="' + lineUrl + '" target="_blank" rel="noopener" class="btn-copy-link btn-copy-link--line" title="ส่งผ่าน LINE">💬</a>'
+      `<button class="btn-copy-link" data-link="${publicLink}" title="คัดลอกลิงก์">📋</button>` +
+      `<a href="${lineUrl}" target="_blank" rel="noopener" class="btn-copy-link btn-copy-link--line" title="ส่งผ่าน LINE">💬</a>`
     );
   }
 
   function mobileAdminAction(c) {
     if (!c.active_link_id) return '';
     if (c.active_link_locked) {
-      return '<button class="btn-copy-link btn-admin-toggle" data-link-id="' + c.active_link_id + '" data-action="unlock" title="เปิดใช้งานลิงก์อีกครั้ง">🔓 เปิดลิงก์</button>';
+      return `<button class="btn-copy-link btn-admin-toggle" data-link-id="${c.active_link_id}" data-action="unlock" title="เปิดใช้งานลิงก์อีกครั้ง">🔓 เปิดลิงก์</button>`;
     }
-    return '<button class="btn-copy-link btn-admin-toggle" data-link-id="' + c.active_link_id + '" data-action="lock" title="ปิดลิงก์ชั่วคราว/ถาวร">🔒 ปิดลิงก์</button>';
+    return `<button class="btn-copy-link btn-admin-toggle" data-link-id="${c.active_link_id}" data-action="lock" title="ปิดลิงก์ชั่วคราว/ถาวร">🔒 ปิดลิงก์</button>`;
   }
 
   function adminLinkCell(c) {
     if (!c.active_link_id) return '<td class="text-center">-</td>';
     if (c.active_link_locked) {
       var reason = c.active_link_lock_reason ? escapeHtml(c.active_link_lock_reason) : '-';
-      return '<td>' +
-        '<div class="admin-link-box">เหตุผล: ' + reason + '</div>' +
-        '<button class="btn-copy-link btn-admin-toggle" data-link-id="' + c.active_link_id + '" data-action="unlock" title="เปิดใช้งานลิงก์อีกครั้ง">🔓 เปิดลิงก์</button>' +
-        '</td>';
+      return `<td>` +
+        `<div class="admin-link-box">เหตุผล: ${reason}</div>` +
+        `<button class="btn-copy-link btn-admin-toggle" data-link-id="${c.active_link_id}" data-action="unlock" title="เปิดใช้งานลิงก์อีกครั้ง">🔓 เปิดลิงก์</button>` +
+        `</td>`;
     }
-    return '<td>' +
-      '<button class="btn-copy-link btn-admin-toggle" data-link-id="' + c.active_link_id + '" data-action="lock" title="ปิดลิงก์ชั่วคราว/ถาวร">🔒 ปิดลิงก์</button>' +
-      '</td>';
+    return `<td>` +
+      `<button class="btn-copy-link btn-admin-toggle" data-link-id="${c.active_link_id}" data-action="lock" title="ปิดลิงก์ชั่วคราว/ถาวร">🔒 ปิดลิงก์</button>` +
+      `</td>`;
   }
 
   function fmt(n) {
@@ -134,11 +139,9 @@
 
   function getStatusLabel(status) {
     var labels = {
-      OPEN: 'เปิดเคส',
       IN_PROGRESS: 'กำลังดำเนินการ',
       PENDING_REVIEW: 'รอผอ.ประเมิน',
-      RESOLVED: 'ปิดเคสแล้ว',
-      COMPLETED: 'ลงพื้นที่สำเร็จ'
+      RESOLVED: 'ปิดเคสแล้ว'
     };
     return labels[status] || status;
   }
@@ -158,31 +161,74 @@
   }
 
   function isExecutiveCase(c) {
-    return c.status === 'PENDING_REVIEW' || c.status === 'OPEN' || c.status === 'IN_PROGRESS' || c.status === 'RESOLVED';
+    return c.status === 'PENDING_REVIEW' || c.status === 'IN_PROGRESS';
   }
 
   function statusPriority(status) {
     var map = {
       PENDING_REVIEW: 0,
-      OPEN: 1,
-      IN_PROGRESS: 2,
-      RESOLVED: 3,
-      COMPLETED: 4
+      IN_PROGRESS: 1,
+      RESOLVED: 2
     };
     return map[status] != null ? map[status] : 99;
+  }
+
+  function toDateOnly(str) {
+    if (!str) return null;
+    var d = new Date(str);
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate());
   }
 
   function getFilteredCases() {
     var filtered = allCases.filter(function (c) {
       if (currentMode === 'EXEC' && !isExecutiveCase(c)) return false;
       if (currentStatusFilter !== 'ALL' && c.status !== currentStatusFilter) return false;
+
+      // Date Preset Filter
+      if (currentDatePreset !== 'ALL') {
+        var caseDate = toDateOnly(c.created_at);
+        if (caseDate) {
+          var today = toDateOnly(new Date());
+          // Use (today - caseDate) without Math.abs to exclude future-dated cases
+          var diffTime = today - caseDate;
+          if (diffTime < 0) return false; // future date — exclude
+          var diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+          // diffDays = 0 for same day, 1 for yesterday
+          if (currentDatePreset === 'TODAY' && diffDays > 0) return false;
+          if (currentDatePreset === 'LAST_7' && diffDays > 7) return false;
+          if (currentDatePreset === 'LAST_30' && diffDays > 30) return false;
+        }
+      }
+
+      // School filter
+      if (currentSchool !== 'ALL') {
+        if ((c.student_school || '') !== currentSchool) return false;
+      }
+
+      // Link filter
+      if (currentLinkFilter === 'ACTIVE') {
+        if (!c.active_link || c.active_link_locked) return false;
+      } else if (currentLinkFilter === 'LOCKED') {
+        if (!c.active_link_locked) return false;
+      } else if (currentLinkFilter === 'NONE') {
+        if (c.active_link) return false;
+      }
+
       return true;
     });
 
     filtered.sort(function (a, b) {
-      var byStatus = statusPriority(a.status) - statusPriority(b.status);
-      if (byStatus !== 0) return byStatus;
-      return new Date(b.created_at) - new Date(a.created_at);
+      if (currentSort === 'NEWEST') {
+        return new Date(b.created_at) - new Date(a.created_at);
+      } else if (currentSort === 'OLDEST') {
+        return new Date(a.created_at) - new Date(b.created_at);
+      } else {
+        // DEFAULT sort
+        var byStatus = statusPriority(a.status) - statusPriority(b.status);
+        if (byStatus !== 0) return byStatus;
+        return new Date(b.created_at) - new Date(a.created_at);
+      }
     });
 
     return filtered;
@@ -284,41 +330,75 @@
       var createdAt = formatDate(c.created_at);
       var tr = document.createElement('tr');
       tr.innerHTML =
-        '<td>' + (i + 1) + '</td>' +
-        '<td>' + studentName + '</td>' +
-        '<td>' + school + '</td>' +
-        '<td>' + reason + '</td>' +
-        '<td>' + statusBadge(c.status) + '</td>' +
+        `<td>${i + 1}</td>` +
+        `<td>${studentName}</td>` +
+        `<td>${school}</td>` +
+        `<td>${reason}</td>` +
+        `<td>${statusBadge(c.status)}</td>` +
         linkCell(c) +
         adminLinkCell(c) +
-        '<td>' + createdAt + '</td>' +
-        '<td>' + (c.task_id ? '<a href="/task-detail/' + c.task_id + '">ดูรายละเอียด</a>' : '-') + '</td>';
+        `<td>${createdAt}</td>` +
+        `<td>${c.task_id ? `<a href="/task-detail/${c.task_id}">ดูรายละเอียด</a>` : '-'}</td>`;
       tbody.appendChild(tr);
 
       var card = document.createElement('div');
       card.className = 'mobile-case-card';
       card.innerHTML =
-        '<div class="mobile-case-top">' +
-          '<div>' +
-            '<div class="mobile-case-title">' + studentName + '</div>' +
-            '<div class="mobile-case-meta">' + school + '</div>' +
-          '</div>' +
-          statusBadge(c.status) +
-        '</div>' +
-        '<div class="mobile-case-meta">สาเหตุ: ' + reason + '</div>' +
-        '<div class="mobile-case-meta">สร้างเมื่อ: ' + createdAt + '</div>' +
-        '<div class="mobile-case-actions">' +
-          mobileLinkCell(c) +
-          mobileAdminAction(c) +
-          (c.task_id ? '<a class="btn-copy-link" href="/task-detail/' + c.task_id + '">รายละเอียด</a>' : '') +
-        '</div>';
+        `<div class="mobile-case-top">` +
+        `<div>` +
+        `<div class="mobile-case-title">${studentName}</div>` +
+        `<div class="mobile-case-meta">${school}</div>` +
+        `</div>` +
+        statusBadge(c.status) +
+        `</div>` +
+        `<div class="mobile-case-meta">สาเหตุ: ${reason}</div>` +
+        `<div class="mobile-case-meta">สร้างเมื่อ: ${createdAt}</div>` +
+        `<div class="mobile-case-actions">` +
+        mobileLinkCell(c) +
+        mobileAdminAction(c) +
+        (c.task_id ? `<a class="btn-copy-link" href="/task-detail/${c.task_id}">รายละเอียด</a>` : '') +
+        `</div>`;
       if (c.active_link_locked && c.active_link_lock_reason) {
-        card.innerHTML += '<div class="mobile-case-link">เหตุผลที่ปิดลิงก์: ' + escapeHtml(c.active_link_lock_reason) + '</div>';
+        card.innerHTML += `<div class="mobile-case-link">เหตุผลที่ปิดลิงก์: ${escapeHtml(c.active_link_lock_reason)}</div>`;
       }
       mobileList.appendChild(card);
     });
 
     bindCaseActionButtons();
+  }
+
+  function populateSchoolFilter() {
+    var schools = {};
+    allCases.forEach(function (c) {
+      var s = c.student_school || '';
+      if (s && !schools[s]) schools[s] = true;
+    });
+    var sorted = Object.keys(schools).sort();
+    schoolFilterSelect.innerHTML = `<option value="ALL">ทุกโรงเรียน</option>`;
+    sorted.forEach(function (s) {
+      var opt = document.createElement('option');
+      opt.value = s;
+      opt.textContent = s;
+      schoolFilterSelect.appendChild(opt);
+    });
+  }
+
+  function resetAllFilters() {
+    currentMode = 'ALL';
+    currentStatusFilter = 'ALL';
+    currentDatePreset = 'ALL';
+    currentSchool = 'ALL';
+    currentLinkFilter = 'ALL';
+    currentSort = 'DEFAULT';
+
+    statusFilterSelect.value = 'ALL';
+    datePresetFilterSelect.value = 'ALL';
+    schoolFilterSelect.value = 'ALL';
+    linkFilterSelect.value = 'ALL';
+    sortFilterSelect.value = 'DEFAULT';
+
+    setFilterChipState();
+    renderFilteredCases();
   }
 
   function bindFilters() {
@@ -338,6 +418,28 @@
       currentStatusFilter = this.value;
       renderFilteredCases();
     });
+
+    datePresetFilterSelect.addEventListener('change', function () {
+      currentDatePreset = this.value;
+      renderFilteredCases();
+    });
+
+    schoolFilterSelect.addEventListener('change', function () {
+      currentSchool = this.value;
+      renderFilteredCases();
+    });
+
+    linkFilterSelect.addEventListener('change', function () {
+      currentLinkFilter = this.value;
+      renderFilteredCases();
+    });
+
+    sortFilterSelect.addEventListener('change', function () {
+      currentSort = this.value;
+      renderFilteredCases();
+    });
+
+    btnResetFilters.addEventListener('click', resetAllFilters);
   }
 
   // Fetch stats
@@ -360,7 +462,7 @@
       document.getElementById('stat-active-links').textContent = fmt(s.active_delegations);
       document.getElementById('stat-delegations').textContent = fmt(s.total_delegations);
     })
-    .catch(function () {});
+    .catch(function () { });
 
   // Fetch cases
   fetch('/api/cases')
@@ -375,6 +477,7 @@
       if (!cases) return;
       loading.classList.add('hidden');
       allCases = Array.isArray(cases) ? cases : [];
+      populateSchoolFilter();
       setFilterChipState();
       bindFilters();
       renderFilteredCases();

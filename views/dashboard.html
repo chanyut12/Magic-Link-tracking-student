@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="th">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>STS — Dashboard</title>
   <link rel="stylesheet" href="/css/style.css">
 </head>
+
 <body>
   <div class="header">
     <h1>Student Tracking System</h1>
@@ -45,7 +47,7 @@
       </div>
       <div class="stat-pill">
         <span class="stat-pill-label">รอผอ.ประเมิน</span>
-        <span class="stat-pill-value badge badge-progress" id="stat-pending-review">-</span>
+        <span class="stat-pill-value badge badge-pending" id="stat-pending-review">-</span>
       </div>
       <div class="stat-pill">
         <span class="stat-pill-label">ลิงก์ที่ยัง Active</span>
@@ -73,17 +75,56 @@
           <select id="status-filter">
             <option value="ALL">ทุกสถานะ</option>
             <option value="PENDING_REVIEW">รอผอ.ประเมิน</option>
-            <option value="OPEN">เปิดเคส</option>
             <option value="IN_PROGRESS">กำลังดำเนินการ</option>
             <option value="RESOLVED">ปิดเคสแล้ว</option>
-            <option value="COMPLETED">ลงพื้นที่สำเร็จ (สถานะเดิม)</option>
           </select>
         </div>
       </div>
+
+      <div class="dashboard-filter-row-2">
+        <div class="dashboard-filter-select">
+          <label for="date-preset-filter">ช่วงเวลาที่สร้าง</label>
+          <select id="date-preset-filter">
+            <option value="ALL">ทุกช่วงเวลา</option>
+            <option value="TODAY">วันนี้</option>
+            <option value="LAST_7">7 วันที่ผ่านมา</option>
+            <option value="LAST_30">30 วันที่ผ่านมา</option>
+          </select>
+        </div>
+        <div class="dashboard-filter-select">
+          <label for="school-filter">โรงเรียน</label>
+          <select id="school-filter">
+            <option value="ALL">ทุกโรงเรียน</option>
+          </select>
+        </div>
+        <div class="dashboard-filter-select">
+          <label for="link-filter">สถานะลิงก์</label>
+          <select id="link-filter">
+            <option value="ALL">ทุกสถานะลิงก์</option>
+            <option value="ACTIVE">มีลิงก์ Active</option>
+            <option value="LOCKED">ถูกล็อก</option>
+            <option value="NONE">ไม่มีลิงก์</option>
+          </select>
+        </div>
+        <div class="dashboard-filter-select">
+          <label for="sort-filter">เรียงลำดับ</label>
+          <select id="sort-filter">
+            <option value="DEFAULT">ความด่วน (เริ่มต้น)</option>
+            <option value="NEWEST">วันที่: ใหม่สุดก่อน</option>
+            <option value="OLDEST">วันที่: เก่าสุดก่อน</option>
+          </select>
+        </div>
+        <div class="dashboard-filter-reset">
+          <button type="button" id="btn-reset-filters" class="btn-reset-filter">↺ ล้างตัวกรอง</button>
+        </div>
+      </div>
+
       <div id="filter-summary" class="filter-summary">แสดงทั้งหมด</div>
     </div>
 
-    <div id="loading" class="loader"><div class="spinner"></div></div>
+    <div id="loading" class="loader">
+      <div class="spinner"></div>
+    </div>
     <div id="empty" class="empty-state hidden">
       <div class="icon">📋</div>
       <p id="empty-message">ยังไม่มีเคส — กด "สร้างภารกิจใหม่" เพื่อเริ่มต้น</p>
@@ -113,4 +154,5 @@
 
   <script src="/js/dashboard.js"></script>
 </body>
+
 </html>
