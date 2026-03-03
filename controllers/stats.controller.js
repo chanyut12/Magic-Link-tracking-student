@@ -17,9 +17,7 @@ function getStats(req, res) {
   const activeDelegations = db.prepare(`SELECT COUNT(*) as count FROM task_links WHERE status = 'ACTIVE' AND COALESCE(admin_locked, 0) = 0`).get().count;
   const totalDelegations = db.prepare(`SELECT COUNT(*) as count FROM task_links WHERE delegation_depth > 0`).get().count;
 
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-  const createdToday = db.prepare(`SELECT COUNT(*) as count FROM cases WHERE created_at >= ?`).get(todayStart.toISOString()).count;
+  const createdToday = db.prepare(`SELECT COUNT(*) as count FROM cases WHERE date(created_at) = date('now')`).get().count;
 
   res.json({
     total,
