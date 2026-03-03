@@ -1,7 +1,7 @@
 services:
   - type: web
     name: sts-link-generate
-    env: node
+    runtime: node
     plan: free
     buildCommand: npm ci
     startCommand: npm start

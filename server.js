@@ -31,7 +31,11 @@ function loadEnvFromFile() {
 loadEnvFromFile();
 
 const db = require('./db/database');
+const { runMigrations } = require('./db/migrations');
 const { getUploadsDir, ensureDir } = require('./utils/storage-paths');
+
+// Run database migrations on startup
+runMigrations();
 
 const app = express();
 const PORT = process.env.PORT || 3000;

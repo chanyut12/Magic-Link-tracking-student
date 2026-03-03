@@ -1,7 +1,8 @@
 const crypto = require('crypto');
+const { ADMIN_COOKIE_NAME, ADMIN_SESSION_HOURS } = require('../config/constants');
 
-const COOKIE_NAME = 'sts_admin_session';
-const SESSION_HOURS = 8;
+const COOKIE_NAME = ADMIN_COOKIE_NAME;
+const SESSION_HOURS = ADMIN_SESSION_HOURS;
 
 function getAdminKey() {
   return String(process.env.ADMIN_ACCESS_KEY || '').trim();
@@ -73,7 +74,14 @@ function clearAdminSessionCookie(res, req) {
 
 function isAuthorized(req) {
   const key = getAdminKey();
-  if (!key) return true; // fail-open for local dev until key is configured
+  // Fail-closed: require admin key in all environments for security
+  if (!key) {
+    // Allow in development mode only if explicitly disabled
+    if (process.env.NODE_ENV === 'development' && process.env.DISABLE_AUTH === 'true') {
+      return true;
+    }
+    return false;
+  }
   const cookies = parseCookies(req);
   return isSessionValid(cookies[COOKIE_NAME]);
 }
