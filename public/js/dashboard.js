@@ -457,7 +457,6 @@
       document.getElementById('stat-progress').textContent = fmt(s.in_progress);
       document.getElementById('stat-resolved').textContent = fmt(s.resolved);
       document.getElementById('stat-today').textContent = fmt(s.created_today);
-      document.getElementById('stat-open').textContent = fmt(s.open);
       document.getElementById('stat-pending-review').textContent = fmt(s.pending_review);
       document.getElementById('stat-active-links').textContent = fmt(s.active_delegations);
       document.getElementById('stat-delegations').textContent = fmt(s.total_delegations);
