@@ -138,13 +138,29 @@ npm start
 ```text
 STS_LINK_GENERATE/
 ├── server.js
+├── config/
+│   └── constants.js          # ค่าคงที่รวมศูนย์ (file limits, expiry, categories)
+├── controllers/
+│   ├── admin.controller.js
+│   ├── case.controller.js
+│   ├── delegation.controller.js
+│   ├── stats.controller.js
+│   ├── submission.controller.js
+│   └── task.controller.js
 ├── routes/
-│   ├── api.js
+│   ├── api.js                # Routing layer (ชี้ไป controllers)
 │   └── pages.js
 ├── db/
 │   ├── database.js
 │   ├── init.js
+│   ├── migrations.js         # Schema migration runner
 │   └── sts.db
+├── utils/
+│   ├── admin-auth.js         # Cookie-based HMAC session
+│   ├── helpers.js            # hashToken, maskName, sanitize, getBaseUrl
+│   └── storage-paths.js
+├── scripts/
+│   └── smoke-check.js
 ├── views/
 ├── public/
 │   ├── css/style.css

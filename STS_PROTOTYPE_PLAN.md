@@ -272,18 +272,35 @@ CREATE TABLE task_submissions (
 
 ---
 
-## 8. โครงสร้างโฟลเดอร์ (Proposed)
+## 8. โครงสร้างโฟลเดอร์ (Actual)
 
 ```
 STS_LINK_GENERATE/
 ├── server.js                 # Express server หลัก
 ├── package.json
+├── config/
+│   └── constants.js          # ค่าคงที่รวมศูนย์ (file limits, expiry, categories)
+├── controllers/              # Business logic แยกตาม domain (MVC)
+│   ├── admin.controller.js
+│   ├── case.controller.js
+│   ├── delegation.controller.js
+│   ├── stats.controller.js
+│   ├── submission.controller.js
+│   └── task.controller.js
 ├── db/
-│   ├── init.js               # สร้างตาราง SQLite
+│   ├── database.js           # SQLite connection singleton
+│   ├── init.js               # สร้างตาราง SQLite (legacy helper)
+│   ├── migrations.js         # Schema migration runner (runMigrations)
 │   └── sts.db                # ไฟล์ SQLite database (auto-generated)
 ├── routes/
 │   ├── pages.js              # Routes สำหรับ serve หน้า HTML
-│   └── api.js                # Routes สำหรับ API endpoints
+│   └── api.js                # Routing layer ชี้ไป controllers
+├── utils/
+│   ├── admin-auth.js         # Cookie-based HMAC session
+│   ├── helpers.js            # hashToken, maskName, sanitize, getBaseUrl
+│   └── storage-paths.js      # Resolve data dir สำหรับ DB + uploads
+├── scripts/
+│   └── smoke-check.js        # Smoke test หลัง deploy
 ├── public/
 │   ├── css/
 │   │   └── style.css         # CSS หลัก (responsive)
@@ -296,6 +313,7 @@ STS_LINK_GENERATE/
 │   │   └── task-detail.js    # Logic หน้า Audit Trail
 │   └── img/                  # Static images (icons, etc.)
 ├── views/
+│   ├── admin-access.html     # หน้า login ผู้บริหาร
 │   ├── dashboard.html
 │   ├── create-task.html
 │   ├── task-view.html
@@ -304,8 +322,7 @@ STS_LINK_GENERATE/
 │   ├── success.html
 │   ├── expired.html
 │   └── task-detail.html
-├── uploads/                  # รูปภาพที่อัปโหลด (auto-created)
-└── STS_PROTOTYPE_PLAN.md     # ไฟล์นี้
+└── uploads/                  # รูปภาพที่อัปโหลด (auto-created)
 ```
 
 ---
@@ -332,15 +349,14 @@ node server.js
 
 สิ่งที่ **ยังไม่ทำ** ใน Prototype นี้ (ทำภายหลังถ้า concept ผ่าน):
 
-- **ระบบ Login จริง** — PoC นี้ไม่มีระบบ auth, Dashboard เปิดได้เลย
+- **Role-based Auth (RBAC)** — PoC ใช้ Admin Access Key แบบ single password (ไม่มี user/role management)
 - **Real-time update** — PoC ใช้การ refresh หน้าแทน (ไม่มี WebSocket)
-- **Cloud Storage** — รูปเก็บ local ไม่ได้ขึ้น cloud
+- **Cloud Storage** — รูปเก็บ local disk ไม่ได้ขึ้น cloud (S3/R2/Supabase Storage)
 - **LINE Integration (ขั้นสูง)** — PoC มีปุ่ม "ส่งผ่าน LINE" (Share URL scheme) แต่ยังไม่มี Bot/Messaging API/LIFF
 - **Data masking แบบสมบูรณ์** — PoC ทำแค่ mask ชื่อเด็กเบื้องต้น
 - **Rate Limiting** — PoC ยังไม่มี Redis
-- **Production deployment** — รันบน localhost เท่านั้น
 - **Offline support (PWA)** — ไม่ทำใน PoC
 
 ---
 
-*Last updated: March 1, 2026 (Dashboard filter enhancements + executive filter fix)*
+*Last updated: March 3, 2026 (MVC refactoring — controllers, config, utils, migrations extracted; admin auth implemented)*
