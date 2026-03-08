@@ -19,19 +19,19 @@
       <div class="card">
         <div class="card-title">ข้อมูลนักเรียน</div>
         <div class="form-group">
-          <label>ชื่อ-สกุล นักเรียน *</label>
+          <label for="student_name">ชื่อ-สกุล นักเรียน *</label>
           <input type="text" id="student_name" placeholder="เช่น ด.ช. สมชาย ดีใจ" required>
         </div>
         <div class="form-group">
-          <label>โรงเรียน</label>
+          <label for="student_school">โรงเรียน</label>
           <input type="text" id="student_school" placeholder="เช่น โรงเรียนบ้านหนองไผ่">
         </div>
         <div class="form-group">
-          <label>ที่อยู่</label>
+          <label for="student_address">ที่อยู่</label>
           <textarea id="student_address" placeholder="ที่อยู่บ้านนักเรียน"></textarea>
         </div>
         <div class="form-group">
-          <label>พิกัดบ้านนักเรียน (คลิกบนแผนที่ หรือพิมพ์เอง)</label>
+          <label for="student_lat">พิกัดบ้านนักเรียน (คลิกบนแผนที่ หรือพิมพ์เอง)</label>
           <button type="button" id="locate-btn" class="map-locate-btn">📍 ใช้ตำแหน่งของฉัน</button>
           <div id="picker-map"></div>
           <div class="expiry-row">
@@ -41,7 +41,7 @@
           <small>คลิกบนแผนที่เพื่อวางหมุด หรือกรอกพิกัดด้วยตัวเอง</small>
         </div>
         <div class="form-group">
-          <label>สาเหตุที่ถูก Flag</label>
+          <label for="reason_flagged">สาเหตุที่ถูก Flag</label>
           <input type="text" id="reason_flagged" placeholder="เช่น ขาดเรียนติดต่อกัน 5 วัน">
         </div>
       </div>
@@ -49,15 +49,15 @@
       <div class="card">
         <div class="card-title">ผู้รับภารกิจ</div>
         <div class="form-group">
-          <label>ชื่อผู้รับงาน *</label>
+          <label for="assigned_to_name">ชื่อผู้รับงาน *</label>
           <input type="text" id="assigned_to_name" placeholder="เช่น ผู้ใหญ่บ้าน สมชาย">
         </div>
         <div class="form-group">
-          <label>เบอร์โทรศัพท์</label>
+          <label for="assigned_to_phone">เบอร์โทรศัพท์</label>
           <input type="tel" id="assigned_to_phone" placeholder="เช่น 081-234-5678">
         </div>
         <div class="form-group">
-          <label>อายุลิงก์</label>
+          <label for="expires_value">อายุลิงก์</label>
           <div class="expiry-row">
             <input type="number" id="expires_value" value="1" min="1" max="90">
             <select id="expires_unit">
@@ -82,14 +82,13 @@
         <div class="magic-link-box" id="magic-link"></div>
         <button id="copy-btn" class="btn btn-outline">📋 คัดลอกลิงก์</button>
         <a id="line-share-btn" class="btn btn-line mt-8" target="_blank" rel="noopener">
-          <img src="https://scdn.line-apps.com/n/line_add_friends/btn/th.png" alt="LINE" style="width:22px;height:22px;display:none;">
           💬 ส่งลิงก์ผ่าน LINE
         </a>
       </div>
       <div class="card qr-section">
         <div class="card-title">QR Code</div>
         <img id="qr-img" alt="QR Code">
-        <p style="font-size:0.8rem;color:var(--gray-400);">สแกน QR หรือส่งลิงก์ผ่าน LINE</p>
+        <p class="hint-text">สแกน QR หรือส่งลิงก์ผ่าน LINE</p>
       </div>
       <a href="/" class="btn btn-secondary">กลับหน้าหลัก</a>
       <a href="/create" class="btn btn-outline mt-8">สร้างภารกิจอีกรายการ</a>

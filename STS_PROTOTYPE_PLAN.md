@@ -105,7 +105,7 @@ CREATE TABLE task_submissions (
 
 | # | หน้า | URL | ผู้ใช้ | คำอธิบาย |
 |---|------|-----|--------|----------|
-| 1 | **Dashboard** | `/` | ผอ./ครู | ดูรายการเคสทั้งหมด + สถานะ |
+| 1 | **Dashboard** | `/` | ผอ./ครู | ดูรายการเคสทั้งหมด + สถานะ + กรองตามวันที่/โรงเรียน/สถานะลิงก์ |
 | 2 | **สร้างภารกิจ** | `/create` | ผอ./ครู | สร้างเคส + ภารกิจ → ได้ Magic Link + QR |
 | 3 | **ดูภารกิจ** | `/task/:token` | ผู้รับลิงก์ | ดูข้อมูลเด็ก + แผนที่ + เลือก "ทำเอง" หรือ "ส่งต่อ" |
 | 4 | **ส่งต่อภารกิจ** | `/task/:token/delegate` | ผู้รับลิงก์ | กรอกชื่อคนรับงานใหม่ → ได้ลิงก์ใหม่ |
@@ -126,6 +126,8 @@ CREATE TABLE task_submissions (
 | `GET` | `/api/tasks/:token` | ดึงข้อมูลภารกิจจาก token |
 | `POST` | `/api/tasks/:token/delegate` | ส่งต่อภารกิจ |
 | `POST` | `/api/tasks/:token/submit` | ส่งรายงาน + อัปโหลดรูป |
+| `POST` | `/api/cases/:caseId/review` | ผอ./ผู้ดูแลบันทึกผลประเมิน (ASSIST/FORWARD/CLOSE) |
+| `GET` | `/api/cases/:caseId/reviews` | ดูประวัติการประเมินเคส |
 | `GET` | `/api/tasks/:taskId/chain` | ดึง Delegation Chain |
 | `GET` | `/api/cases` | ดึงรายการเคสทั้งหมด (Dashboard) |
 
@@ -144,7 +146,7 @@ CREATE TABLE task_submissions (
 2. เห็นข้อมูลเด็ก + แผนที่ตำแหน่งบ้าน
 3. กด "ลงพื้นที่เอง" → เปิดหน้า Report Form
 4. กรอกสาเหตุ + ถ่ายรูป + ระบบดึง GPS
-5. กด "ส่งรายงาน" → เปลี่ยนสถานะเป็น COMPLETED
+5. กด "ส่งรายงาน" → เคสเข้า `PENDING_REVIEW` เพื่อรอ ผอ.ประเมิน
 
 ### Flow C: รับลิงก์ + ส่งต่อให้คนอื่น
 1. ผู้รับกดลิงก์ → เปิดหน้า Task View
@@ -157,6 +159,13 @@ CREATE TABLE task_submissions (
 1. ผอ. เปิด Dashboard → เห็นสถานะเคสอัปเดต
 2. คลิกดูรายละเอียด → เห็น Delegation Chain (Timeline)
 3. เห็นว่าใครส่งต่อให้ใคร + ข้อมูลรายงาน + รูปถ่าย + พิกัด
+
+### Flow E: ผอ. ประเมินผลหลังลงพื้นที่
+1. เคสที่มีรายงานแล้วจะขึ้นสถานะ `PENDING_REVIEW`
+2. ผอ. เปิดหน้า Task Detail แล้วเลือกผลประเมิน
+3. เลือกได้ 3 ทาง: `ASSIST` / `FORWARD` / `CLOSE`
+4. บันทึกหมายเหตุการประเมิน
+5. ถ้าเลือก `CLOSE` เคสเป็น `RESOLVED`, หากเลือกอื่นเคสกลับไป `IN_PROGRESS`
 
 ---
 
@@ -243,20 +252,55 @@ CREATE TABLE task_submissions (
 - [x] ทดสอบบนมือถือจริง (หรือ Chrome DevTools mobile mode)
 - [x] UI สวยงาม อ่านง่าย ใช้สีและ icon สื่อความหมาย
 
+### Phase 9: Director Review Workflow (ผอ.ประเมินหลังรายงาน)
+- [x] เพิ่มสถานะเคส `PENDING_REVIEW`
+- [x] ปรับ submit flow: ส่งรายงานแล้วเข้ารอประเมิน (ไม่ปิดเคสทันที)
+- [x] เพิ่มตาราง `case_reviews` เก็บผลประเมิน + หมายเหตุ + ผู้ประเมิน + เวลา
+- [x] เพิ่ม API `POST /api/cases/:caseId/review` (ASSIST/FORWARD/CLOSE)
+- [x] เพิ่ม API `GET /api/cases/:caseId/reviews`
+- [x] เพิ่ม UI หน้า Task Detail ให้ผอ.เลือกผลประเมินและดูประวัติ
+- [x] อัปเดต Dashboard badge/stats รองรับเคสรอประเมิน
+- [x] ทดสอบ e2e flow ใหม่ร่วมกับ flow เดิม
+
+### Phase 10: Dashboard Filter Enhancements
+- [x] เพิ่ม filter ช่วงวันที่ (date range)
+- [x] เพิ่ม filter โรงเรียน (dropdown สร้างจากข้อมูลจริง)
+- [x] เพิ่ม filter สถานะลิงก์ (Active / ถูกล็อก / ไม่มีลิงก์)
+- [x] เพิ่มปุ่ม "ล้างตัวกรอง" สำหรับ reset ทุก filter
+- [x] แก้ไข `isExecutiveCase()` ให้โหมดผู้บริหารแสดงเฉพาะเคสที่ต้องดำเนินการ
+- [x] Responsive: filter ใหม่ใช้ได้ดีบนมือถือ
+
 ---
 
-## 8. โครงสร้างโฟลเดอร์ (Proposed)
+## 8. โครงสร้างโฟลเดอร์ (Actual)
 
 ```
 STS_LINK_GENERATE/
 ├── server.js                 # Express server หลัก
 ├── package.json
+├── config/
+│   └── constants.js          # ค่าคงที่รวมศูนย์ (file limits, expiry, categories)
+├── controllers/              # Business logic แยกตาม domain (MVC)
+│   ├── admin.controller.js
+│   ├── case.controller.js
+│   ├── delegation.controller.js
+│   ├── stats.controller.js
+│   ├── submission.controller.js
+│   └── task.controller.js
 ├── db/
-│   ├── init.js               # สร้างตาราง SQLite
+│   ├── database.js           # SQLite connection singleton
+│   ├── init.js               # สร้างตาราง SQLite (legacy helper)
+│   ├── migrations.js         # Schema migration runner (runMigrations)
 │   └── sts.db                # ไฟล์ SQLite database (auto-generated)
 ├── routes/
 │   ├── pages.js              # Routes สำหรับ serve หน้า HTML
-│   └── api.js                # Routes สำหรับ API endpoints
+│   └── api.js                # Routing layer ชี้ไป controllers
+├── utils/
+│   ├── admin-auth.js         # Cookie-based HMAC session
+│   ├── helpers.js            # hashToken, maskName, sanitize, getBaseUrl
+│   └── storage-paths.js      # Resolve data dir สำหรับ DB + uploads
+├── scripts/
+│   └── smoke-check.js        # Smoke test หลัง deploy
 ├── public/
 │   ├── css/
 │   │   └── style.css         # CSS หลัก (responsive)
@@ -269,6 +313,7 @@ STS_LINK_GENERATE/
 │   │   └── task-detail.js    # Logic หน้า Audit Trail
 │   └── img/                  # Static images (icons, etc.)
 ├── views/
+│   ├── admin-access.html     # หน้า login ผู้บริหาร
 │   ├── dashboard.html
 │   ├── create-task.html
 │   ├── task-view.html
@@ -277,8 +322,7 @@ STS_LINK_GENERATE/
 │   ├── success.html
 │   ├── expired.html
 │   └── task-detail.html
-├── uploads/                  # รูปภาพที่อัปโหลด (auto-created)
-└── STS_PROTOTYPE_PLAN.md     # ไฟล์นี้
+└── uploads/                  # รูปภาพที่อัปโหลด (auto-created)
 ```
 
 ---
@@ -305,15 +349,14 @@ node server.js
 
 สิ่งที่ **ยังไม่ทำ** ใน Prototype นี้ (ทำภายหลังถ้า concept ผ่าน):
 
-- **ระบบ Login จริง** — PoC นี้ไม่มีระบบ auth, Dashboard เปิดได้เลย
+- **Role-based Auth (RBAC)** — PoC ใช้ Admin Access Key แบบ single password (ไม่มี user/role management)
 - **Real-time update** — PoC ใช้การ refresh หน้าแทน (ไม่มี WebSocket)
-- **Cloud Storage** — รูปเก็บ local ไม่ได้ขึ้น cloud
+- **Cloud Storage** — รูปเก็บ local disk ไม่ได้ขึ้น cloud (S3/R2/Supabase Storage)
 - **LINE Integration (ขั้นสูง)** — PoC มีปุ่ม "ส่งผ่าน LINE" (Share URL scheme) แต่ยังไม่มี Bot/Messaging API/LIFF
 - **Data masking แบบสมบูรณ์** — PoC ทำแค่ mask ชื่อเด็กเบื้องต้น
 - **Rate Limiting** — PoC ยังไม่มี Redis
-- **Production deployment** — รันบน localhost เท่านั้น
 - **Offline support (PWA)** — ไม่ทำใน PoC
 
 ---
 
-*Last updated: February 28, 2026*
+*Last updated: March 3, 2026 (MVC refactoring — controllers, config, utils, migrations extracted; admin auth implemented)*

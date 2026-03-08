@@ -50,9 +50,20 @@ db.exec(`
     submitted_at TEXT DEFAULT (datetime('now','localtime'))
   );
 
+  CREATE TABLE IF NOT EXISTS case_reviews (
+    id TEXT PRIMARY KEY,
+    case_id INTEGER REFERENCES cases(id) ON DELETE CASCADE,
+    review_action TEXT NOT NULL, -- ASSIST, FORWARD, CLOSE
+    review_note TEXT,
+    reviewed_by TEXT,
+    reviewed_at TEXT DEFAULT (datetime('now','localtime'))
+  );
+
   CREATE INDEX IF NOT EXISTS idx_task_links_token ON task_links(token_hash);
   CREATE INDEX IF NOT EXISTS idx_task_links_task_id ON task_links(task_id);
   CREATE INDEX IF NOT EXISTS idx_task_links_status ON task_links(status);
+  CREATE INDEX IF NOT EXISTS idx_case_reviews_case_id ON case_reviews(case_id);
+  CREATE INDEX IF NOT EXISTS idx_case_reviews_reviewed_at ON case_reviews(reviewed_at);
 `);
 
 console.log('Database initialized successfully.');

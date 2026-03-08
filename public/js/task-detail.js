@@ -17,12 +17,18 @@
     var map = {
       PENDING: 'badge-pending',
       IN_PROGRESS: 'badge-progress',
+      PENDING_REVIEW: 'badge-progress',
+      RESOLVED: 'badge-resolved',
       COMPLETED: 'badge-completed',
       ACTIVE: 'badge-active',
       DELEGATED: 'badge-delegated',
       EXPIRED: 'badge-expired'
     };
-    return '<span class="badge ' + (map[status] || 'badge-pending') + '">' + status + '</span>';
+    var labels = {
+      PENDING_REVIEW: 'รอผอ.ประเมิน',
+      RESOLVED: 'ปิดเคสแล้ว'
+    };
+    return '<span class="badge ' + (map[status] || 'badge-pending') + '">' + (labels[status] || status) + '</span>';
   }
 
   function formatDateTime(d) {
@@ -30,6 +36,89 @@
     return new Date(d).toLocaleString('th-TH', {
       day: 'numeric', month: 'short', year: 'numeric',
       hour: '2-digit', minute: '2-digit'
+    });
+  }
+
+  function renderReviewHistory(reviews) {
+    var historyEl = document.getElementById('review-history');
+    var historyCard = document.getElementById('review-history-card');
+    historyEl.innerHTML = '';
+    if (!reviews || !reviews.length) return;
+
+    historyCard.classList.remove('hidden');
+    reviews.forEach(function (r) {
+      var actionMap = {
+        ASSIST: 'ให้ความช่วยเหลือ',
+        FORWARD: 'ส่งต่อหน่วยงาน/ผู้เกี่ยวข้อง',
+        CLOSE: 'ปิดเคส'
+      };
+      var item = document.createElement('div');
+      item.className = 'info-row';
+      item.innerHTML =
+        '<span class="label">' + (actionMap[r.review_action] || r.review_action) + ' — ' + (r.reviewed_by || 'ผอ.') + '</span>' +
+        '<span class="value">' + formatDateTime(r.reviewed_at) + '</span>';
+      historyEl.appendChild(item);
+
+      if (r.review_note) {
+        var note = document.createElement('div');
+        note.className = 'admin-link-box';
+        note.style.marginBottom = '10px';
+        note.textContent = 'หมายเหตุ: ' + r.review_note;
+        historyEl.appendChild(note);
+      }
+    });
+  }
+
+  function setupReviewForm(data, submission) {
+    var reviewCard = document.getElementById('review-card');
+    var reviewStatus = document.getElementById('review-status');
+    var submitBtn = document.getElementById('review-submit-btn');
+    var reviewedByInput = document.getElementById('reviewed-by');
+    var actionInput = document.getElementById('review-action');
+    var noteInput = document.getElementById('review-note');
+
+    if (!submission) return;
+    reviewCard.classList.remove('hidden');
+    reviewStatus.innerHTML = 'สถานะเคสปัจจุบัน: ' + statusBadge(data.case_status || 'IN_PROGRESS');
+
+    if (data.case_status === 'RESOLVED') {
+      reviewedByInput.disabled = true;
+      actionInput.disabled = true;
+      noteInput.disabled = true;
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'ปิดเคสแล้ว';
+      return;
+    }
+
+    submitBtn.addEventListener('click', function () {
+      var payload = {
+        review_action: actionInput.value,
+        review_note: noteInput.value.trim(),
+        reviewed_by: reviewedByInput.value.trim() || 'ผอ.'
+      };
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'กำลังบันทึก...';
+      fetch('/api/cases/' + data.case_id + '/review', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+        .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+        .then(function (resp) {
+          if (!resp.ok) {
+            alert(resp.data.error || 'บันทึกผลการประเมินไม่สำเร็จ');
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'บันทึกผลการประเมิน';
+            return;
+          }
+          alert('บันทึกผลการประเมินสำเร็จ');
+          window.location.reload();
+        })
+        .catch(function () {
+          alert('เกิดข้อผิดพลาด กรุณาลองใหม่');
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'บันทึกผลการประเมิน';
+        });
     });
   }
 
@@ -48,7 +137,7 @@
       document.getElementById('student-name').textContent = data.student_name;
       document.getElementById('student-school').textContent = data.student_school || '-';
       document.getElementById('reason-flagged').textContent = data.reason_flagged || '-';
-      document.getElementById('task-status').innerHTML = statusBadge(data.task_status);
+      document.getElementById('task-status').innerHTML = statusBadge(data.case_status || data.task_status);
 
       // Timeline
       var timeline = document.getElementById('timeline');
@@ -68,6 +157,7 @@
         if (link.status === 'DELEGATED') statusText = ' — ส่งต่อให้คนอื่นแล้ว';
         if (link.status === 'COMPLETED') statusText = ' — ลงพื้นที่สำเร็จ';
         if (link.status === 'ACTIVE') statusText = ' — รอดำเนินการ';
+        if (link.admin_locked) statusText = ' — ถูกผู้ดูแลปิดลิงก์';
 
         var item = document.createElement('div');
         item.className = 'timeline-item';
@@ -117,6 +207,9 @@
           document.getElementById('submission-map').style.display = 'none';
         }
       }
+
+      renderReviewHistory(data.reviews || []);
+      setupReviewForm(data, submission);
     })
     .catch(function () {
       loading.classList.add('hidden');

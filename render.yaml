@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: sts-link-generate
+    runtime: node
+    plan: free
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: TRUST_PROXY
+        value: "true"
+      - key: ADMIN_ACCESS_KEY
+        sync: false

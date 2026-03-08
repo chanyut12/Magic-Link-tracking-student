@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="th">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>STS — Dashboard</title>
   <link rel="stylesheet" href="/css/style.css">
 </head>
+
 <body>
   <div class="header">
     <h1>Student Tracking System</h1>
@@ -39,9 +41,10 @@
     </div>
 
     <div class="stats-row-secondary" id="stats-secondary">
+
       <div class="stat-pill">
-        <span class="stat-pill-label">รอดำเนินการ</span>
-        <span class="stat-pill-value badge badge-open" id="stat-open">-</span>
+        <span class="stat-pill-label">รอผอ.ประเมิน</span>
+        <span class="stat-pill-value badge badge-pending" id="stat-pending-review">-</span>
       </div>
       <div class="stat-pill">
         <span class="stat-pill-label">ลิงก์ที่ยัง Active</span>
@@ -53,15 +56,75 @@
       </div>
     </div>
 
-    <div class="card" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
-      <h2 class="card-title" style="margin:0;">รายการเคสทั้งหมด</h2>
-      <a href="/create" class="btn btn-primary" style="width:auto;">+ สร้างภารกิจใหม่</a>
+    <div class="card dashboard-toolbar">
+      <h2 class="card-title dashboard-toolbar-title">รายการเคสทั้งหมด</h2>
+      <a href="/create" class="btn btn-primary btn-auto">+ สร้างภารกิจใหม่</a>
     </div>
 
-    <div id="loading" class="loader"><div class="spinner"></div></div>
+    <div class="card dashboard-filter-card">
+      <div class="dashboard-filter-row">
+        <div class="dashboard-filter-mode">
+          <button type="button" id="filter-mode-all" class="filter-chip filter-chip-active">ทั้งหมด</button>
+          <button type="button" id="filter-mode-exec" class="filter-chip">โหมดผู้บริหาร/ผอ.</button>
+        </div>
+        <div class="dashboard-filter-select">
+          <label for="status-filter">สถานะ</label>
+          <select id="status-filter">
+            <option value="ALL">ทุกสถานะ</option>
+            <option value="PENDING_REVIEW">รอผอ.ประเมิน</option>
+            <option value="IN_PROGRESS">กำลังดำเนินการ</option>
+            <option value="RESOLVED">ปิดเคสแล้ว</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="dashboard-filter-row-2">
+        <div class="dashboard-filter-select">
+          <label for="date-preset-filter">ช่วงเวลาที่สร้าง</label>
+          <select id="date-preset-filter">
+            <option value="ALL">ทุกช่วงเวลา</option>
+            <option value="TODAY">วันนี้</option>
+            <option value="LAST_7">7 วันที่ผ่านมา</option>
+            <option value="LAST_30">30 วันที่ผ่านมา</option>
+          </select>
+        </div>
+        <div class="dashboard-filter-select">
+          <label for="school-filter">โรงเรียน</label>
+          <select id="school-filter">
+            <option value="ALL">ทุกโรงเรียน</option>
+          </select>
+        </div>
+        <div class="dashboard-filter-select">
+          <label for="link-filter">สถานะลิงก์</label>
+          <select id="link-filter">
+            <option value="ALL">ทุกสถานะลิงก์</option>
+            <option value="ACTIVE">มีลิงก์ Active</option>
+            <option value="LOCKED">ถูกล็อก</option>
+            <option value="NONE">ไม่มีลิงก์</option>
+          </select>
+        </div>
+        <div class="dashboard-filter-select">
+          <label for="sort-filter">เรียงลำดับ</label>
+          <select id="sort-filter">
+            <option value="DEFAULT">ความด่วน (เริ่มต้น)</option>
+            <option value="NEWEST">วันที่: ใหม่สุดก่อน</option>
+            <option value="OLDEST">วันที่: เก่าสุดก่อน</option>
+          </select>
+        </div>
+        <div class="dashboard-filter-reset">
+          <button type="button" id="btn-reset-filters" class="btn-reset-filter">↺ ล้างตัวกรอง</button>
+        </div>
+      </div>
+
+      <div id="filter-summary" class="filter-summary">แสดงทั้งหมด</div>
+    </div>
+
+    <div id="loading" class="loader">
+      <div class="spinner"></div>
+    </div>
     <div id="empty" class="empty-state hidden">
       <div class="icon">📋</div>
-      <p>ยังไม่มีเคส — กด "สร้างภารกิจใหม่" เพื่อเริ่มต้น</p>
+      <p id="empty-message">ยังไม่มีเคส — กด "สร้างภารกิจใหม่" เพื่อเริ่มต้น</p>
     </div>
 
     <div id="table-wrap" class="table-wrap hidden">
@@ -82,8 +145,11 @@
         <tbody id="cases-body"></tbody>
       </table>
     </div>
+
+    <div id="mobile-list" class="mobile-case-list hidden"></div>
   </div>
 
   <script src="/js/dashboard.js"></script>
 </body>
+
 </html>
