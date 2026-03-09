@@ -47,7 +47,8 @@ body {
 }
 
 .container--wide {
-  max-width: 960px;
+  max-width: 1300px;
+  width: 96%;
 }
 
 /* Header */
@@ -238,12 +239,13 @@ textarea:focus-visible {
 /* Badge */
 .badge {
   display: inline-block;
-  padding: 3px 10px;
+  padding: 4px 12px;
   border-radius: 99px;
   font-size: 0.75rem;
-  font-weight: 600;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.03em;
+  white-space: nowrap;
 }
 
 .badge-pending {
@@ -290,6 +292,9 @@ textarea:focus-visible {
 .table-wrap {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  background: #fff;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
 }
 
 table {
@@ -300,7 +305,7 @@ table {
 
 th,
 td {
-  padding: 10px 12px;
+  padding: 12px 10px;
   text-align: left;
   border-bottom: 1px solid var(--gray-200);
 }
@@ -312,9 +317,20 @@ th {
   white-space: nowrap;
 }
 
+.nowrap { white-space: nowrap; }
+
 tr:hover td {
   background: var(--gray-50);
 }
+
+.text-nowrap { white-space: nowrap; }
+.text-truncate { 
+  max-width: 200px; 
+  white-space: nowrap; 
+  overflow: hidden; 
+  text-overflow: ellipsis; 
+}
+.min-w-120 { min-width: 120px; }
 
 td a {
   color: var(--primary);
@@ -661,6 +677,23 @@ td a:hover {
   }
 }
 
+/* Mobile Case Card Enhancements */
+.mobile-case-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--gray-100);
+}
+
+.mobile-case-actions .btn-copy-link, 
+.mobile-case-actions .btn-detail {
+  flex: 1;
+  min-width: 100px;
+  justify-content: center;
+}
+
 /* Stats grid */
 .stats-grid {
   display: grid;
@@ -773,19 +806,18 @@ td a:hover {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 8px 12px;
-  min-height: 40px;
-  min-width: 40px;
+  gap: 6px;
+  padding: 4px 8px;
+  min-height: 32px;
   border: 1.5px solid var(--primary);
   border-radius: 6px;
   background: #fff;
   color: var(--primary);
-  font-size: 0.85rem;
-  font-weight: 500;
+  font-size: 0.75rem;
+  font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
-  transition: background 0.15s, color 0.15s;
+  transition: all 0.2s;
   text-decoration: none;
 }
 
@@ -807,7 +839,7 @@ td a:hover {
 }
 
 .btn-admin-toggle {
-  min-width: 92px;
+  min-width: 80px;
 }
 
 .dashboard-toolbar {

@@ -38,6 +38,8 @@ router.get('/task/:token/delegate', (req, res) => res.sendFile(path.join(viewsDi
 router.get('/task/:token/report', (req, res) => res.sendFile(path.join(viewsDir, 'report.html')));
 router.get('/task/:token/success', (req, res) => res.sendFile(path.join(viewsDir, 'success.html')));
 router.get('/task-detail/:taskId', requireAdminPage, (req, res) => res.sendFile(path.join(viewsDir, 'task-detail.html')));
+router.get('/attendance', requireAdminPage, (req, res) => res.sendFile(path.join(viewsDir, 'attendance.html')));
+router.get('/task/:token/attendance', (req, res) => res.sendFile(path.join(viewsDir, 'task-attendance.html')));
 router.get('/expired', (req, res) => res.sendFile(path.join(viewsDir, 'expired.html')));
 
 module.exports = router;

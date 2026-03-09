@@ -18,10 +18,11 @@ const {
 // Controllers
 const { getStats } = require('../controllers/stats.controller');
 const { getAllCases, reviewCase, getCaseReviews } = require('../controllers/case.controller');
-const { createTask, getTaskByToken, getTaskChain } = require('../controllers/task.controller');
+const { createTask, getTaskByToken, getTaskChain, requestOTP, verifyOTP, getTaskStudents, getTaskHistory, submitTaskAttendance } = require('../controllers/task.controller');
 const { delegateTask } = require('../controllers/delegation.controller');
 const { submitTask } = require('../controllers/submission.controller');
 const { adminLockLink } = require('../controllers/admin.controller');
+const { getStudentsSummary, saveAttendance } = require('../controllers/attendance.controller');
 
 const router = express.Router();
 const uploadsDir = getUploadsDir();
@@ -67,7 +68,12 @@ router.get('/cases/:caseId/reviews', requireAdminApi, getCaseReviews);
 // Task endpoints
 router.post('/tasks', requireAdminApi, createTask);
 router.get('/tasks/:token', getTaskByToken);
+router.get('/tasks/:token/students', getTaskStudents);
+router.get('/tasks/:token/history', getTaskHistory);
+router.post('/tasks/:token/attendance', submitTaskAttendance);
 router.get('/tasks/:taskId/chain', requireAdminApi, getTaskChain);
+router.post('/tasks/:token/otp', requestOTP);
+router.post('/tasks/:token/verify', verifyOTP);
 
 // Delegation endpoints
 router.post('/tasks/:token/delegate', delegateTask);
@@ -77,5 +83,11 @@ router.post('/tasks/:token/submit', upload.array('photos', MAX_FILES_PER_UPLOAD)
 
 // Admin endpoints
 router.post('/task-links/:linkId/admin-lock', requireAdminApi, adminLockLink);
+
+// Attendance endpoints
+router.get('/attendance/students', requireAdminApi, getStudentsSummary);
+router.post('/attendance', requireAdminApi, saveAttendance);
+router.get('/attendance/history', requireAdminApi, require('../controllers/attendance.controller').getAttendanceHistory);
+router.get('/attendance/stats', requireAdminApi, require('../controllers/attendance.controller').getAttendanceStats);
 
 module.exports = router;

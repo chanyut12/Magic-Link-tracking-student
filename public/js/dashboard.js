@@ -87,17 +87,16 @@
     return dt.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' });
   }
 
-  function linkCell(c) {
-    if (!c.active_link) return '<td class="text-center">-</td>';
+  function linkCellContent(c) {
+    if (!c.active_link) return '';
     var publicLink = normalizePublicLink(c.active_link);
     var lineUrl = buildLineShareUrl(publicLink);
     if (c.active_link_locked) {
-      return '<td><span class="badge badge-expired">ปิดโดยผู้ดูแล</span></td>';
+      return '<span class="badge badge-expired" style="margin-right:6px">ปิดโดยผู้ดูแล</span>';
     }
-    return `<td style="white-space:nowrap">` +
-      `<button class="btn-copy-link" data-link="${publicLink}" title="คัดลอกลิงก์">📋</button> ` +
-      `<a href="${lineUrl}" target="_blank" rel="noopener" class="btn-copy-link btn-line-share" style="background:#06C755;color:#fff;border-color:#06C755;text-decoration:none;" title="ส่งผ่าน LINE">💬</a>` +
-      `</td>`;
+    return `<a href="${publicLink}" target="_blank" rel="noopener" class="btn-copy-link" style="text-decoration:none; background:#3b82f6; color:white; border-color:#3b82f6;" title="เปิดดูภารกิจ">👁️ เปิด</a> ` +
+      `<button class="btn-copy-link" data-link="${publicLink}" title="คัดลอกลิงก์">📋 คัดลอก</button> ` +
+      `<a href="${lineUrl}" target="_blank" rel="noopener" class="btn-copy-link btn-line-share" style="background:#06C755;color:#fff;border-color:#06C755;text-decoration:none;" title="ส่งผ่าน LINE">💬 LINE</a> `;
   }
 
   function mobileLinkCell(c) {
@@ -106,8 +105,9 @@
     var publicLink = normalizePublicLink(c.active_link);
     var lineUrl = buildLineShareUrl(publicLink);
     return (
-      `<button class="btn-copy-link" data-link="${publicLink}" title="คัดลอกลิงก์">📋</button>` +
-      `<a href="${lineUrl}" target="_blank" rel="noopener" class="btn-copy-link btn-copy-link--line" title="ส่งผ่าน LINE">💬</a>`
+      `<a href="${publicLink}" target="_blank" rel="noopener" class="btn-copy-link" style="text-decoration:none; background:#3b82f6; color:white; border-color:#3b82f6;">👁️ เปิดดู</a>` +
+      `<button class="btn-copy-link" data-link="${publicLink}" title="คัดลอกลิงก์">📋 คัดลอก</button>` +
+      `<a href="${lineUrl}" target="_blank" rel="noopener" class="btn-copy-link btn-copy-link--line" title="ส่งผ่าน LINE">💬 LINE</a>`
     );
   }
 
@@ -119,18 +119,13 @@
     return `<button class="btn-copy-link btn-admin-toggle" data-link-id="${c.active_link_id}" data-action="lock" title="ปิดลิงก์ชั่วคราว/ถาวร">🔒 ปิดลิงก์</button>`;
   }
 
-  function adminLinkCell(c) {
-    if (!c.active_link_id) return '<td class="text-center">-</td>';
+  function adminLinkCellContent(c) {
+    if (!c.active_link_id) return '';
     if (c.active_link_locked) {
       var reason = c.active_link_lock_reason ? escapeHtml(c.active_link_lock_reason) : '-';
-      return `<td>` +
-        `<div class="admin-link-box">เหตุผล: ${reason}</div>` +
-        `<button class="btn-copy-link btn-admin-toggle" data-link-id="${c.active_link_id}" data-action="unlock" title="เปิดใช้งานลิงก์อีกครั้ง">🔓 เปิดลิงก์</button>` +
-        `</td>`;
+      return `<button class="btn-copy-link btn-admin-toggle" style="color:#ef4444; border-color:#ef4444;" data-link-id="${c.active_link_id}" data-action="unlock" title="เหตุผล: ${reason} (คลิกเพื่อเปิดใช้งานลิงก์อีกครั้ง)">🔓 เปิดลิงก์</button>`;
     }
-    return `<td>` +
-      `<button class="btn-copy-link btn-admin-toggle" data-link-id="${c.active_link_id}" data-action="lock" title="ปิดลิงก์ชั่วคราว/ถาวร">🔒 ปิดลิงก์</button>` +
-      `</td>`;
+    return `<button class="btn-copy-link btn-admin-toggle" style="color:#64748b; border-color:#cbd5e1;" data-link-id="${c.active_link_id}" data-action="lock" title="ปิดลิงก์ชั่วคราว/ถาวร">🔒 ปิดลิงก์</button>`;
   }
 
   function fmt(n) {
@@ -331,14 +326,13 @@
       var tr = document.createElement('tr');
       tr.innerHTML =
         `<td>${i + 1}</td>` +
-        `<td>${studentName}</td>` +
+        `<td>${c.task_id ? `<a href="/task-detail/${c.task_id}" style="text-decoration:none; color:inherit; font-weight:700;">${studentName}</a>` : studentName}</td>` +
         `<td>${school}</td>` +
-        `<td>${reason}</td>` +
-        `<td>${statusBadge(c.status)}</td>` +
-        linkCell(c) +
-        adminLinkCell(c) +
-        `<td>${createdAt}</td>` +
-        `<td>${c.task_id ? `<a href="/task-detail/${c.task_id}">ดูรายละเอียด</a>` : '-'}</td>`;
+        `<td class="text-truncate" title="${reason}">${reason}</td>` +
+        `<td class="text-nowrap">${statusBadge(c.status)}</td>` +
+        `<td class="text-nowrap" style="display:flex; gap:4px; align-items:center;">${linkCellContent(c)}${adminLinkCellContent(c)}</td>` +
+        `<td class="text-nowrap">${createdAt}</td>` +
+        `<td class="text-nowrap">${c.task_id ? `<a href="/task-detail/${c.task_id}" class="btn-detail"><i class="fas fa-search"></i> ดูรายละเอียด</a>` : '-'}</td>`;
       tbody.appendChild(tr);
 
       var card = document.createElement('div');
@@ -354,9 +348,9 @@
         `<div class="mobile-case-meta">สาเหตุ: ${reason}</div>` +
         `<div class="mobile-case-meta">สร้างเมื่อ: ${createdAt}</div>` +
         `<div class="mobile-case-actions">` +
-        mobileLinkCell(c) +
-        mobileAdminAction(c) +
-        (c.task_id ? `<a class="btn-copy-link" href="/task-detail/${c.task_id}">รายละเอียด</a>` : '') +
+        linkCellContent(c) +
+        adminLinkCellContent(c) +
+        (c.task_id ? `<a class="btn-detail" href="/task-detail/${c.task_id}"><i class="fas fa-info-circle"></i> รายละเอียด</a>` : '') +
         `</div>`;
       if (c.active_link_locked && c.active_link_lock_reason) {
         card.innerHTML += `<div class="mobile-case-link">เหตุผลที่ปิดลิงก์: ${escapeHtml(c.active_link_lock_reason)}</div>`;
@@ -459,6 +453,12 @@
       document.getElementById('stat-today').textContent = fmt(s.created_today);
       document.getElementById('stat-pending-review').textContent = fmt(s.pending_review);
       document.getElementById('stat-active-links').textContent = fmt(s.active_delegations);
+      document.getElementById('stat-active-links').parentElement.style.cursor = 'pointer';
+      document.getElementById('stat-active-links').parentElement.onclick = function() {
+        linkFilterSelect.value = 'ACTIVE';
+        currentLinkFilter = 'ACTIVE';
+        renderFilteredCases();
+      };
       document.getElementById('stat-delegations').textContent = fmt(s.total_delegations);
     })
     .catch(function () { });

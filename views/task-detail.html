@@ -17,22 +17,40 @@
     <div id="loading" class="loader"><div class="spinner"></div></div>
 
     <div id="content" class="hidden">
-      <div class="card">
-        <div class="card-title">ข้อมูลเคส</div>
-        <div class="info-row">
-          <span class="label">ชื่อนักเรียน</span>
-          <span class="value" id="student-name"></span>
+      <div id="case-card" class="card">
+        <div class="card-title" id="card-title-main">ข้อมูลภารกิจ</div>
+        <div id="visit-info">
+          <div class="info-row">
+            <span class="label">ชื่อนักเรียน</span>
+            <span class="value" id="student-name"></span>
+          </div>
+          <div class="info-row">
+            <span class="label">โรงเรียน</span>
+            <span class="value" id="student-school"></span>
+          </div>
+          <div class="info-row">
+            <span class="label">สาเหตุ</span>
+            <span class="value" id="reason-flagged"></span>
+          </div>
         </div>
-        <div class="info-row">
-          <span class="label">โรงเรียน</span>
-          <span class="value" id="student-school"></span>
+        
+        <div id="attendance-info" class="hidden">
+           <div class="info-row">
+             <span class="label">ประเภทภารกิจ</span>
+             <span class="value">เช็คชื่อรายห้อง (Attendance)</span>
+           </div>
+           <div class="info-row">
+             <span class="label">ระดับชั้น</span>
+             <span class="value" id="target-grade"></span>
+           </div>
+           <div class="info-row">
+             <span class="label">ห้อง</span>
+             <span class="value" id="target-room"></span>
+           </div>
         </div>
+
         <div class="info-row">
-          <span class="label">สาเหตุ</span>
-          <span class="value" id="reason-flagged"></span>
-        </div>
-        <div class="info-row">
-          <span class="label">สถานะ</span>
+          <span class="label">สถานะภาพรวม</span>
           <span id="task-status"></span>
         </div>
       </div>

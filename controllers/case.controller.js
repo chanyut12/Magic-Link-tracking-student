@@ -14,7 +14,18 @@ const { REVIEW_ACTIONS } = require('../config/constants');
  */
 function getAllCases(req, res) {
   const cases = db.prepare(`
-    SELECT c.*, t.id as task_id, t.status as task_status,
+    SELECT 
+      COALESCE(c.id, t.id) as id,
+      COALESCE(c.student_name, '[เช็คชื่อ] ' || t.target_grade || '/' || t.target_room) as student_name,
+      c.student_school,
+      c.student_address,
+      c.student_lat,
+      c.student_lng,
+      COALESCE(c.reason_flagged, 'ระบบเช็คชื่อรายห้อง') as reason_flagged,
+      COALESCE(c.status, t.status) as status,
+      COALESCE(c.created_at, t.created_at) as created_at,
+      t.id as task_id, 
+      t.status as task_status,
       tl.id as active_link_id,
       tl.magic_link as active_link,
       tl.assigned_to_name as link_assigned_to,
@@ -49,10 +60,10 @@ function getAllCases(req, res) {
         ORDER BY datetime(cr.reviewed_at) DESC
         LIMIT 1
       ) as latest_reviewed_at
-    FROM cases c
-    LEFT JOIN tasks t ON t.case_id = c.id
+    FROM tasks t
+    LEFT JOIN cases c ON t.case_id = c.id
     LEFT JOIN task_links tl ON tl.task_id = t.id AND tl.status = 'ACTIVE'
-    ORDER BY c.created_at DESC
+    ORDER BY COALESCE(c.created_at, t.created_at) DESC
   `).all();
   res.json(cases);
 }

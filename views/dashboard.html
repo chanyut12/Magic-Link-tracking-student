@@ -57,8 +57,11 @@
     </div>
 
     <div class="card dashboard-toolbar">
-      <h2 class="card-title dashboard-toolbar-title">รายการเคสทั้งหมด</h2>
-      <a href="/create" class="btn btn-primary btn-auto">+ สร้างภารกิจใหม่</a>
+      <h2 class="card-title dashboard-toolbar-title">จัดการระบบ</h2>
+      <div class="dashboard-toolbar-actions">
+        <a href="/attendance" class="btn btn-success btn-auto" style="margin-right: 10px;">📊 ระบบเช็คชื่อนักเรียน</a>
+        <a href="/create" class="btn btn-primary btn-auto">+ สร้างภารกิจใหม่</a>
+      </div>
     </div>
 
     <div class="card dashboard-filter-card">
@@ -136,9 +139,8 @@
             <th>โรงเรียน</th>
             <th>สาเหตุ</th>
             <th>สถานะ</th>
-            <th>ลิงก์</th>
-            <th>จัดการลิงก์</th>
-            <th>วันที่สร้าง</th>
+            <th style="min-width: 320px;">ลิงก์ & การจัดการ</th>
+            <th class="text-nowrap">วันที่สร้าง</th>
             <th></th>
           </tr>
         </thead>
