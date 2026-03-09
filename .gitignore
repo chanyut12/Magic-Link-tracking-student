@@ -7,3 +7,4 @@ db/*.db-shm
 uploads/*
 !uploads/.gitkeep
 /docs
+/UI

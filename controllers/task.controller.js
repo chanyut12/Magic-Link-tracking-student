@@ -23,6 +23,10 @@ async function createTask(req, res) {
 
   const studentSchool = clean(req.body.student_school);
   const studentAddress = clean(req.body.student_address);
+  const studentSubdistrict = clean(req.body.student_subdistrict);
+  const studentDistrict = clean(req.body.student_district);
+  const studentProvince = clean(req.body.student_province);
+  const studentZipcode = clean(req.body.student_zipcode);
   const studentLat = parseFloat(req.body.student_lat) || null;
   const studentLng = parseFloat(req.body.student_lng) || null;
   const reasonFlagged = clean(req.body.reason_flagged);
@@ -38,9 +42,9 @@ async function createTask(req, res) {
 
   const createTx = db.transaction(() => {
     const caseResult = db.prepare(`
-      INSERT INTO cases (student_name, student_school, student_address, student_lat, student_lng, reason_flagged)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(studentName, studentSchool, studentAddress, studentLat, studentLng, reasonFlagged);
+      INSERT INTO cases (student_name, student_school, student_address, student_subdistrict, student_district, student_province, student_zipcode, student_lat, student_lng, reason_flagged)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(studentName, studentSchool, studentAddress, studentSubdistrict, studentDistrict, studentProvince, studentZipcode, studentLat, studentLng, reasonFlagged);
     const caseId = caseResult.lastInsertRowid;
 
     db.prepare(`INSERT INTO tasks (id, case_id) VALUES (?, ?)`).run(taskId, caseId);
