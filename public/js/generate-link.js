@@ -81,7 +81,7 @@
 
     // ===== Generate Button =====
     generateBtn.addEventListener('click', function () {
-        if (selectedPurpose === 'TRACKING') {
+        if (selectedPurpose === 'TRACKING' || selectedPurpose === 'ATTENDANCE') {
             openModal();
         }
     });
@@ -100,6 +100,16 @@
     function openModal() {
         overlay.classList.remove('hidden');
         document.body.style.overflow = 'hidden';
+
+        if (selectedPurpose === 'ATTENDANCE') {
+            document.getElementById('m_visit-form').classList.add('hidden');
+            document.getElementById('m_attendance-form').classList.remove('hidden');
+            document.getElementById('modal-main-title').innerText = '✅ สร้างภารกิจเช็คชื่อ';
+        } else {
+            document.getElementById('m_visit-form').classList.remove('hidden');
+            document.getElementById('m_attendance-form').classList.add('hidden');
+            document.getElementById('modal-main-title').innerText = '📋 สร้างภารกิจลงพื้นที่';
+        }
 
         if (!mapInitialized) {
             initMap();
@@ -256,31 +266,55 @@
 
     // ===== Modal: Form Submission =====
     submitBtn.addEventListener('click', function () {
-        var name = document.getElementById('m_student_name').value.trim();
         var assigned = document.getElementById('m_assigned_to_name').value.trim();
-        if (!name || !assigned) {
-            alert('กรุณากรอกชื่อนักเรียนและชื่อผู้รับงาน');
+        var email = document.getElementById('m_assigned_to_email').value.trim();
+
+        if (!assigned) {
+            alert('กรุณากรอกชื่อผู้รับงาน');
             return;
+        }
+        if (!email) {
+            alert('กรุณากรอกอีเมลสำหรับรับรหัส OTP');
+            return;
+        }
+
+        var body = {
+            task_type: selectedPurpose === 'ATTENDANCE' ? 'ATTENDANCE' : 'VISIT',
+            assigned_to_name: assigned,
+            assigned_to_phone: document.getElementById('m_assigned_to_phone').value.trim(),
+            assigned_to_email: email,
+            expires_in_hours: computeExpiryHours()
+        };
+
+        if (selectedPurpose === 'VISIT' || selectedPurpose === 'TRACKING') {
+            body.student_name = document.getElementById('m_student_name').value.trim();
+            body.student_school = document.getElementById('m_student_school').value.trim();
+            body.student_address = document.getElementById('m_student_address').value.trim();
+            body.student_subdistrict = document.getElementById('m_student_subdistrict').value.trim();
+            body.student_district = document.getElementById('m_student_district').value.trim();
+            body.student_province = document.getElementById('m_student_province').value.trim();
+            body.student_zipcode = document.getElementById('m_student_zipcode').value.trim();
+            body.student_lat = parseFloat(latInput.value) || null;
+            body.student_lng = parseFloat(lngInput.value) || null;
+            body.reason_flagged = document.getElementById('m_reason_flagged').value.trim();
+
+            if (!body.student_name) {
+                alert('กรุณากรอกชื่อนักเรียน');
+                return;
+            }
+        } else if (selectedPurpose === 'ATTENDANCE') {
+            body.target_grade = document.getElementById('m_target_grade').value;
+            body.target_room = document.getElementById('m_target_room').value;
+            body.subject = document.getElementById('m_target_subject').value;
+
+            if (!body.target_grade || !body.target_room || !body.subject) {
+                alert('กรุณาเลือกชั้น ห้อง และวิชาที่ต้องการเช็คชื่อ');
+                return;
+            }
         }
 
         submitBtn.disabled = true;
         submitBtn.textContent = 'กำลังสร้าง...';
-
-        var body = {
-            student_name: name,
-            student_school: document.getElementById('m_student_school').value.trim(),
-            student_address: document.getElementById('m_student_address').value.trim(),
-            student_subdistrict: document.getElementById('m_student_subdistrict').value.trim(),
-            student_district: document.getElementById('m_student_district').value.trim(),
-            student_province: document.getElementById('m_student_province').value.trim(),
-            student_zipcode: document.getElementById('m_student_zipcode').value.trim(),
-            student_lat: parseFloat(latInput.value) || null,
-            student_lng: parseFloat(lngInput.value) || null,
-            reason_flagged: document.getElementById('m_reason_flagged').value.trim(),
-            assigned_to_name: assigned,
-            assigned_to_phone: document.getElementById('m_assigned_to_phone').value.trim(),
-            expires_in_hours: computeExpiryHours()
-        };
 
         fetch('/api/tasks', {
             method: 'POST',
@@ -339,6 +373,10 @@
         document.getElementById('m_reason_flagged').value = '';
         document.getElementById('m_assigned_to_name').value = '';
         document.getElementById('m_assigned_to_phone').value = '';
+        document.getElementById('m_assigned_to_email').value = '';
+        document.getElementById('m_target_grade').value = '';
+        document.getElementById('m_target_room').value = '';
+        document.getElementById('m_target_subject').value = '';
         // Reset expiry is handled on the hub page now, so we can ignore m_expires_value
 
         if (marker) {
