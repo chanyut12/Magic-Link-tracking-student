@@ -10,14 +10,14 @@ const db = require('../db/database');
  * Get dashboard statistics
  */
 function getStats(req, res) {
-  const total = db.prepare(`SELECT COUNT(*) as count FROM cases`).get().count;
-  const inProgress = db.prepare(`SELECT COUNT(*) as count FROM cases WHERE status = 'IN_PROGRESS'`).get().count;
-  const pendingReview = db.prepare(`SELECT COUNT(*) as count FROM cases WHERE status = 'PENDING_REVIEW'`).get().count;
-  const resolved = db.prepare(`SELECT COUNT(*) as count FROM cases WHERE status = 'RESOLVED'`).get().count;
-  const activeDelegations = db.prepare(`SELECT COUNT(*) as count FROM task_links WHERE status = 'ACTIVE' AND COALESCE(admin_locked, 0) = 0`).get().count;
-  const totalDelegations = db.prepare(`SELECT COUNT(*) as count FROM task_links WHERE delegation_depth > 0`).get().count;
+  const total = db.prepare(`SELECT COUNT(*) as count FROM cases c JOIN tasks t ON c.id = t.case_id WHERE t.task_type = 'VISIT'`).get().count;
+  const inProgress = db.prepare(`SELECT COUNT(*) as count FROM cases c JOIN tasks t ON c.id = t.case_id WHERE c.status = 'IN_PROGRESS' AND t.task_type = 'VISIT'`).get().count;
+  const pendingReview = db.prepare(`SELECT COUNT(*) as count FROM cases c JOIN tasks t ON c.id = t.case_id WHERE c.status = 'PENDING_REVIEW' AND t.task_type = 'VISIT'`).get().count;
+  const resolved = db.prepare(`SELECT COUNT(*) as count FROM cases c JOIN tasks t ON c.id = t.case_id WHERE c.status = 'RESOLVED' AND t.task_type = 'VISIT'`).get().count;
+  const activeDelegations = db.prepare(`SELECT COUNT(*) as count FROM task_links tl JOIN tasks t ON tl.task_id = t.id WHERE tl.status = 'ACTIVE' AND COALESCE(tl.admin_locked, 0) = 0 AND t.task_type = 'VISIT'`).get().count;
+  const totalDelegations = db.prepare(`SELECT COUNT(*) as count FROM task_links tl JOIN tasks t ON tl.task_id = t.id WHERE tl.delegation_depth > 0 AND t.task_type = 'VISIT'`).get().count;
 
-  const createdToday = db.prepare(`SELECT COUNT(*) as count FROM cases WHERE date(created_at) = date('now')`).get().count;
+  const createdToday = db.prepare(`SELECT COUNT(*) as count FROM cases c JOIN tasks t ON c.id = t.case_id WHERE date(c.created_at) = date('now') AND t.task_type = 'VISIT'`).get().count;
 
   res.json({
     total,

@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>STS — สร้างลิงค์เข้าใช้งาน</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+
+<body class="has-sidebar">
+    <div id="overlay" class="overlay"></div>
+    <div id="sidebar" class="sidebar">
+        <div class="logo-section"><i class="fas fa-graduation-cap"></i><span>ระบบติดตามนักเรียน</span></div>
+        <div class="menu-label">เมนู</div>
+        <a href="/" class="nav-item"><i class="fas fa-home"></i>Dashboard</a>
+        <a href="/create" class="nav-item active"><i class="fas fa-link"></i>สร้างลิงค์</a>
+        <a href="/attendance" class="nav-item"><i class="fas fa-clipboard-check"></i>เช็คชื่อ</a>
+        <a href="/attendance-dashboard" class="nav-item"><i class="fas fa-chart-bar"></i>Dashboard เช็คชื่อ</a>
+        <div class="user-profile">
+            <div class="avatar">A</div>
+            <div>
+                <div style="font-weight:600;font-size:0.9rem">ผู้ดูแลระบบ</div>
+                <div style="font-size:0.75rem;color:#94a3b8">Admin</div>
+            </div>
+            <form action="/admin-logout" method="POST" style="margin-left:auto">
+                <button type="submit" style="background:none;border:none;color:#94a3b8;cursor:pointer"><i class="fas fa-sign-out-alt"></i></button>
+            </form>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="top-bar">
+            <div style="display:flex;align-items:center;gap:1rem">
+                <div id="menu-btn" class="mobile-toggle"><i class="fas fa-bars"></i></div>
+                <h1 class="page-title">สร้างลิงค์เข้าใช้งานด่วน</h1>
+            </div>
+        </div>
+
+        <div class="container" style="padding:0;margin:0;max-width:640px">
+        <!-- Section: Purpose -->
+        <div class="card">
+            <div class="section-heading">
+                <span class="section-heading-icon">🎯</span>
+                วัตถุประสงค์ (Purpose)
+            </div>
+
+            <div class="purpose-cards">
+                <!-- Option 1: Case Tracking -->
+                <label class="purpose-card purpose-card--selected" id="card-tracking" data-purpose="TRACKING">
+                    <input type="radio" name="purpose" value="TRACKING" class="purpose-radio" checked>
+                    <div class="purpose-icon">📋</div>
+                    <div class="purpose-info">
+                        <div class="purpose-title">เปิดเคสติดตามนักเรียน</div>
+                        <div class="purpose-desc">Open Case Tracking System</div>
+                    </div>
+                </label>
+
+                <!-- Option 2: Attendance -->
+                <label class="purpose-card" id="card-attendance" data-purpose="ATTENDANCE">
+                    <input type="radio" name="purpose" value="ATTENDANCE" class="purpose-radio">
+                    <div class="purpose-icon">✅</div>
+                    <div class="purpose-info">
+                        <div class="purpose-title">
+                            เช็คชื่อเข้าเรียน
+                        </div>
+                        <div class="purpose-desc">Attendance Tracking System</div>
+                    </div>
+                </label>
+            </div>
+        </div>
+
+        <!-- Section: Permissions -->
+        <div class="card">
+            <div class="section-heading">
+                <span class="section-heading-icon">🛡️</span>
+                เลือกกลุ่มเมนูและสิทธิ์
+            </div>
+
+            <div class="config-tab-bar" id="perm-tab-bar">
+                <button type="button" class="config-tab config-tab--active" data-tab="template">เทมเพลตมาตรฐาน</button>
+                <button type="button" class="config-tab" data-tab="custom">กำหนดเอง</button>
+            </div>
+
+            <div id="perm-template-panel">
+                <div class="form-group mt-8">
+                    <select id="perm-role-select">
+                        <option value="counselor">สิทธิ์เจ้าหน้าที่แนะแนว (Counselor)</option>
+                        <option value="class_teacher" selected>สิทธิ์ครูประจำชั้น (Class Teacher)</option>
+                        <option value="admin">สิทธิ์ผู้บริหารสถานศึกษา (Admin)</option>
+                        <option value="field_worker">สิทธิ์ผู้ลงพื้นที่ (Field Worker)</option>
+                    </select>
+                </div>
+                <div class="config-hint">
+                    💡 เทมเพลตจะกำหนดเมนูและสิทธิ์เข้าถึงข้อมูลอัตโนมัติตามบทบาทที่เลือก
+                </div>
+            </div>
+
+            <div id="perm-custom-panel" class="hidden">
+                <div class="config-hint mt-8">
+                    🚧 ระบบกำหนดสิทธิ์เองจะเปิดให้ใช้งานในเวอร์ชันถัดไป
+                </div>
+            </div>
+        </div>
+
+        <!-- Section: Data Scope -->
+        <div class="card">
+            <div class="section-heading">
+                <span class="section-heading-icon">🗺️</span>
+                ขอบเขตข้อมูล (Data Scope)
+            </div>
+
+            <div class="form-group">
+                <label class="config-mini-label">ระดับชั้นข้อมูล</label>
+                <div class="scope-chips" id="scope-chips">
+                    <button type="button" class="scope-chip scope-chip--active" data-scope="school">สถานศึกษา</button>
+                    <button type="button" class="scope-chip" data-scope="district">อำเภอ</button>
+                    <button type="button" class="scope-chip" data-scope="province">จังหวัด</button>
+                    <button type="button" class="scope-chip" data-scope="national">ประเทศ</button>
+                </div>
+            </div>
+
+            <div class="form-group" id="school-search-group">
+                <label class="config-mini-label">ระบุสถานศึกษา</label>
+                <div class="search-input-wrap">
+                    <span class="search-input-icon">🔍</span>
+                    <input type="text" id="scope-school-search" placeholder="ระบุชื่อโรงเรียน หรือ รหัส OBEC"
+                        class="search-input">
+                </div>
+            </div>
+        </div>
+
+        <!-- Section: Link Expiry -->
+        <div class="card">
+            <div class="section-heading">
+                <span class="section-heading-icon">⏱️</span>
+                ระยะเวลาลิงค์ (Expiry)
+            </div>
+
+            <div class="expiry-chips" id="expiry-chips">
+                <button type="button" class="expiry-chip" data-hours="24">24 ชม.</button>
+                <button type="button" class="expiry-chip expiry-chip--active" data-hours="168">7 วัน</button>
+                <button type="button" class="expiry-chip" data-hours="720">30 วัน</button>
+                <button type="button" class="expiry-chip" data-hours="0">ไม่มีวันหมดอายุ</button>
+            </div>
+            <div class="config-hint mt-8" id="expiry-hint">
+                ลิงค์จะหมดอายุใน <strong>7 วัน</strong> นับจากเวลาสร้าง
+            </div>
+        </div>
+
+        <!-- PDPA Notice -->
+        <div class="pdpa-notice">
+            <div class="pdpa-icon">⚠️</div>
+            <div>
+                <div class="pdpa-label">PDPA Notice</div>
+                <div class="pdpa-text">
+                    การสร้างลิงค์นี้มีการเข้าถึงข้อมูลส่วนบุคคลของนักเรียน
+                    โปรดตรวจสอบสิทธิ์และขอบเขตข้อมูลให้ถูกต้องตามระเบียบความปลอดภัยทางไซเบอร์
+                </div>
+            </div>
+        </div>
+
+        <!-- Generate Button -->
+        <button type="button" id="generate-btn" class="generate-link-btn">
+            🔗 สร้างลิงค์
+        </button>
+        </div>
+    </div>
+
+    <!-- ==================== Modal: Create Task ==================== -->
+    <div id="modal-overlay" class="modal-overlay hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-main-title">📋 สร้างภารกิจลงพื้นที่</h2>
+                <button type="button" class="modal-close" id="modal-close-btn">✕</button>
+            </div>
+            <div class="modal-body">
+                <!-- Form Section -->
+                <div id="modal-form-section">
+                    <!-- VISIT form fields -->
+                    <div id="m_visit-form">
+                        <div class="card">
+                            <div class="card-title">ข้อมูลนักเรียน</div>
+                            <div class="form-group">
+                                <label for="m_student_name">ชื่อ-สกุล นักเรียน *</label>
+                                <input type="text" id="m_student_name" placeholder="เช่น ด.ช. สมชาย ดีใจ" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="m_student_school">โรงเรียน</label>
+                                <input type="text" id="m_student_school" placeholder="เช่น โรงเรียนบ้านหนองไผ่">
+                            </div>
+                            <div class="form-group">
+                                <label for="m_student_address">ที่อยู่ (บ้านเลขที่, หมู่บ้าน, ถนน)</label>
+                                <textarea id="m_student_address" placeholder="ที่อยู่บ้านนักเรียน"></textarea>
+                            </div>
+
+                            <div class="address-grid"
+                                style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label for="m_student_subdistrict">ตำบล/แขวง</label>
+                                    <input type="text" id="m_student_subdistrict" placeholder="เช่น หนองไผ่">
+                                </div>
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label for="m_student_district">อำเภอ/เขต</label>
+                                    <input type="text" id="m_student_district" placeholder="เช่น เมือง">
+                                </div>
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label for="m_student_province">จังหวัด</label>
+                                    <input type="text" id="m_student_province" placeholder="เช่น ขอนแก่น">
+                                </div>
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label for="m_student_zipcode">รหัสไปรษณีย์</label>
+                                    <input type="text" id="m_student_zipcode" placeholder="เช่น 40000">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label>พิกัดบ้านนักเรียน (คลิกบนแผนที่ หรือพิมพ์เอง)</label>
+                                <button type="button" id="m_locate-btn" class="map-locate-btn">📍
+                                    ใช้ตำแหน่งของฉัน</button>
+                                <div id="modal-picker-map"></div>
+                                <div class="expiry-row">
+                                    <input type="number" step="any" id="m_student_lat" placeholder="Latitude">
+                                    <input type="number" step="any" id="m_student_lng" placeholder="Longitude">
+                                </div>
+                                <small>คลิกบนแผนที่เพื่อวางหมุด หรือกรอกพิกัดด้วยตัวเอง</small>
+                            </div>
+                            <div class="form-group">
+                                <label for="m_reason_flagged">สาเหตุที่ถูก Flag</label>
+                                <input type="text" id="m_reason_flagged" placeholder="เช่น ขาดเรียนติดต่อกัน 5 วัน">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ATTENDANCE form fields -->
+                    <div id="m_attendance-form" class="hidden">
+                        <div class="card">
+                            <div class="card-title">ข้อมูลการเช็คชื่อ</div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                                <div class="form-group">
+                                    <label for="m_target_grade">ชั้น *</label>
+                                    <select id="m_target_grade">
+                                        <option value="">-- เลือกชั้น --</option>
+                                        <option value="ม.1">มัธยมศึกษาปีที่ 1</option>
+                                        <option value="ม.2">มัธยมศึกษาปีที่ 2</option>
+                                        <option value="ม.3">มัธยมศึกษาปีที่ 3</option>
+                                        <option value="ม.4">มัธยมศึกษาปีที่ 4</option>
+                                        <option value="ม.5">มัธยมศึกษาปีที่ 5</option>
+                                        <option value="ม.6">มัธยมศึกษาปีที่ 6</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="m_target_room">ห้อง *</label>
+                                    <select id="m_target_room">
+                                        <option value="">-- เลือกห้อง --</option>
+                                        <option value="1">1</option>
+                                        <option value="2">2</option>
+                                        <option value="3">3</option>
+                                        <option value="4">4</option>
+                                        <option value="5">5</option>
+                                        <option value="6">6</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-group mt-4">
+                                <label for="m_target_subject">วิชา *</label>
+                                <select id="m_target_subject">
+                                    <option value="">-- เลือกวิชา --</option>
+                                    <option value="คณิตศาสตร์พื้นฐาน">คณิตศาสตร์พื้นฐาน</option>
+                                    <option value="ภาษาไทย">ภาษาไทย</option>
+                                    <option value="ภาษาอังกฤษ">ภาษาอังกฤษ</option>
+                                    <option value="วิทยาศาสตร์">วิทยาศาสตร์</option>
+                                    <option value="สังคมศึกษา">สังคมศึกษา</option>
+                                    <option value="พละศึกษา">พละศึกษา</option>
+                                    <option value="ศิลปะ">ศิลปะ</option>
+                                    <option value="การงานอาชีพ">การงานอาชีพ</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-title">ผู้รับภารกิจ</div>
+                        <div class="form-group">
+                            <label for="m_assigned_to_name">ชื่อผู้รับงาน *</label>
+                            <input type="text" id="m_assigned_to_name"
+                                placeholder="เช่น ผู้ใหญ่บ้าน สมชาย หรือ อาจารย์สมเกียรติ">
+                        </div>
+                        <div class="form-group">
+                            <label for="m_assigned_to_email">อีเมลผู้รับงาน (สำหรับรับรหัส OTP) *</label>
+                            <input type="email" id="m_assigned_to_email" placeholder="เช่น teacher@school.ac.th">
+                        </div>
+                        <div class="form-group">
+                            <label for="m_assigned_to_phone">เบอร์โทรศัพท์</label>
+                            <input type="tel" id="m_assigned_to_phone" placeholder="เช่น 081-234-5678">
+                        </div>
+                    </div>
+
+                    <button type="button" id="modal-submit-btn" class="btn btn-primary">สร้างภารกิจ</button>
+                </div>
+
+                <!-- Result Section (shown after success) -->
+                <div id="modal-result-section" class="hidden">
+                    <div class="card result-area">
+                        <div class="alert alert-success">สร้างภารกิจสำเร็จ!</div>
+                        <div class="qr-section">
+                            <img id="modal-qr-img" alt="QR Code">
+                        </div>
+                        <div class="result-link-box">
+                            <div class="result-link-text" id="modal-magic-link"></div>
+                            <button type="button" class="btn-copy-link" id="modal-copy-btn"
+                                title="คัดลอกลิงก์">📋</button>
+                        </div>
+                        <div class="result-actions mt-16">
+                            <a id="modal-line-share-btn" class="btn btn-line" target="_blank" rel="noopener">
+                                💬 ส่งผ่าน LINE
+                            </a>
+                        </div>
+                        <div class="result-actions">
+                            <button type="button" class="btn btn-outline"
+                                id="modal-create-another">สร้างภารกิจอีกรายการ</button>
+                            <a href="/" class="btn btn-secondary">กลับหน้าหลัก</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="/js/sidebar.js"></script>
+    <script src="/js/generate-link.js"></script>
+</body>
+
+</html>

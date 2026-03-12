@@ -1,5 +1,6 @@
 (function () {
-  var formSection = document.getElementById('form-section');
+  window.selectedTaskType = null;
+  var formSection = document.getElementById('step-2');
   var resultSection = document.getElementById('result-section');
   var submitBtn = document.getElementById('submit-btn');
   var latInput = document.getElementById('student_lat');
@@ -49,6 +50,7 @@
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; OpenStreetMap'
   }).addTo(map);
+  window.mapInstance = map;
 
   var marker = null;
 
@@ -72,29 +74,15 @@
     map.setView(e.latlng, Math.max(map.getZoom(), 13));
   });
 
-  var gpsNotice = document.createElement('small');
-  gpsNotice.style.cssText = 'display:block;margin-top:4px;color:#e74c3c;';
-  document.getElementById('locate-btn').parentNode.insertBefore(gpsNotice, document.getElementById('picker-map'));
-
   document.getElementById('locate-btn').addEventListener('click', function () {
     var btn = this;
     btn.textContent = '📍 กำลังค้นหา...';
     btn.disabled = true;
-    gpsNotice.textContent = '';
-
-    function onFail(msg) {
-      gpsNotice.textContent = msg;
-      btn.textContent = '📍 ใช้ตำแหน่งของฉัน';
-      btn.disabled = false;
-    }
 
     if (!navigator.geolocation) {
-      onFail('อุปกรณ์ไม่รองรับ GPS — กรุณาคลิกบนแผนที่หรือพิมพ์พิกัดด้วยตัวเอง');
-      return;
-    }
-
-    if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
-      onFail('GPS ไม่สามารถใช้ได้ผ่าน HTTP — กรุณาคลิกบนแผนที่เพื่อเลือกพิกัดแทน');
+      alert('อุปกรณ์ไม่รองรับ GPS');
+      btn.textContent = '📍 ใช้ตำแหน่งของฉัน';
+      btn.disabled = false;
       return;
     }
 
@@ -106,56 +94,61 @@
         btn.disabled = false;
       },
       function () {
-        onFail('ไม่สามารถดึงตำแหน่ง GPS ได้ — กรุณาอนุญาตการเข้าถึงตำแหน่ง หรือคลิกบนแผนที่แทน');
+        alert('ไม่สามารถดึงตำแหน่ง GPS ได้');
+        btn.textContent = '📍 ใช้ตำแหน่งของฉัน';
+        btn.disabled = false;
       },
       { enableHighAccuracy: true, timeout: 15000 }
     );
   });
 
-  function syncFromInputs() {
-    var lat = parseFloat(latInput.value);
-    var lng = parseFloat(lngInput.value);
-    if (!isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
-      if (marker) {
-        marker.setLatLng([lat, lng]);
-      } else {
-        marker = L.marker([lat, lng], { draggable: true }).addTo(map);
-        marker.on('dragend', function () {
-          var pos = marker.getLatLng();
-          latInput.value = pos.lat.toFixed(6);
-          lngInput.value = pos.lng.toFixed(6);
-        });
-      }
-      map.setView([lat, lng], Math.max(map.getZoom(), 13));
-    }
-  }
-
-  latInput.addEventListener('change', syncFromInputs);
-  lngInput.addEventListener('change', syncFromInputs);
-
   // --- Form Submit ---
   submitBtn.addEventListener('click', function () {
-    var name = document.getElementById('student_name').value.trim();
     var assigned = document.getElementById('assigned_to_name').value.trim();
-    if (!name || !assigned) {
-      alert('กรุณากรอกชื่อนักเรียนและชื่อผู้รับงาน');
+    var email = document.getElementById('assigned_to_email').value.trim();
+    
+    if (!assigned) {
+      alert('กรุณากรอกชื่อผู้รับงาน');
       return;
+    }
+    if (!email) {
+      alert('กรุณากรอกอีเมลลำหรับรับรหัส OTP');
+      return;
+    }
+
+    var body = {
+      task_type: window.selectedTaskType,
+      assigned_to_name: assigned,
+      assigned_to_phone: document.getElementById('assigned_to_phone').value.trim(),
+      assigned_to_email: document.getElementById('assigned_to_email').value.trim(),
+      expires_in_hours: computeExpiryHours()
+    };
+
+    if (window.selectedTaskType === 'VISIT') {
+      body.student_name = document.getElementById('student_name').value.trim();
+      body.student_school = document.getElementById('student_school').value.trim();
+      body.student_address = document.getElementById('student_address').value.trim();
+      body.student_lat = parseFloat(latInput.value) || null;
+      body.student_lng = parseFloat(lngInput.value) || null;
+      body.reason_flagged = document.getElementById('reason_flagged').value.trim();
+
+      if (!body.student_name) {
+        alert('กรุณากรอกชื่อนักเรียน');
+        return;
+      }
+    } else {
+      body.target_grade = document.getElementById('target_grade').value;
+      body.target_room = document.getElementById('target_room').value;
+      body.subject = document.getElementById('target_subject').value;
+
+      if (!body.target_grade || !body.target_room || !body.subject) {
+        alert('กรุณาเลือกชั้น ห้อง และวิชาที่ต้องการเช็คชื่อ');
+        return;
+      }
     }
 
     submitBtn.disabled = true;
     submitBtn.textContent = 'กำลังสร้าง...';
-
-    var body = {
-      student_name: name,
-      student_school: document.getElementById('student_school').value.trim(),
-      student_address: document.getElementById('student_address').value.trim(),
-      student_lat: parseFloat(latInput.value) || null,
-      student_lng: parseFloat(lngInput.value) || null,
-      reason_flagged: document.getElementById('reason_flagged').value.trim(),
-      assigned_to_name: assigned,
-      assigned_to_phone: document.getElementById('assigned_to_phone').value.trim(),
-      expires_in_hours: computeExpiryHours()
-    };
 
     fetch('/api/tasks', {
       method: 'POST',
@@ -176,7 +169,9 @@
           document.getElementById('qr-img').src = data.qr_code_data;
         }
         document.getElementById('line-share-btn').href = buildLineShareUrl(publicLink);
-        formSection.classList.add('hidden');
+        document.getElementById('step-1').classList.add('hidden');
+        document.getElementById('step-2').classList.add('hidden');
+        document.querySelector('.step-indicator').classList.add('hidden');
         resultSection.classList.remove('hidden');
 
         document.getElementById('copy-btn').addEventListener('click', function () {

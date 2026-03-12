@@ -115,6 +115,108 @@ function ensureCaseReviewsTable() {
 }
 
 /**
+ * Migration: Add attendance-related columns to tasks and task_links
+ */
+function ensureAttendanceColumns() {
+  // tasks table: task_type, target_grade, target_room
+  const taskCols = db.prepare(`PRAGMA table_info(tasks)`).all();
+  const taskNames = new Set(taskCols.map(c => c.name));
+
+  if (!taskNames.has('task_type')) {
+    db.exec(`ALTER TABLE tasks ADD COLUMN task_type TEXT DEFAULT 'VISIT'`);
+  }
+  if (!taskNames.has('target_grade')) {
+    db.exec(`ALTER TABLE tasks ADD COLUMN target_grade TEXT`);
+  }
+  if (!taskNames.has('target_room')) {
+    db.exec(`ALTER TABLE tasks ADD COLUMN target_room TEXT`);
+  }
+
+  // task_links table: assigned_to_email, otp_code, otp_expires_at, otp_verified, subject
+  const linkCols = db.prepare(`PRAGMA table_info(task_links)`).all();
+  const linkNames = new Set(linkCols.map(c => c.name));
+
+  if (!linkNames.has('assigned_to_email')) {
+    db.exec(`ALTER TABLE task_links ADD COLUMN assigned_to_email TEXT`);
+  }
+  if (!linkNames.has('otp_code')) {
+    db.exec(`ALTER TABLE task_links ADD COLUMN otp_code TEXT`);
+  }
+  if (!linkNames.has('otp_expires_at')) {
+    db.exec(`ALTER TABLE task_links ADD COLUMN otp_expires_at TEXT`);
+  }
+  if (!linkNames.has('otp_verified')) {
+    db.exec(`ALTER TABLE task_links ADD COLUMN otp_verified INTEGER DEFAULT 0`);
+  }
+  if (!linkNames.has('subject')) {
+    db.exec(`ALTER TABLE task_links ADD COLUMN subject TEXT`);
+  }
+}
+
+/**
+ * Migration: Add granular address columns to cases table
+ */
+function ensureCaseAddressColumns() {
+  const cols = db.prepare(`PRAGMA table_info(cases)`).all();
+  const names = new Set(cols.map(c => c.name));
+
+  if (!names.has('student_subdistrict')) {
+    db.exec(`ALTER TABLE cases ADD COLUMN student_subdistrict TEXT`);
+  }
+  if (!names.has('student_district')) {
+    db.exec(`ALTER TABLE cases ADD COLUMN student_district TEXT`);
+  }
+  if (!names.has('student_province')) {
+    db.exec(`ALTER TABLE cases ADD COLUMN student_province TEXT`);
+  }
+  if (!names.has('student_zipcode')) {
+    db.exec(`ALTER TABLE cases ADD COLUMN student_zipcode TEXT`);
+  }
+}
+
+/**
+ * Migration: Create students and attendance tables
+ */
+function ensureAttendanceTables() {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS students (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      school TEXT,
+      grade TEXT,
+      room TEXT,
+      avatar_url TEXT,
+      total_late INTEGER DEFAULT 0,
+      total_absent INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now','localtime'))
+    );
+
+    CREATE TABLE IF NOT EXISTS attendance_records (
+      id TEXT PRIMARY KEY,
+      student_id TEXT REFERENCES students(id) ON DELETE CASCADE,
+      status TEXT NOT NULL,
+      check_date TEXT DEFAULT (date('now','localtime')),
+      created_at TEXT DEFAULT (datetime('now','localtime')),
+      UNIQUE(student_id, check_date)
+    );
+
+    CREATE TABLE IF NOT EXISTS schedules (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      grade TEXT,
+      room TEXT,
+      day_of_week INTEGER,
+      subject TEXT,
+      start_time TEXT,
+      end_time TEXT,
+      teacher TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_attendance_records_student_id ON attendance_records(student_id);
+    CREATE INDEX IF NOT EXISTS idx_attendance_records_date ON attendance_records(check_date);
+  `);
+}
+
+/**
  * Run all migrations
  * Call this on server startup to ensure database is up to date
  */
@@ -122,11 +224,17 @@ function runMigrations() {
   ensureBaseSchema();
   ensureTaskLinkAdminColumns();
   ensureCaseReviewsTable();
+  ensureAttendanceColumns();
+  ensureCaseAddressColumns();
+  ensureAttendanceTables();
 }
 
 module.exports = {
   ensureBaseSchema,
   ensureTaskLinkAdminColumns,
   ensureCaseReviewsTable,
+  ensureAttendanceColumns,
+  ensureCaseAddressColumns,
+  ensureAttendanceTables,
   runMigrations
 };

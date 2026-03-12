@@ -6,54 +6,236 @@
   <title>STS — สร้างภารกิจ</title>
   <link rel="stylesheet" href="/css/style.css">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <style>
+    .type-selection {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1.5rem;
+        margin: 2rem 0;
+    }
+    .type-card {
+        background: white;
+        border: 2px solid transparent;
+        border-radius: 16px;
+        padding: 2rem;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+    .type-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    }
+    .type-card.active {
+        border-color: #2563eb;
+        background: #eff6ff;
+    }
+    .type-icon {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+        display: block;
+    }
+    .type-title {
+        font-weight: 700;
+        font-size: 1.25rem;
+        margin-bottom: 0.5rem;
+        color: #1e3a8a;
+    }
+    .type-desc {
+        color: #64748b;
+        font-size: 0.9rem;
+    }
+    .step-indicator {
+        display: flex;
+        justify-content: center;
+        gap: 2rem;
+        margin-bottom: 2rem;
+    }
+    .step {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        color: #94a3b8;
+        font-weight: 600;
+    }
+    .step.active {
+        color: #2563eb;
+    }
+    .step-num {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        background: #e2e8f0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.8rem;
+    }
+    .step.active .step-num {
+        background: #2563eb;
+        color: white;
+    }
+    .hidden { display: none !important; }
+    
+    /* Back Button */
+    .header-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 2rem;
+    }
+    .btn-back-home {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: white;
+        text-decoration: none;
+        background: rgba(255, 255, 255, 0.2);
+        padding: 0.6rem 1.2rem;
+        border-radius: 12px;
+        font-weight: 600;
+        transition: all 0.2s;
+        backdrop-filter: blur(4px);
+    }
+    .btn-back-home:hover {
+        background: rgba(255, 255, 255, 0.3);
+        transform: translateX(-4px);
+    }
+  </style>
 </head>
 <body>
   <div class="header">
-    <h1>สร้างภารกิจลงพื้นที่</h1>
-    <div class="header-sub">กรอกข้อมูลเด็กและผู้รับงาน</div>
+    <div class="header-top">
+        <div>
+            <h1 id="page-main-title" style="margin-bottom: 0.5rem;">สร้างภารกิจ</h1>
+            <div class="header-sub">เลือกประเภทและกรอกข้อมูลให้ครบถ้วน</div>
+        </div>
+        <a href="/" class="btn-back-home">
+            <i class="fas fa-arrow-left"></i> ย้อนกลับหน้าหลัก
+        </a>
+    </div>
   </div>
 
   <div class="container">
-    <!-- Form -->
-    <div id="form-section">
-      <div class="card">
-        <div class="card-title">ข้อมูลนักเรียน</div>
-        <div class="form-group">
-          <label for="student_name">ชื่อ-สกุล นักเรียน *</label>
-          <input type="text" id="student_name" placeholder="เช่น ด.ช. สมชาย ดีใจ" required>
+    <!-- Step Indicator -->
+    <div class="step-indicator">
+        <div class="step active" id="step-1-label">
+            <span class="step-num">1</span> เลือกประเภท
         </div>
-        <div class="form-group">
-          <label for="student_school">โรงเรียน</label>
-          <input type="text" id="student_school" placeholder="เช่น โรงเรียนบ้านหนองไผ่">
+        <div class="step" id="step-2-label">
+            <span class="step-num">2</span> กรอกรายละเอียด
         </div>
-        <div class="form-group">
-          <label for="student_address">ที่อยู่</label>
-          <textarea id="student_address" placeholder="ที่อยู่บ้านนักเรียน"></textarea>
+    </div>
+
+    <!-- Step 1: Type Selection -->
+    <div id="step-1" class="type-selection">
+        <div class="type-card" onclick="selectType('VISIT')">
+            <span class="type-icon">📍</span>
+            <div class="type-title">ภารกิจลงพื้นที่</div>
+            <div class="type-desc">สำหรับการส่งตัวแทนไปเยี่ยมบ้านนักเรียนที่ถูกระบุตัวเพื่อติดตามผล</div>
         </div>
-        <div class="form-group">
-          <label for="student_lat">พิกัดบ้านนักเรียน (คลิกบนแผนที่ หรือพิมพ์เอง)</label>
-          <button type="button" id="locate-btn" class="map-locate-btn">📍 ใช้ตำแหน่งของฉัน</button>
-          <div id="picker-map"></div>
-          <div class="expiry-row">
-            <input type="number" step="any" id="student_lat" placeholder="Latitude">
-            <input type="number" step="any" id="student_lng" placeholder="Longitude">
+        <div class="type-card" onclick="selectType('ATTENDANCE')">
+            <span class="type-icon">📋</span>
+            <div class="type-title">ภารกิจเช็คชื่อ</div>
+            <div class="type-desc">สำหรับการมอบหมายงานเช็คชื่อนักเรียนรายห้องให้กับครูประจำชั้นหรือตัวแทน</div>
+        </div>
+    </div>
+
+    <!-- Step 2: Form Section -->
+    <div id="step-2" class="hidden">
+      <!-- Field Visit Form -->
+      <div id="visit-form" class="hidden">
+        <div class="card">
+          <div class="card-title">ข้อมูลนักเรียน (ลงพื้นที่)</div>
+          <div class="form-group">
+            <label for="student_name">ชื่อ-สกุล นักเรียน *</label>
+            <input type="text" id="student_name" placeholder="เช่น ด.ช. สมชาย ดีใจ">
           </div>
-          <small>คลิกบนแผนที่เพื่อวางหมุด หรือกรอกพิกัดด้วยตัวเอง</small>
-        </div>
-        <div class="form-group">
-          <label for="reason_flagged">สาเหตุที่ถูก Flag</label>
-          <input type="text" id="reason_flagged" placeholder="เช่น ขาดเรียนติดต่อกัน 5 วัน">
+          <div class="form-group">
+            <label for="student_school">โรงเรียน</label>
+            <input type="text" id="student_school" placeholder="เช่น โรงเรียนบ้านหนองไผ่">
+          </div>
+          <div class="form-group">
+            <label for="student_address">ที่อยู่</label>
+            <textarea id="student_address" placeholder="ที่อยู่บ้านนักเรียน"></textarea>
+          </div>
+          <div class="form-group">
+            <label>พิกัดบ้านนักเรียน</label>
+            <button type="button" id="locate-btn" class="map-locate-btn">📍 ใช้ตำแหน่งของฉัน</button>
+            <div id="picker-map" style="height: 300px; border-radius: 12px; margin: 10px 0;"></div>
+            <div class="expiry-row">
+              <input type="number" step="any" id="student_lat" placeholder="Latitude">
+              <input type="number" step="any" id="student_lng" placeholder="Longitude">
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="reason_flagged">สาเหตุที่ถูก Flag</label>
+            <input type="text" id="reason_flagged" placeholder="เช่น ขาดเรียนติดต่อกัน 5 วัน">
+          </div>
         </div>
       </div>
 
+      <!-- Attendance Form -->
+      <div id="attendance-form" class="hidden">
+        <div class="card">
+            <div class="card-title">ข้อมูลชั้นเรียน</div>
+            <div class="grid-2">
+                <div class="form-group">
+                    <label for="target_grade">ระดับชั้น *</label>
+                    <select id="target_grade">
+                        <option value="">-- เลือกชั้น --</option>
+                        <option value="ม.1">มัธยมศึกษาปีที่ 1</option>
+                        <option value="ม.2">มัธยมศึกษาปีที่ 2</option>
+                        <option value="ม.3">มัธยมศึกษาปีที่ 3</option>
+                        <option value="ม.4">มัธยมศึกษาปีที่ 4</option>
+                        <option value="ม.5">มัธยมศึกษาปีที่ 5</option>
+                        <option value="ม.6">มัธยมศึกษาปีที่ 6</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="target_room">ห้อง *</label>
+                    <select id="target_room">
+                        <option value="">-- เลือกห้อง --</option>
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                        <option value="5">5</option>
+                        <option value="6">6</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group mt-4">
+                <label for="target_subject">วิชา *</label>
+                <select id="target_subject">
+                    <option value="">-- เลือกวิชา --</option>
+                    <option value="คณิตศาสตร์พื้นฐาน">คณิตศาสตร์พื้นฐาน</option>
+                    <option value="ภาษาไทย">ภาษาไทย</option>
+                    <option value="ภาษาอังกฤษ">ภาษาอังกฤษ</option>
+                    <option value="วิทยาศาสตร์">วิทยาศาสตร์</option>
+                    <option value="สังคมศึกษา">สังคมศึกษา</option>
+                    <option value="พละศึกษา">พละศึกษา</option>
+                    <option value="ศิลปะ">ศิลปะ</option>
+                    <option value="การงานอาชีพ">การงานอาชีพ</option>
+                </select>
+            </div>
+        </div>
+      </div>
+
+      <!-- Common Section: Assignee -->
       <div class="card">
         <div class="card-title">ผู้รับภารกิจ</div>
         <div class="form-group">
           <label for="assigned_to_name">ชื่อผู้รับงาน *</label>
-          <input type="text" id="assigned_to_name" placeholder="เช่น ผู้ใหญ่บ้าน สมชาย">
+          <input type="text" id="assigned_to_name" placeholder="เช่น อาจารย์สมเกียรติ">
         </div>
         <div class="form-group">
-          <label for="assigned_to_phone">เบอร์โทรศัพท์</label>
+          <label for="assigned_to_email">อีเมลผู้รับงาน (สำหรับรับรหัส OTP) *</label>
+          <input type="email" id="assigned_to_email" placeholder="เช่น teacher@school.ac.th">
+        </div>
+        <div class="form-group">
+          <label for="assigned_to_phone">เบอร์โทรศัพท์ (ทางเลือก)</label>
           <input type="tel" id="assigned_to_phone" placeholder="เช่น 081-234-5678">
         </div>
         <div class="form-group">
@@ -66,36 +248,67 @@
               <option value="weeks">สัปดาห์</option>
             </select>
           </div>
-          <small>ค่าเริ่มต้น 1 วัน (สูงสุด 90 วัน)</small>
         </div>
       </div>
 
-      <button id="submit-btn" class="btn btn-primary">สร้างภารกิจ</button>
-      <a href="/" class="btn btn-secondary mt-8">กลับหน้าหลัก</a>
+      <div style="display: flex; gap: 1rem;">
+        <button onclick="goBack()" class="btn btn-secondary">ย้อนกลับ</button>
+        <button id="submit-btn" class="btn btn-primary" style="flex: 1;">สร้างภารกิจ</button>
+      </div>
     </div>
 
-    <!-- Result -->
+    <!-- Result Section -->
     <div id="result-section" class="hidden">
       <div class="card">
-        <div class="alert alert-success">สร้างภารกิจสำเร็จ!</div>
+        <div class="alert alert-success" style="background: #dcfce7; color: #15803d; padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem; text-align: center; font-weight: 600;">สร้างภารกิจสำเร็จ!</div>
         <div class="card-title">Magic Link</div>
-        <div class="magic-link-box" id="magic-link"></div>
-        <button id="copy-btn" class="btn btn-outline">📋 คัดลอกลิงก์</button>
-        <a id="line-share-btn" class="btn btn-line mt-8" target="_blank" rel="noopener">
+        <div class="magic-link-box" id="magic-link" style="background: #f8fafc; padding: 1rem; border: 1px dashed #cbd5e1; border-radius: 8px; word-break: break-all; margin-bottom: 1rem; font-family: monospace; font-size: 0.9rem;"></div>
+        <button id="copy-btn" class="btn btn-outline" style="width: 100%;">📋 คัดลอกลิงก์</button>
+        <a id="line-share-btn" class="btn btn-line mt-8" target="_blank" rel="noopener" style="background: #06C755; color: white; width: 100%; display: block; text-align: center; padding: 0.75rem; text-decoration: none; border-radius: 8px; font-weight: 600; margin-top: 10px;">
           💬 ส่งลิงก์ผ่าน LINE
         </a>
       </div>
-      <div class="card qr-section">
+      <div class="card qr-section" style="text-align: center;">
         <div class="card-title">QR Code</div>
-        <img id="qr-img" alt="QR Code">
-        <p class="hint-text">สแกน QR หรือส่งลิงก์ผ่าน LINE</p>
+        <img id="qr-img" alt="QR Code" style="max-width: 200px; margin: 0 auto;">
+        <p class="hint-text" style="color: #64748b; font-size: 0.85rem; margin-top: 10px;">สแกนเพื่อเข้าถึงภารกิจ</p>
       </div>
-      <a href="/" class="btn btn-secondary">กลับหน้าหลัก</a>
-      <a href="/create" class="btn btn-outline mt-8">สร้างภารกิจอีกรายการ</a>
+      <a href="/" class="btn btn-secondary" style="width: 100%; display: block; text-align: center; margin-top: 1rem;">กลับหน้าหลัก</a>
     </div>
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="/js/create-task.js"></script>
+  <script>
+    window.selectedTaskType = null;
+
+    function selectType(type) {
+        window.selectedTaskType = type;
+        document.getElementById('step-1').classList.add('hidden');
+        document.getElementById('step-2').classList.remove('hidden');
+        document.getElementById('step-1-label').classList.remove('active');
+        document.getElementById('step-2-label').classList.add('active');
+
+        if (type === 'VISIT') {
+            document.getElementById('visit-form').classList.remove('hidden');
+            document.getElementById('attendance-form').classList.add('hidden');
+            document.getElementById('page-main-title').innerText = 'สร้างภารกิจลงพื้นที่';
+            // Trigger map resize if hidden
+            setTimeout(() => { if (window.mapInstance) window.mapInstance.invalidateSize(); }, 100);
+        } else {
+            document.getElementById('attendance-form').classList.remove('hidden');
+            document.getElementById('visit-form').classList.add('hidden');
+            document.getElementById('page-main-title').innerText = 'สร้างภารกิจเช็คชื่อ';
+        }
+    }
+
+    function goBack() {
+        document.getElementById('step-2').classList.add('hidden');
+        document.getElementById('step-1').classList.remove('hidden');
+        document.getElementById('step-1-label').classList.add('active');
+        document.getElementById('step-2-label').classList.remove('active');
+        document.getElementById('page-main-title').innerText = 'สร้างภารกิจ';
+    }
+  </script>
 </body>
 </html>
