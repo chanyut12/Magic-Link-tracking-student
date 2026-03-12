@@ -133,10 +133,25 @@
       }
 
       content.classList.remove('hidden');
-      document.getElementById('header-info').textContent = data.student_name + ' — ' + (data.student_school || '');
-      document.getElementById('student-name').textContent = data.student_name;
-      document.getElementById('student-school').textContent = data.student_school || '-';
-      document.getElementById('reason-flagged').textContent = data.reason_flagged || '-';
+      
+      if (data.task_type === 'ATTENDANCE') {
+          document.getElementById('header-info').textContent = 'ภารกิจเช็คชื่อ ' + data.target_grade + '/' + data.target_room;
+          document.getElementById('visit-info').classList.add('hidden');
+          document.getElementById('attendance-info').classList.remove('hidden');
+          document.getElementById('target-grade').textContent = data.target_grade;
+          document.getElementById('target-room').textContent = data.target_room;
+          
+          // Hide review for attendance tasks for now
+          document.getElementById('review-card').classList.add('hidden');
+      } else {
+          document.getElementById('header-info').textContent = data.student_name + ' — ' + (data.student_school || '');
+          document.getElementById('student-name').textContent = data.student_name;
+          document.getElementById('student-school').textContent = data.student_school || '-';
+          document.getElementById('reason-flagged').textContent = data.reason_flagged || '-';
+          document.getElementById('visit-info').classList.remove('hidden');
+          document.getElementById('attendance-info').classList.add('hidden');
+      }
+      
       document.getElementById('task-status').innerHTML = statusBadge(data.case_status || data.task_status);
 
       // Timeline

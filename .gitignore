@@ -8,3 +8,7 @@ uploads/*
 !uploads/.gitkeep
 /docs
 /UI
+/node_modules
+.DS_Store
+~$*.docx
+db/test.db
