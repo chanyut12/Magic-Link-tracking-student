@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>STS — ระบบเช็คชื่อนักเรียน</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+
+<body class="has-sidebar">
+    <div id="overlay" class="overlay"></div>
+    <div id="sidebar" class="sidebar">
+        <div class="logo-section"><i class="fas fa-graduation-cap"></i><span>ระบบติดตามนักเรียน</span></div>
+        <div class="menu-label">เมนู</div>
+        <a href="/" class="nav-item"><i class="fas fa-home"></i>Dashboard</a>
+        <a href="/create" class="nav-item"><i class="fas fa-link"></i>สร้างลิงค์</a>
+        <a href="/attendance" class="nav-item"><i class="fas fa-clipboard-check"></i>เช็คชื่อ</a>
+        <a href="/attendance-dashboard" class="nav-item active"><i class="fas fa-chart-bar"></i>Dashboard เช็คชื่อ</a>
+        <div class="user-profile">
+            <div class="avatar">A</div>
+            <div>
+                <div style="font-weight:600;font-size:0.9rem">ผู้ดูแลระบบ</div>
+                <div style="font-size:0.75rem;color:#94a3b8">Admin</div>
+            </div>
+            <form action="/admin-logout" method="POST" style="margin-left:auto">
+                <button type="submit" style="background:none;border:none;color:#94a3b8;cursor:pointer"><i
+                        class="fas fa-sign-out-alt"></i></button>
+            </form>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="top-bar">
+            <div style="display:flex;align-items:center;gap:1rem">
+                <div id="menu-btn" class="mobile-toggle"><i class="fas fa-bars"></i></div>
+                <h1 class="page-title">Dashboard เช็คชื่อ</h1>
+            </div>
+        </div>
+
+        <div style="max-width:1300px;width:100%">
+
+            <!-- Summary Stats -->
+            <div class="stats-grid" id="stats-grid">
+                <div class="stat-card stat-card--total">
+                    <div class="stat-label">ลิงก์ทั้งหมด</div>
+                    <div class="stat-value" id="stat-total">-</div>
+                    <div class="stat-sub">ลิงก์</div>
+                </div>
+                <div class="stat-card stat-card--progress">
+                    <div class="stat-label">Active</div>
+                    <div class="stat-value" id="stat-active">-</div>
+                    <div class="stat-sub">ลิงก์</div>
+                </div>
+                <div class="stat-card stat-card--resolved">
+                    <div class="stat-label">ถูกล็อก</div>
+                    <div class="stat-value" id="stat-locked">-</div>
+                    <div class="stat-sub">ลิงก์</div>
+                </div>
+                <div class="stat-card stat-card--today">
+                    <div class="stat-label">หมดอายุ</div>
+                    <div class="stat-value" id="stat-expired">-</div>
+                    <div class="stat-sub">ลิงก์</div>
+                </div>
+            </div>
+
+            <!-- Toolbar -->
+            <div class="card dashboard-toolbar">
+                <h2 class="card-title dashboard-toolbar-title">จัดการลิงก์เช็คชื่อ</h2>
+                <div class="dashboard-toolbar-actions">
+                    <a href="/create" class="btn btn-primary btn-auto">+ สร้างลิงก์เช็คชื่อใหม่</a>
+                </div>
+            </div>
+
+            <!-- Filters -->
+            <div class="card dashboard-filter-card">
+                <div class="dashboard-filter-row-2">
+                    <div class="dashboard-filter-select">
+                        <label for="grade-filter">ชั้นเรียน</label>
+                        <select id="grade-filter">
+                            <option value="ALL">ทุกชั้น</option>
+                            <option value="ม.1">ม.1</option>
+                            <option value="ม.2">ม.2</option>
+                            <option value="ม.3">ม.3</option>
+                            <option value="ม.4">ม.4</option>
+                            <option value="ม.5">ม.5</option>
+                            <option value="ม.6">ม.6</option>
+                        </select>
+                    </div>
+                    <div class="dashboard-filter-select">
+                        <label for="room-filter">ห้อง</label>
+                        <select id="room-filter">
+                            <option value="ALL">ทุกห้อง</option>
+                            <option value="1">1</option>
+                            <option value="2">2</option>
+                            <option value="3">3</option>
+                            <option value="4">4</option>
+                            <option value="5">5</option>
+                            <option value="6">6</option>
+                        </select>
+                    </div>
+                    <div class="dashboard-filter-select">
+                        <label for="link-filter">สถานะลิงก์</label>
+                        <select id="link-filter">
+                            <option value="ALL">ทุกสถานะ</option>
+                            <option value="ACTIVE">Active</option>
+                            <option value="LOCKED">ถูกล็อก</option>
+                            <option value="EXPIRED">หมดอายุ</option>
+                        </select>
+                    </div>
+                    <div class="dashboard-filter-reset">
+                        <button type="button" id="btn-reset-filters" class="btn-reset-filter">↺ ล้างตัวกรอง</button>
+                    </div>
+                </div>
+                <div id="filter-summary" class="filter-summary">แสดงทั้งหมด</div>
+            </div>
+
+            <!-- Loading -->
+            <div id="loading" class="loader">
+                <div class="spinner"></div>
+            </div>
+            <div id="empty" class="empty-state hidden">
+                <div class="icon">📋</div>
+                <p id="empty-message">ยังไม่มีลิงก์เช็คชื่อ — กด "สร้างลิงก์เช็คชื่อใหม่" เพื่อเริ่มต้น</p>
+            </div>
+
+            <!-- Table -->
+            <div id="table-wrap" class="table-wrap hidden">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>ชั้น/ห้อง</th>
+                            <th>ผู้รับผิดชอบ</th>
+                            <th>สถานะลิงก์</th>
+                            <th style="min-width: 320px;">ลิงก์ & การจัดการ</th>
+                            <th class="text-nowrap">วันที่สร้าง</th>
+                        </tr>
+                    </thead>
+                    <tbody id="cases-body"></tbody>
+                </table>
+            </div>
+
+            <!-- Mobile list -->
+            <div id="mobile-list" class="mobile-case-list hidden"></div>
+        </div>
+    </div>
+
+    <script src="/js/sidebar.js"></script>
+    <script>
+        (function () {
+            var loading = document.getElementById('loading');
+            var empty = document.getElementById('empty');
+            var tableWrap = document.getElementById('table-wrap');
+            var tbody = document.getElementById('cases-body');
+            var mobileList = document.getElementById('mobile-list');
+
+            var allTasks = [];
+            var currentGrade = 'ALL';
+            var currentRoom = 'ALL';
+            var currentLinkFilter = 'ALL';
+
+            function escapeHtml(str) {
+                if (!str) return '';
+                return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            }
+
+            function formatDate(d) {
+                if (!d) return '-';
+                return new Date(d).toLocaleDateString('th-TH', { day: '2-digit', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit' });
+            }
+
+            function getLinkStatus(task) {
+                if (task.active_link && !task.active_link_locked) return 'ACTIVE';
+                if (task.active_link && task.active_link_locked) return 'LOCKED';
+                return 'EXPIRED';
+            }
+
+            function linkStatusBadge(status) {
+                if (status === 'ACTIVE') return '<span class="badge badge-active">✅ Active</span>';
+                if (status === 'LOCKED') return '<span class="badge badge-locked" style="background:#fee2e2;color:#b91c1c;">🔒 ถูกล็อก</span>';
+                return '<span class="badge badge-expired" style="background:#f3f4f6;color:#6b7280;">⏳ หมดอายุ</span>';
+            }
+
+            function normalizePublicLink(rawLink) {
+                if (!rawLink) return rawLink;
+                try {
+                    var url = new URL(rawLink, window.location.origin);
+                    if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') {
+                        url.protocol = window.location.protocol;
+                        url.host = window.location.host;
+                    }
+                    return url.toString();
+                } catch (_) { return rawLink; }
+            }
+
+            function buildLineShareUrl(publicLink) {
+                return 'https://social-plugins.line.me/lineit/share?url=' + encodeURIComponent(publicLink);
+            }
+
+            function linkCellContent(task) {
+                if (!task.active_link) return '<span style="color:var(--gray-400);">ไม่มีลิงก์</span>';
+                var publicLink = normalizePublicLink(task.active_link + '/attendance');
+                var lineUrl = buildLineShareUrl(publicLink);
+                if (task.active_link_locked) {
+                    return '<span class="badge badge-expired" style="margin-right:6px">ปิดโดยผู้ดูแล</span>';
+                }
+                return '<a href="' + publicLink + '" target="_blank" rel="noopener" class="btn-copy-link btn-copy-link--primary" title="เปิดดูภารกิจ">👁️ เปิด</a> ' +
+                    '<button class="btn-copy-link" data-link="' + publicLink + '" title="คัดลอกลิงก์">📋 คัดลอก</button> ' +
+                    '<a href="' + lineUrl + '" target="_blank" rel="noopener" class="btn-copy-link btn-copy-link--line" title="ส่งผ่าน LINE">💬 LINE</a> ' +
+                    (!task.active_link_locked ? '<button class="btn-copy-link" style="color:var(--gray-600); border-color:var(--gray-400);" onclick="lockAttendanceLink(\'' + escapeHtml(task.active_link_id) + '\')">🔒 ปิดลิงก์</button>' : '');
+            }
+
+            function isMobileViewport() { return window.innerWidth < 768; }
+
+            function applyLayout() {
+                if (allTasks.length === 0) return;
+                if (isMobileViewport()) {
+                    tableWrap.classList.add('hidden');
+                    mobileList.classList.remove('hidden');
+                } else {
+                    tableWrap.classList.remove('hidden');
+                    mobileList.classList.add('hidden');
+                }
+            }
+
+            function getFilteredTasks() {
+                return allTasks.filter(function (t) {
+                    if (currentGrade !== 'ALL' && t.target_grade !== currentGrade) return false;
+                    if (currentRoom !== 'ALL' && t.target_room !== currentRoom) return false;
+                    if (currentLinkFilter !== 'ALL' && getLinkStatus(t) !== currentLinkFilter) return false;
+                    return true;
+                });
+            }
+
+            function updateStats(tasks) {
+                var total = tasks.length;
+                var active = 0, locked = 0, expired = 0;
+                tasks.forEach(function (t) {
+                    var s = getLinkStatus(t);
+                    if (s === 'ACTIVE') active++;
+                    else if (s === 'LOCKED') locked++;
+                    else expired++;
+                });
+                document.getElementById('stat-total').textContent = total;
+                document.getElementById('stat-active').textContent = active;
+                document.getElementById('stat-locked').textContent = locked;
+                document.getElementById('stat-expired').textContent = expired;
+            }
+
+            function renderTasks() {
+                var filtered = getFilteredTasks();
+                document.getElementById('filter-summary').textContent =
+                    'กำลังแสดง ' + filtered.length + ' จาก ' + allTasks.length + ' ลิงก์';
+
+                if (filtered.length === 0) {
+                    tableWrap.classList.add('hidden');
+                    mobileList.classList.add('hidden');
+                    empty.classList.remove('hidden');
+                    document.getElementById('empty-message').textContent = 'ไม่พบลิงก์ที่ตรงกับตัวกรอง';
+                    return;
+                }
+
+                empty.classList.add('hidden');
+
+                // Desktop table
+                tbody.innerHTML = filtered.map(function (t, i) {
+                    return '<tr>' +
+                        '<td>' + (i + 1) + '</td>' +
+                        '<td><strong>' + escapeHtml(t.target_grade) + '/' + escapeHtml(t.target_room) + '</strong></td>' +
+                        '<td>' + escapeHtml(t.link_assigned_to || '-') + '</td>' +
+                        '<td>' + linkStatusBadge(getLinkStatus(t)) + '</td>' +
+                        '<td>' + linkCellContent(t) + '</td>' +
+                        '<td class="text-nowrap">' + formatDate(t.created_at) + '</td>' +
+                        '</tr>';
+                }).join('');
+
+                // Mobile list
+                mobileList.innerHTML = filtered.map(function (t, i) {
+                    var publicLink = t.active_link ? normalizePublicLink(t.active_link + '/attendance') : '';
+                    var lineUrl = publicLink ? buildLineShareUrl(publicLink) : '';
+                    return '<div class="mobile-case-card">' +
+                        '<div class="mobile-case-header">' +
+                        '<span class="mobile-case-num">#' + (i + 1) + '</span>' +
+                        '<strong>' + escapeHtml(t.target_grade) + '/' + escapeHtml(t.target_room) + '</strong>' +
+                        linkStatusBadge(getLinkStatus(t)) +
+                        '</div>' +
+                        '<div class="mobile-case-body">' +
+                        '<div><small>ผู้รับผิดชอบ:</small> ' + escapeHtml(t.link_assigned_to || '-') + '</div>' +
+                        '<div><small>สร้างเมื่อ:</small> ' + formatDate(t.created_at) + '</div>' +
+                        (publicLink && !t.active_link_locked ? '<div style="margin-top:8px;" class="mobile-case-actions">' +
+                            '<a href="' + publicLink + '" target="_blank" rel="noopener" class="btn-copy-link btn-copy-link--primary" title="เปิดดูภารกิจ">👁️ เปิด</a> ' +
+                            '<button class="btn-copy-link" data-link="' + publicLink + '" title="คัดลอกลิงก์">📋 คัดลอก</button> ' +
+                            '<a href="' + lineUrl + '" target="_blank" rel="noopener" class="btn-copy-link btn-copy-link--line" title="ส่งผ่าน LINE">💬 LINE</a> ' +
+                            (!t.active_link_locked ? '<button class="btn-copy-link" style="color:var(--gray-600); border-color:var(--gray-400);" onclick="lockAttendanceLink(\'' + escapeHtml(t.active_link_id) + '\')">🔒 ปิดลิงก์</button>' : '') +
+                            '</div>' : '') +
+                        '</div></div>';
+                }).join('');
+
+                bindCopyButtons();
+                applyLayout();
+            }
+
+            function bindCopyButtons() {
+                document.querySelectorAll('.btn-copy-link[data-link]').forEach(function (btn) {
+                    btn.addEventListener('click', function () {
+                        var link = btn.getAttribute('data-link');
+                        copyText(link, function () {
+                            var orig = btn.textContent;
+                            btn.textContent = '✅ คัดลอกแล้ว!';
+                            setTimeout(function () { btn.textContent = orig; }, 2000);
+                        });
+                    });
+                });
+            }
+
+            function copyText(text, onSuccess) {
+                if (navigator.clipboard && window.isSecureContext) {
+                    navigator.clipboard.writeText(text).then(onSuccess).catch(fallback);
+                } else {
+                    fallback();
+                }
+                function fallback() {
+                    var ta = document.createElement('textarea');
+                    ta.value = text;
+                    ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px';
+                    document.body.appendChild(ta);
+                    ta.focus();
+                    ta.select();
+                    try { document.execCommand('copy'); onSuccess(); } catch (e) { alert('คัดลอกไม่สำเร็จ'); }
+                    document.body.removeChild(ta);
+                }
+            }
+            function bindFilters() {
+                document.getElementById('grade-filter').addEventListener('change', function () {
+                    currentGrade = this.value;
+                    renderTasks();
+                });
+                document.getElementById('room-filter').addEventListener('change', function () {
+                    currentRoom = this.value;
+                    renderTasks();
+                });
+                document.getElementById('link-filter').addEventListener('change', function () {
+                    currentLinkFilter = this.value;
+                    renderTasks();
+                });
+                document.getElementById('btn-reset-filters').addEventListener('click', function () {
+                    currentGrade = 'ALL';
+                    currentRoom = 'ALL';
+                    currentLinkFilter = 'ALL';
+                    document.getElementById('grade-filter').value = 'ALL';
+                    document.getElementById('room-filter').value = 'ALL';
+                    document.getElementById('link-filter').value = 'ALL';
+                    renderTasks();
+                });
+            }
+
+            // Fetch attendance tasks
+            fetch('/api/attendance/tasks')
+                .then(function (r) {
+                    if (r.status === 401) {
+                        window.location.href = '/admin-access?next=' + encodeURIComponent(window.location.pathname);
+                        return null;
+                    }
+                    return r.json();
+                })
+                .then(function (data) {
+                    if (!data) return;
+                    loading.classList.add('hidden');
+                    allTasks = data;
+
+                    updateStats(allTasks);
+
+                    if (allTasks.length === 0) {
+                        empty.classList.remove('hidden');
+                        return;
+                    }
+
+                    renderTasks();
+                    bindFilters();
+                    window.addEventListener('resize', applyLayout);
+                })
+                .catch(function () {
+                    loading.classList.add('hidden');
+                    empty.classList.remove('hidden');
+                });
+        })();
+
+        function copyAttendanceLink(text, btn) {
+            navigator.clipboard.writeText(text).then(function () {
+                var orig = btn.textContent;
+                btn.textContent = '✅ คัดลอกแล้ว!';
+                setTimeout(function () { btn.textContent = orig; }, 2000);
+            });
+        }
+
+        function lockAttendanceLink(linkId) {
+            if (!confirm('คุณแน่ใจหรือไม่ว่าต้องการปิดลิงก์เช็คชื่อนี้?')) return;
+            fetch('/api/task-links/' + linkId + '/admin-lock', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ reason: 'Admin manually locked attendance link' })
+            })
+                .then(function (res) {
+                    if (res.ok) { alert('ปิดลิงก์สำเร็จ'); window.location.reload(); }
+                    else { alert('เกิดข้อผิดพลาดในการปิดลิงก์'); }
+                })
+                .catch(function () { alert('เกิดข้อผิดพลาด'); });
+        }
+    </script>
+</body>
+
+</html>

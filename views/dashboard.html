@@ -6,15 +6,39 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>STS — Dashboard</title>
   <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 
-<body>
-  <div class="header">
-    <h1>Student Tracking System</h1>
-    <div class="header-sub">ระบบติดตามผู้เรียน — Task Delegation Chain</div>
+<body class="has-sidebar">
+  <div id="overlay" class="overlay"></div>
+  <div id="sidebar" class="sidebar">
+    <div class="logo-section"><i class="fas fa-graduation-cap"></i><span>ระบบติดตามนักเรียน</span></div>
+    <div class="menu-label">เมนู</div>
+    <a href="/" class="nav-item active"><i class="fas fa-home"></i>Dashboard</a>
+    <a href="/create" class="nav-item"><i class="fas fa-link"></i>สร้างลิงค์</a>
+    <a href="/attendance" class="nav-item"><i class="fas fa-clipboard-check"></i>เช็คชื่อ</a>
+    <a href="/attendance-dashboard" class="nav-item"><i class="fas fa-chart-bar"></i>Dashboard เช็คชื่อ</a>
+    <div class="user-profile">
+      <div class="avatar">A</div>
+      <div>
+        <div style="font-weight:600;font-size:0.9rem">ผู้ดูแลระบบ</div>
+        <div style="font-size:0.75rem;color:#94a3b8">Admin</div>
+      </div>
+      <form action="/admin-logout" method="POST" style="margin-left:auto">
+        <button type="submit" style="background:none;border:none;color:#94a3b8;cursor:pointer"><i class="fas fa-sign-out-alt"></i></button>
+      </form>
+    </div>
   </div>
 
-  <div class="container container--wide">
+  <div class="main-content">
+    <div class="top-bar">
+      <div style="display:flex;align-items:center;gap:1rem">
+        <div id="menu-btn" class="mobile-toggle"><i class="fas fa-bars"></i></div>
+        <h1 class="page-title">Dashboard</h1>
+      </div>
+    </div>
+
+    <div style="max-width:1300px;width:100%">
 
     <!-- Summary Stats -->
     <div class="stats-grid" id="stats-grid">
@@ -57,8 +81,10 @@
     </div>
 
     <div class="card dashboard-toolbar">
-      <h2 class="card-title dashboard-toolbar-title">รายการเคสทั้งหมด</h2>
-      <a href="/create" class="btn btn-primary btn-auto">+ สร้างภารกิจใหม่</a>
+      <h2 class="card-title dashboard-toolbar-title">จัดการระบบ</h2>
+      <div class="dashboard-toolbar-actions">
+        <a href="/create" class="btn btn-primary btn-auto">+ สร้างภารกิจใหม่</a>
+      </div>
     </div>
 
     <div class="card dashboard-filter-card">
@@ -136,9 +162,8 @@
             <th>โรงเรียน</th>
             <th>สาเหตุ</th>
             <th>สถานะ</th>
-            <th>ลิงก์</th>
-            <th>จัดการลิงก์</th>
-            <th>วันที่สร้าง</th>
+            <th style="min-width: 320px;">ลิงก์ & การจัดการ</th>
+            <th class="text-nowrap">วันที่สร้าง</th>
             <th></th>
           </tr>
         </thead>
@@ -147,8 +172,10 @@
     </div>
 
     <div id="mobile-list" class="mobile-case-list hidden"></div>
+    </div>
   </div>
 
+  <script src="/js/sidebar.js"></script>
   <script src="/js/dashboard.js"></script>
 </body>
 

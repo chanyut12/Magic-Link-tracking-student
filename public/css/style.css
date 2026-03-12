@@ -9,6 +9,7 @@
 :root {
   --primary: #2563eb;
   --primary-dark: #1d4ed8;
+  --sidebar-width: 260px;
   --success: #16a34a;
   --warning: #d97706;
   --danger: #dc2626;
@@ -47,7 +48,8 @@ body {
 }
 
 .container--wide {
-  max-width: 960px;
+  max-width: 1300px;
+  width: 96%;
 }
 
 /* Header */
@@ -238,12 +240,13 @@ textarea:focus-visible {
 /* Badge */
 .badge {
   display: inline-block;
-  padding: 3px 10px;
+  padding: 4px 12px;
   border-radius: 99px;
   font-size: 0.75rem;
-  font-weight: 600;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.03em;
+  white-space: nowrap;
 }
 
 .badge-pending {
@@ -290,6 +293,9 @@ textarea:focus-visible {
 .table-wrap {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  background: #fff;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
 }
 
 table {
@@ -300,7 +306,7 @@ table {
 
 th,
 td {
-  padding: 10px 12px;
+  padding: 12px 10px;
   text-align: left;
   border-bottom: 1px solid var(--gray-200);
 }
@@ -312,8 +318,27 @@ th {
   white-space: nowrap;
 }
 
+.nowrap {
+  white-space: nowrap;
+}
+
 tr:hover td {
   background: var(--gray-50);
+}
+
+.text-nowrap {
+  white-space: nowrap;
+}
+
+.text-truncate {
+  max-width: 200px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.min-w-120 {
+  min-width: 120px;
 }
 
 td a {
@@ -661,6 +686,22 @@ td a:hover {
   }
 }
 
+/* Mobile Case Card Enhancements */
+.mobile-case-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--gray-100);
+}
+
+.mobile-case-actions>* {
+  flex: 1 1 calc(50% - 4px);
+  min-width: 110px;
+  justify-content: center;
+}
+
 /* Stats grid */
 .stats-grid {
   display: grid;
@@ -768,30 +809,43 @@ td a:hover {
   }
 }
 
-/* Copy link button (dashboard table) */
+/* Copy link button (dashboard table/mobile) */
 .btn-copy-link {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 4px;
-  padding: 8px 12px;
-  min-height: 40px;
-  min-width: 40px;
+  padding: 4px 6px;
+  min-height: 32px;
   border: 1.5px solid var(--primary);
   border-radius: 6px;
   background: #fff;
   color: var(--primary);
-  font-size: 0.85rem;
-  font-weight: 500;
+  font-size: 0.75rem;
+  font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
-  transition: background 0.15s, color 0.15s;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: all 0.2s;
   text-decoration: none;
 }
 
 .btn-copy-link:hover {
   background: var(--primary);
   color: #fff;
+}
+
+.btn-copy-link--primary {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+  text-decoration: none;
+}
+
+.btn-copy-link--primary:hover {
+  background: var(--primary-dark);
+  border-color: var(--primary-dark);
 }
 
 .btn-copy-link--line {
@@ -807,7 +861,7 @@ td a:hover {
 }
 
 .btn-admin-toggle {
-  min-width: 92px;
+  min-width: 80px;
 }
 
 .dashboard-toolbar {
@@ -1106,6 +1160,173 @@ td a:hover {
   .btn-reset-filter {
     width: 100%;
     justify-content: center;
+  }
+}
+
+/* ===================== Sidebar Navigation ===================== */
+
+body.has-sidebar {
+  display: flex;
+  background-color: #f4f7fe;
+}
+
+body.has-sidebar .sidebar {
+  width: var(--sidebar-width);
+  background: white;
+  height: 100vh;
+  position: fixed;
+  left: 0;
+  top: 0;
+  border-right: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  padding: 1.5rem 0;
+  z-index: 1000;
+  transition: transform 0.3s ease;
+}
+
+body.has-sidebar .logo-section {
+  padding: 0 1.5rem 2rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: #1e40af;
+  font-weight: 700;
+  font-size: 1.2rem;
+}
+
+body.has-sidebar .menu-label {
+  padding: 0 1.5rem 0.5rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  color: #94a3b8;
+  letter-spacing: 0.05em;
+}
+
+body.has-sidebar .nav-item {
+  padding: 0.75rem 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  text-decoration: none;
+  color: #64748b;
+  transition: all 0.2s;
+  border-left: 4px solid transparent;
+}
+
+body.has-sidebar .nav-item:hover {
+  color: #1e40af;
+  background: #eff6ff;
+}
+
+body.has-sidebar .nav-item.active {
+  color: #1e40af;
+  background: #eff6ff;
+  border-left-color: #1e40af;
+  font-weight: 600;
+}
+
+body.has-sidebar .user-profile {
+  margin-top: auto;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+body.has-sidebar .avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  color: #64748b;
+  flex-shrink: 0;
+}
+
+body.has-sidebar .main-content {
+  margin-left: var(--sidebar-width);
+  flex: 1;
+  padding: 2rem;
+  max-width: 100%;
+  transition: margin-left 0.3s ease;
+}
+
+body.has-sidebar .top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+body.has-sidebar .page-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+body.has-sidebar .mobile-toggle {
+  display: block;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: #1e40af;
+  background: none;
+  border: none;
+  padding: 4px;
+  line-height: 1;
+}
+
+/* Desktop collapsed sidebar */
+body.has-sidebar.sidebar-collapsed .sidebar {
+  transform: translateX(-100%);
+}
+
+body.has-sidebar.sidebar-collapsed .main-content {
+  margin-left: 0;
+}
+
+body.has-sidebar .overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.3);
+  z-index: 900;
+}
+
+body.has-sidebar .overlay.show {
+  display: block;
+}
+
+@media (max-width: 768px) {
+  body.has-sidebar .sidebar {
+    transform: translateX(-100%);
+  }
+
+  body.has-sidebar .sidebar.show {
+    transform: translateX(0);
+  }
+
+  /* On mobile, ignore desktop collapsed state */
+  body.has-sidebar.sidebar-collapsed .sidebar {
+    transform: translateX(-100%);
+  }
+
+  body.has-sidebar.sidebar-collapsed .sidebar.show {
+    transform: translateX(0);
+  }
+
+  body.has-sidebar .main-content,
+  body.has-sidebar.sidebar-collapsed .main-content {
+    margin-left: 0;
+    padding: 1.25rem;
   }
 }
 
@@ -1463,7 +1684,7 @@ td a:hover {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.5);
-  z-index: 1000;
+  z-index: 1100;
   display: flex;
   align-items: center;
   justify-content: center;
