@@ -17,7 +17,10 @@
           {{ pageTitle }}
         </q-toolbar-title>
 
-        <div class="text-caption text-gray-400">v1.1.0</div>
+        <div class="header-actions">
+          <q-btn flat round dense color="grey-8" icon="far fa-bell" class="header-icon-btn" />
+          <q-btn flat round dense color="grey-8" icon="fas fa-cog" class="header-icon-btn" />
+        </div>
       </q-toolbar>
     </q-header>
 
@@ -136,5 +139,32 @@ async function logout() {
     min-width: 32px !important;
     padding-right: 0 !important;
   }
+}
+
+.header-icon-btn {
+  transition: all 0.2s;
+  background: #f8fafc;
+  border: 1.5px solid #e2e8f0;
+  width: 42px;
+  height: 42px;
+  border-radius: 50% !important;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  
+  &:hover {
+    color: var(--q-primary) !important;
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  }
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-right: 8px;
 }
 </style>
