@@ -77,15 +77,22 @@
               </q-item-section>
               <q-item-section>Dashboard เช็คชื่อ</q-item-section>
             </q-item>
+
+            <q-item clickable v-ripple to="/manage-users" class="nav-item">
+              <q-item-section avatar min-width="44px">
+                <i class="fas fa-users-cog"></i>
+              </q-item-section>
+              <q-item-section>จัดการสิทธิ์ผู้ใช้งาน</q-item-section>
+            </q-item>
           </q-list>
         </div>
 
         <!-- Pinned Logout Section -->
         <div class="user-profile">
-          <div class="avatar">A</div>
+          <div class="avatar">{{ userInitials }}</div>
           <div>
-            <div style="font-weight:600;font-size:0.9rem">ผู้ดูแลระบบ</div>
-            <div style="font-size:0.75rem;color:#94a3b8">Admin</div>
+            <div style="font-weight:600;font-size:0.9rem">{{ userDisplayName }}</div>
+            <div style="font-size:0.75rem;color:#94a3b8">{{ userRoleLabel }}</div>
           </div>
           <q-btn flat round color="primary" icon="fa-solid fa-right-from-bracket" size="md" @click="logout" class="q-ml-auto" />
         </div>
@@ -99,7 +106,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useQuasar } from 'quasar';
 
@@ -107,6 +114,59 @@ const route = useRoute();
 const router = useRouter();
 const $q = useQuasar();
 const leftDrawerOpen = ref(false);
+
+interface User {
+  id: number;
+  username: string;
+  FirstName: string | null;
+  LastName: string | null;
+  roles: string[];
+  labels?: string[];
+}
+
+const currentUser = ref<User | null>(null);
+
+onMounted(() => {
+  const userStr = localStorage.getItem('sts_user');
+  if (userStr) {
+    try {
+      currentUser.value = JSON.parse(userStr) as User;
+    } catch (e) {
+      console.error('Failed to parse sts_user', e);
+    }
+  }
+});
+
+const userDisplayName = computed(() => {
+  if (!currentUser.value) return 'ผู้ดูแลระบบ';
+  const { FirstName, LastName, username } = currentUser.value;
+  if (FirstName && LastName) return `${FirstName} ${LastName}`;
+  return FirstName || username || 'ผู้ใช้งาน';
+});
+
+const userRoleLabel = computed(() => {
+  if (!currentUser.value) return 'ผู้ดูแลระบบ';
+  
+  const labels = currentUser.value.labels || [];
+  if (labels.length > 0) {
+    return labels.join(', ');
+  }
+
+  const roles = currentUser.value.roles || [];
+  if (roles.includes('ADMIN')) return 'ผู้ดูแลระบบ';
+  if (roles.includes('DIRECTOR')) return 'ผู้อำนวยการ';
+  if (roles.includes('TEACHER')) return 'คุณครู';
+  if (roles.includes('EXECUTIVE')) return 'ผู้บริหาร';
+  if (roles.includes('STAFF')) return 'เจ้าหน้าที่';
+  
+  return roles[0] || 'ผู้ใช้งาน';
+});
+
+const userInitials = computed(() => {
+  if (currentUser.value?.FirstName) return currentUser.value.FirstName.charAt(0).toUpperCase();
+  if (currentUser.value?.username) return currentUser.value.username.charAt(0).toUpperCase();
+  return 'A';
+});
 
 const hideNavigation = computed(() => !!route.meta.hideNav);
 
@@ -117,6 +177,7 @@ const pageTitle = computed(() => {
   if (route.path === '/attendance') return 'เช็คชื่อ';
   if (route.path === '/attendance-dashboard') return 'Dashboard เช็คชื่อ';
   if (route.path === '/admin-access') return 'Admin Access';
+  if (route.path === '/manage-users') return 'จัดการผู้ใช้งาน';
   return 'Student Tracking System';
 });
 
@@ -126,6 +187,7 @@ function toggleLeftDrawer () {
 
 async function logout() {
   localStorage.removeItem('admin_access');
+  localStorage.removeItem('sts_user');
   $q.notify({
     message: 'ออกจากระบบสำเร็จ',
     color: 'positive',

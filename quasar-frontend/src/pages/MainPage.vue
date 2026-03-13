@@ -5,12 +5,14 @@
       <!-- 1. Profile Header Card -->
       <div class="profile-card q-mb-lg">
         <div class="row items-center no-wrap">
-          <div class="profile-avatar-placeholder q-mr-lg"></div>
+          <div class="profile-avatar-placeholder q-mr-lg flex flex-center text-h4 text-weight-bold text-blue-grey-3">
+            {{ userInitials }}
+          </div>
           <div class="profile-info">
             <div class="row items-center q-gutter-x-sm q-mb-xs">
-              <h1 class="text-h5 text-weight-bold q-my-none">อรภา เกษมสุวรรณ</h1>
+              <h1 class="text-h5 text-weight-bold q-my-none">{{ userDisplayName }}</h1>
               <q-chip 
-                label="ผู้อำนวยการ" 
+                :label="userRoleLabel" 
                 color="red-4" 
                 text-color="white" 
                 dense 
@@ -18,7 +20,7 @@
               />
             </div>
             <p class="text-subtitle2 text-grey-7 q-mb-none">
-              สังกัด: โรงเรียนหนองโคกบ้านดอนสภาการศึกษา
+              สังกัด: {{ currentUser?.affiliation || '-' }}
             </p>
           </div>
         </div>
@@ -141,8 +143,51 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { api } from 'boot/axios';
+
+interface User {
+  id: number;
+  username: string;
+  FirstName: string | null;
+  LastName: string | null;
+  roles: string[];
+  labels?: string[];
+  affiliation?: string | null;
+}
+
+const currentUser = ref<User | null>(null);
+
+const userDisplayName = computed(() => {
+  if (!currentUser.value) return 'ผู้ดูแลระบบ';
+  const { FirstName, LastName, username } = currentUser.value;
+  if (FirstName && LastName) return `${FirstName} ${LastName}`;
+  return FirstName || username || 'ผู้ใช้งาน';
+});
+
+const userRoleLabel = computed(() => {
+  if (!currentUser.value) return 'ผู้ดูแลระบบ';
+  
+  const labels = currentUser.value.labels || [];
+  if (labels.length > 0) {
+    return labels.join(', ');
+  }
+
+  const roles = currentUser.value.roles || [];
+  if (roles.includes('ADMIN')) return 'ผู้ดูแลระบบ';
+  if (roles.includes('DIRECTOR')) return 'ผู้อำนวยการ';
+  if (roles.includes('TEACHER')) return 'คุณครู';
+  if (roles.includes('EXECUTIVE')) return 'ผู้บริหาร';
+  if (roles.includes('STAFF')) return 'เจ้าหน้าที่';
+  
+  return roles[0] || 'ผู้ใช้งาน';
+});
+
+const userInitials = computed(() => {
+  if (currentUser.value?.FirstName) return currentUser.value.FirstName.charAt(0).toUpperCase();
+  if (currentUser.value?.username) return currentUser.value.username.charAt(0).toUpperCase();
+  return 'A';
+});
 
 const overviewData = ref({
   totalStudents: 0,
@@ -174,7 +219,17 @@ const fetchOverview = async () => {
   }
 };
 
-onMounted(fetchOverview);
+onMounted(() => {
+  void fetchOverview();
+  const userStr = localStorage.getItem('sts_user');
+  if (userStr) {
+    try {
+      currentUser.value = JSON.parse(userStr) as User;
+    } catch (e) {
+      console.error('Failed to parse sts_user', e);
+    }
+  }
+});
 </script>
 
 <style lang="scss" scoped>

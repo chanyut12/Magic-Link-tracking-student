@@ -58,7 +58,7 @@
             label="เข้าสู่ระบบ" 
             class="full-width q-py-md btn-primary" 
             unelevated
-            @click="handleLogin"
+            :loading="loading"
           />
 
           <div class="divider">
@@ -84,21 +84,74 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
+import { api } from 'boot/axios';
+import { useQuasar } from 'quasar';
+import { AxiosError } from 'axios';
+
+interface User {
+  id: number;
+  username: string;
+  FirstName: string | null;
+  LastName: string | null;
+  roles: string[];
+  labels: string[];
+  affiliation?: string | null;
+}
 
 const router = useRouter();
+const $q = useQuasar();
 const username = ref('');
 const password = ref('');
 const showPassword = ref(false);
+const loading = ref(false);
 
-const handleLogin = () => {
-  // Setting admin access immediately as requested
-  localStorage.setItem('admin_access', 'true');
-  
-  // Use direct window navigation to ensure it triggers
-  window.location.href = '#/';
-  
-  // Also try router as fallback
-  void router.push('/');
+const handleLogin = async () => {
+  if (!username.value || !password.value) {
+    $q.notify({
+      message: 'กรุณากรอกชื่อผู้ใช้งานและรหัสผ่าน',
+      color: 'negative',
+      position: 'top'
+    });
+    return;
+  }
+
+  loading.value = true;
+  try {
+    const response = await api.post<User>('/api/users/login', {
+      username: username.value,
+      password: password.value
+    });
+
+    const user = response.data;
+    
+    // Store user info
+    localStorage.setItem('sts_user', JSON.stringify(user));
+    localStorage.setItem('admin_access', 'true');
+    
+    $q.notify({
+      message: `ยินดีต้อนรับคุณ ${user.FirstName || user.username}`,
+      color: 'positive',
+      position: 'top'
+    });
+
+    // Navigate to home
+    void router.push('/');
+  } catch (error) {
+    console.error('Login error:', error);
+    let errorMsg = 'ชื่อผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง';
+    
+    if (error instanceof AxiosError && error.response?.data?.message) {
+      errorMsg = error.response.data.message;
+    }
+    
+    $q.notify({
+      message: errorMsg,
+      color: 'negative',
+      position: 'top'
+    });
+  } finally {
+    loading.value = false;
+  }
 };
 </script>
 

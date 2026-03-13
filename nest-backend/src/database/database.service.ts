@@ -38,7 +38,7 @@ export class DatabaseService implements OnModuleInit {
       await client.query('BEGIN');
       await client.query(`
         CREATE TABLE IF NOT EXISTS schools (
-          id INTEGER PRIMARY KEY,
+          id SERIAL PRIMARY KEY,
           name TEXT NOT NULL,
           province TEXT,
           district TEXT,
@@ -46,7 +46,7 @@ export class DatabaseService implements OnModuleInit {
         );
 
         CREATE TABLE IF NOT EXISTS grade_levels (
-          id INTEGER PRIMARY KEY,
+          id SERIAL PRIMARY KEY,
           label TEXT NOT NULL,
           category TEXT
         );
@@ -117,7 +117,6 @@ export class DatabaseService implements OnModuleInit {
           reviewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
-
         CREATE TABLE IF NOT EXISTS student_term (
           "AcademicYear_Onec" INTEGER,
           "Semester_Onec" INTEGER,
@@ -184,10 +183,10 @@ export class DatabaseService implements OnModuleInit {
             "AcademicYear_Onec"   INT NOT NULL,
             "Semester_Onec"       INT NOT NULL,
             "AttendanceDate"      DATE NOT NULL,
-            "Period"              INT NOT NULL,  -- คาบที่ 1-8
-            "AttendanceStatus"    SMALLINT NOT NULL,  -- 1=มา 2=ขาด 3=สาย
+            "Period"              INT NOT NULL,
+            "AttendanceStatus"    SMALLINT NOT NULL,
             "RecordedAt"          TIMESTAMP DEFAULT NOW(),
-            "RecordedBy"          VARCHAR(100)  -- ครูที่เช็ค
+            "RecordedBy"          VARCHAR(100)
         );
 
         CREATE TABLE IF NOT EXISTS schedules (
@@ -200,6 +199,57 @@ export class DatabaseService implements OnModuleInit {
           end_time TEXT,
           teacher TEXT
         );
+
+        -- User Management
+        CREATE TABLE IF NOT EXISTS roles (
+          id SERIAL PRIMARY KEY,
+          name TEXT NOT NULL UNIQUE,
+          label TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS users (
+          id SERIAL PRIMARY KEY,
+          username TEXT NOT NULL UNIQUE,
+          password TEXT NOT NULL,
+          fullname TEXT,
+          "PersonID_Onec" TEXT,
+          phone TEXT,
+          email TEXT,
+          affiliation TEXT,
+          status TEXT DEFAULT 'ACTIVE',
+          permissions JSONB DEFAULT '[]',
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS user_roles (
+          user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+          role_id INTEGER REFERENCES roles(id) ON DELETE CASCADE,
+          PRIMARY KEY (user_id, role_id)
+        );
+
+        -- Seed Roles
+        INSERT INTO roles (name, label) VALUES ('ADMIN', 'ผู้ดูแลระบบ') ON CONFLICT (name) DO UPDATE SET label = EXCLUDED.label;
+        INSERT INTO roles (name, label) VALUES ('DIRECTOR', 'ผู้อำนวยการ') ON CONFLICT (name) DO UPDATE SET label = EXCLUDED.label;
+        INSERT INTO roles (name, label) VALUES ('TEACHER', 'คุณครู') ON CONFLICT (name) DO UPDATE SET label = EXCLUDED.label;
+        INSERT INTO roles (name, label) VALUES ('EXECUTIVE', 'ผู้บริหาร') ON CONFLICT (name) DO UPDATE SET label = EXCLUDED.label;
+
+        CREATE TABLE IF NOT EXISTS external_users (
+          "ExternalID" SERIAL PRIMARY KEY,
+          "PersonID_Onec" TEXT UNIQUE,
+          "FullName" TEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        -- Ensure users table has all required columns
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS "PersonID_Onec" TEXT;
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS "FirstName" TEXT;
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS "LastName" TEXT;
+        ALTER TABLE users DROP COLUMN IF EXISTS fullname;
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS "phone" TEXT;
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS "email" TEXT;
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS "affiliation" TEXT;
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS "status" TEXT DEFAULT 'ACTIVE';
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS "permissions" JSONB DEFAULT '[]';
 
         CREATE INDEX IF NOT EXISTS idx_task_links_token ON task_links(token_hash);
         CREATE INDEX IF NOT EXISTS idx_task_links_task_id ON task_links(task_id);
