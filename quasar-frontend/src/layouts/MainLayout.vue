@@ -47,7 +47,14 @@
               <q-item-section avatar min-width="44px">
                 <i class="fas fa-home"></i>
               </q-item-section>
-              <q-item-section>Dashboard</q-item-section>
+              <q-item-section>หน้าหลัก</q-item-section>
+            </q-item>
+
+            <q-item clickable v-ripple to="/dashboard" class="nav-item">
+              <q-item-section avatar min-width="44px">
+                <i class="fas fa-chart-line"></i>
+              </q-item-section>
+              <q-item-section>รายงานนักเรียน</q-item-section>
             </q-item>
 
             <q-item clickable v-ripple to="/create" class="nav-item">
@@ -104,7 +111,8 @@ const leftDrawerOpen = ref(false);
 const hideNavigation = computed(() => !!route.meta.hideNav);
 
 const pageTitle = computed(() => {
-  if (route.path === '/') return 'Dashboard';
+  if (route.path === '/') return 'หน้าหลัก';
+  if (route.path === '/dashboard') return 'รายงานนักเรียน';
   if (route.path === '/create') return 'สร้างภารกิจใหม่';
   if (route.path === '/attendance') return 'เช็คชื่อ';
   if (route.path === '/attendance-dashboard') return 'Dashboard เช็คชื่อ';
