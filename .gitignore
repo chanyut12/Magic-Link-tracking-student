@@ -1,14 +1,23 @@
+# Node
 node_modules/
-.claude
-/skill
+**/node_modules/
+
+# Build
+dist/
+**/dist/
+.quasar/
+**/.quasar/
+
+# Environment
 .env
+**/.env
+
+# DB
 db/*.db-wal
 db/*.db-shm
-uploads/*
-!uploads/.gitkeep
-/docs
-/UI
-/node_modules
+db/*.db
+!db/.gitkeep
+
+# System
 .DS_Store
-~$*.docx
-db/test.db
+Thumbs.db
