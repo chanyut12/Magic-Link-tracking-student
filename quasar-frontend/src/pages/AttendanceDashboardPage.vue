@@ -95,9 +95,18 @@
             </q-td>
           </template>
 
+          <template v-slot:body-cell-task_type="props">
+            <q-td :props="props">
+              <span class="badge" :style="props.row.task_type === 'VISIT' ? 'background:#dcfce7;color:#15803d;' : 'background:#dbeafe;color:#1e40af;'">
+                {{ props.row.task_type === 'VISIT' ? '📍 ลงพื้นที่' : '📋 เช็คชื่อ' }}
+              </span>
+            </q-td>
+          </template>
+
           <template v-slot:body-cell-class="props">
             <q-td :props="props">
-              <strong>{{ props.row.target_grade }}/{{ props.row.target_room }}</strong>
+              <strong v-if="props.row.task_type === 'ATTENDANCE'">{{ props.row.target_grade }}/{{ props.row.target_room }}</strong>
+              <span v-else class="text-gray-500">-</span>
             </q-td>
           </template>
 
@@ -143,6 +152,7 @@ import type { QTableColumn } from 'quasar';
 
 interface AttendanceTask {
   id: string;
+  task_type: string;
   target_grade: string;
   target_room: string;
   link_assigned_to: string;
@@ -150,6 +160,17 @@ interface AttendanceTask {
   active_link_locked: boolean;
   active_link_id: string;
   created_at: string;
+}
+
+interface SelectOption {
+  label: string;
+  value: string;
+}
+
+interface GradeLevel {
+  id: number;
+  label: string;
+  category: string;
 }
 
 const $q = useQuasar();
@@ -162,15 +183,20 @@ const filters = reactive({
   status: 'ALL',
 });
 
-const gradeOptions = [
-  { label: 'ทุกชั้น', value: 'ALL' },
-  { label: 'ม.1', value: 'ม.1' },
-  { label: 'ม.2', value: 'ม.2' },
-  { label: 'ม.3', value: 'ม.3' },
-  { label: 'ม.4', value: 'ม.4' },
-  { label: 'ม.5', value: 'ม.5' },
-  { label: 'ม.6', value: 'ม.6' },
-];
+const gradeOptions = ref<SelectOption[]>([{ label: 'ทุกชั้น', value: 'ALL' }]);
+
+const fetchGradeLevels = async () => {
+  try {
+    const res = await api.get('/api/attendance/grade-levels');
+    const levels = res.data.data.map((l: GradeLevel) => ({
+      label: l.label,
+      value: l.label
+    }));
+    gradeOptions.value = [{ label: 'ทุกชั้น', value: 'ALL' }, ...levels];
+  } catch (err) {
+    console.error('Fetch grade levels error:', err);
+  }
+};
 
 const roomOptions = [
   { label: 'ทุกห้อง', value: 'ALL' },
@@ -238,7 +264,7 @@ const cardStats = computed(() => {
 
 const getPublicLink = (task: AttendanceTask) => {
   const baseUrl = window.location.origin;
-  return `${baseUrl}/#/guest/attendance/${task.active_link_id}`;
+  return `${baseUrl}/#/task/${task.active_link_id}`;
 };
 
 const getLineUrl = (link: string) => {
@@ -279,7 +305,10 @@ const resetFilters = () => {
   filters.status = 'ALL';
 };
 
-onMounted(fetchData);
+onMounted(async () => {
+  await fetchGradeLevels();
+  await fetchData();
+});
 </script>
 
 <style lang="scss" scoped>

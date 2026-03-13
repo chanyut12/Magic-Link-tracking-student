@@ -70,7 +70,7 @@
                 <label>ระดับชั้น *</label>
                 <select v-model="formData.target_grade">
                   <option value="">-- เลือกชั้น --</option>
-                  <option v-for="g in ['ม.1', 'ม.2', 'ม.3', 'ม.4', 'ม.5', 'ม.6']" :key="g" :value="g">{{ g }}</option>
+                  <option v-for="gl in gradeLevels" :key="gl.id" :value="gl.label">{{ gl.label }}</option>
                 </select>
               </div>
             </div>
@@ -162,8 +162,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed } from 'vue';
+import { ref, reactive, computed, onMounted } from 'vue';
 import { api } from 'boot/axios';
+import type { AxiosError } from 'axios';
 import { useQuasar } from 'quasar';
 
 const $q = useQuasar();
@@ -188,6 +189,27 @@ const formData = reactive({
   expires_unit: 'days'
 });
 
+interface GradeLevel {
+  id: number;
+  label: string;
+}
+
+const gradeLevels = ref<GradeLevel[]>([]);
+
+const fetchGradeLevels = async () => {
+  try {
+    const res = await api.get('/api/attendance/grade-levels');
+    gradeLevels.value = res.data.data;
+    if (gradeLevels.value.length > 0 && !formData.target_grade) {
+      formData.target_grade = gradeLevels.value[0]?.label || '';
+    }
+  } catch (err) {
+    console.error('Fetch grade levels error:', err);
+  }
+};
+
+onMounted(fetchGradeLevels);
+
 const pageTitle = computed(() => {
   if (currentStep.value === 1) return 'สร้างภารกิจ';
   return formData.type === 'VISIT' ? 'สร้างภารกิจลงพื้นที่' : 'สร้างภารกิจเช็คชื่อ';
@@ -207,12 +229,19 @@ const submitForm = async () => {
 
   loading.value = true;
   try {
-    const res = await api.post('/api/tasks', formData);
-    resultLink.value = res.data.magic_link_full;
-    qrCodeUrl.value = res.data.qr_code;
+    const payload = {
+      ...formData,
+      task_type: formData.type // Backend expects task_type
+    };
+    const res = await api.post('/api/tasks', payload);
+    resultLink.value = res.data.magic_link;
+    // We don't have a QR code generator in this mock yet, so just leave it empty or use dummy
+    qrCodeUrl.value = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(res.data.magic_link)}`;
     showResult.value = true;
-  } catch {
-    $q.notify({ message: 'เกิดข้อผิดพลาดในการสร้างภารกิจ', color: 'negative' });
+  } catch (err: unknown) {
+    console.error(err);
+    const error = err as AxiosError<{ message?: string }>;
+    $q.notify({ message: error.response?.data?.message || 'เกิดข้อผิดพลาดในการสร้างภารกิจ', color: 'negative' });
   } finally {
     loading.value = false;
   }

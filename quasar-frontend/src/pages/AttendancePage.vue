@@ -37,13 +37,14 @@
         <div class="col-12 col-sm-auto row q-col-gutter-sm">
           <div class="col-auto">
             <select v-model="filters.grade" class="filter-select">
-              <option v-for="g in ['ม.1', 'ม.2', 'ม.3', 'ม.4', 'ม.5', 'ม.6']" :key="g" :value="g">{{ g }}</option>
+              <option v-for="gl in gradeLevels" :key="gl.id" :value="gl.label">{{ gl.label }}</option>
             </select>
           </div>
           <div class="col-auto">
             <select v-model="filters.room" class="filter-select">
-              <option v-for="r in ['1', '2', '3', '4', '5', '6', 'all']" :key="r" :value="r">{{ r === 'all' ? 'ทั้งหมด' : r }}</option>
+              <option v-for="r in rooms" :key="r" :value="r">ห้อง {{ r }}</option>
             </select>
+            <div v-if="rooms.length === 0" class="text-caption text-negative q-mt-xs">ไม่พบข้อมูลห้อง</div>
           </div>
         </div>
 
@@ -80,8 +81,8 @@
       <!-- Table Header (Desktop) -->
       <div class="table-header d-none-mobile" v-if="filteredDisplayList.length > 0">
         <div>ชื่อ - นามสกุล</div>
-        <div class="text-center">{{ currentTab === 'today' ? 'สาย' : 'วันที่ประมวลผล' }}</div>
-        <div class="text-center">{{ currentTab === 'today' ? 'ขาด' : '-' }}</div>
+        <div class="text-center">{{ currentTab === 'today' ? 'ขาด' : 'วันที่ประมวลผล' }}</div>
+        <div class="text-center">{{ currentTab === 'today' ? 'สาย' : '-' }}</div>
         <div class="text-right">สถานะเช็คชื่อ</div>
       </div>
 
@@ -107,12 +108,8 @@
           </div>
 
           <template v-if="currentTab === 'today'">
-            <div class="count-badge d-none-mobile">{{ (s as any).total_late || 0 }}</div>
-            <div class="count-badge d-none-mobile">{{ (s as any).total_absent || 0 }}</div>
-            <div class="count-row d-only-mobile">
-              <div class="count-item"><span class="count-label">สาย</span><strong>{{ (s as any).total_late || 0 }}</strong></div>
-              <div class="count-item"><span class="count-label">ขาด</span><strong>{{ (s as any).total_absent || 0 }}</strong></div>
-            </div>
+            <div class="count-badge d-none-mobile">{{ 'total_absent' in s ? s.total_absent || 0 : 0 }}</div>
+            <div class="count-badge d-none-mobile">{{ 'total_late' in s ? s.total_late || 0 : 0 }}</div>
             <div class="attendance-options">
               <button 
                 @click="setStatus(s.id, 'P_PRESENT')" 
@@ -139,12 +136,12 @@
           </template>
 
           <template v-else>
-            <div class="count-badge" style="font-size: 0.8rem; color: #94a3b8;">{{ (s as any).check_date || '-' }}</div>
+            <div class="count-badge" style="font-size: 0.8rem; color: #94a3b8;">{{ 'check_date' in s ? s.check_date || '-' : '-' }}</div>
             <div class="count-badge">-</div>
             <div class="text-right">
-              <div :class="['status-display', getStatusClass((s as any).status)]">
-                <i :class="['fas', getStatusIcon((s as any).status)]"></i>
-                {{ getStatusLabel((s as any).status) }}
+              <div :class="['status-display', getStatusClass('status' in s ? s.status : 'NONE')]">
+                <i :class="['fas', getStatusIcon('status' in s ? s.status : 'NONE')]"></i>
+                {{ getStatusLabel('status' in s ? s.status : 'NONE') }}
               </div>
             </div>
           </template>
@@ -184,6 +181,13 @@ interface AttendanceRecord {
   room: string;
   status: string;
   check_date?: string;
+  PersonID_Onec?: string;
+}
+
+interface GradeLevel {
+  id: number;
+  label: string;
+  category: string;
 }
 
 const $q = useQuasar();
@@ -193,20 +197,48 @@ const historyDate = ref(new Date().toISOString().split('T')[0]);
 const saving = ref(false);
 
 const students = ref<Student[]>([]);
+const gradeLevels = ref<GradeLevel[]>([]);
 const history = ref<AttendanceRecord[]>([]);
+const rooms = ref<string[]>([]);
 const attendanceSelections = reactive<Record<string, string>>({});
 
 const filters = reactive({
-  grade: 'ม.1',
+  grade: '',
   room: '1'
 });
 
-const fetchStudents = async () => {
+const fetchGradeLevels = async () => {
   try {
-    const res = await api.get('/api/attendance/students');
-    students.value = res.data;
+    const res = await api.get('/api/attendance/grade-levels');
+    gradeLevels.value = res.data.data;
+    if (gradeLevels.value.length > 0 && !filters.grade) {
+      filters.grade = gradeLevels.value[0]?.label || '';
+    }
+    if (filters.grade) await fetchRooms();
   } catch (err) {
-    console.error(err);
+    console.error('Fetch grade levels error:', err);
+  }
+};
+
+const fetchStudents = async () => {
+  if (!filters.grade || !filters.room) return;
+  try {
+    const res = await api.get('/api/attendance/students', {
+      params: { 
+        grade: filters.grade,
+        room: filters.room
+      }
+    });
+    students.value = res.data.data;
+    
+    // Default everyone to present if not set
+    students.value.forEach(s => {
+      if (!attendanceSelections[s.id]) {
+        attendanceSelections[s.id] = 'P_PRESENT';
+      }
+    });
+  } catch (err) {
+    console.error('Fetch students error:', err);
   }
 };
 
@@ -214,20 +246,41 @@ const fetchTodayRecords = async () => {
   const today = new Date().toISOString().split('T')[0];
   try {
     const res = await api.get(`/api/attendance/history?date=${today}`);
-    res.data.forEach((r: AttendanceRecord) => {
-      if (r.status) attendanceSelections[r.id] = r.status;
+    const data = res.data.data;
+    data.forEach((r: AttendanceRecord) => {
+      if (r.status) attendanceSelections[r.PersonID_Onec || r.id] = r.status;
     });
   } catch (err) {
-    console.error(err);
+    console.error('Fetch today records error:', err);
+  }
+};
+
+const fetchRooms = async () => {
+  if (!filters.grade) return;
+  try {
+    const res = await api.get('/api/attendance/rooms', { params: { grade: filters.grade } });
+    rooms.value = res.data.data;
+    if (rooms.value.length > 0) {
+      // If current room is not in the new rooms list, select the first one
+      if (!rooms.value.includes(filters.room)) {
+        filters.room = rooms.value[0] || '';
+      }
+    } else {
+      rooms.value = [];
+      filters.room = '';
+    }
+  } catch (err) {
+    console.error('Fetch rooms error:', err);
   }
 };
 
 const fetchHistory = async () => {
+  if (!historyDate.value) return;
   try {
     const res = await api.get(`/api/attendance/history?date=${historyDate.value}`);
-    history.value = res.data;
+    history.value = res.data.data;
   } catch (err) {
-    console.error(err);
+    console.error('Fetch history error:', err);
   }
 };
 
@@ -256,13 +309,9 @@ const saveAttendance = async () => {
 };
 
 const filteredStudents = computed(() => {
-  if (!filters.grade || !filters.room || filters.room === 'all') return [];
-
   return students.value.filter(s => {
     const matchesSearch = s.name.toLowerCase().includes(searchQuery.value.toLowerCase()) || s.id.includes(searchQuery.value);
-    const matchesGrade = s.grade === filters.grade;
-    const matchesRoom = s.room === filters.room;
-    return matchesSearch && matchesGrade && matchesRoom;
+    return matchesSearch;
   });
 });
 
@@ -270,7 +319,7 @@ const filteredHistory = computed(() => {
   return history.value.filter(h => {
     const matchesSearch = h.name.toLowerCase().includes(searchQuery.value.toLowerCase()) || h.id.includes(searchQuery.value);
     const matchesGrade = h.grade === filters.grade;
-    const matchesRoom = filters.room === 'all' ? true : h.room === filters.room;
+    const matchesRoom = h.room === filters.room;
     return matchesSearch && matchesGrade && matchesRoom;
   });
 });
@@ -310,8 +359,20 @@ const getStatusLabel = (status: string) => {
   return 'ไม่ได้เช็คชื่อ';
 };
 
+watch(() => filters.grade, async () => {
+  await fetchRooms();
+  if (currentTab.value === 'today') void fetchStudents();
+  else void fetchHistory();
+});
+
+watch(() => filters.room, () => {
+  if (currentTab.value === 'today') void fetchStudents();
+  else void fetchHistory();
+});
+
 watch(currentTab, (newTab) => {
-  if (newTab === 'history') void fetchHistory();
+  if (newTab === 'today') void fetchStudents();
+  else void fetchHistory();
 });
 
 watch(historyDate, () => {
@@ -319,6 +380,7 @@ watch(historyDate, () => {
 });
 
 onMounted(async () => {
+  await fetchGradeLevels();
   await fetchStudents();
   await fetchTodayRecords();
 });

@@ -143,22 +143,35 @@
             </div>
           </div>
 
-          <div class="card q-mb-lg">
+          <div class="card q-mb-lg" v-if="task.student_lat">
             <div class="card-title">พิกัดบ้านนักเรียน</div>
             <div style="background: #f1f5f9; height: 150px; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #64748b;">
               <i class="fas fa-map-marked-alt q-mr-sm"></i>
-              <span>แผนที่จะแสดงที่นี่</span>
+              <span>แผนที่จะแสดงที่นี่ ({{ task.student_lat }}, {{ task.student_lng }})</span>
             </div>
             <q-btn outline color="primary" label="🗺️ เปิดใน Google Maps" class="full-width q-mt-md" :href="getGmapsUrl()" target="_blank" />
           </div>
+
+          <!-- Visit Submission Form -->
+          <div class="card q-mb-lg" v-if="!showVisitResults">
+            <div class="card-title">สรุปผลการลงพื้นที่</div>
+            <div class="form-group">
+                <label>รายละเอียดการเยี่ยมบ้าน</label>
+                <textarea v-model="visitData.notes" placeholder="กรอกข้อมูลที่พบจากการลงพื้นที่..."></textarea>
+            </div>
+            <div class="row q-col-gutter-md">
+                <div class="col-6">
+                    <q-btn color="positive" label="สำเร็จ" icon="check" class="full-width q-py-md" unelevated @click="submitVisit('COMPLETED')" :loading="saving" />
+                </div>
+                <div class="col-6">
+                    <q-btn color="warning" label="อยู่ระหว่างดำเนินการ" icon="history" class="full-width q-py-md" unelevated @click="submitVisit('IN_PROGRESS')" :loading="saving" />
+                </div>
+            </div>
+          </div>
           
-          <div class="row q-col-gutter-md">
-            <div class="col-6">
-              <q-btn color="positive" label="📍 ลงพื้นที่เอง" class="full-width q-py-md" unelevated />
-            </div>
-            <div class="col-6">
-              <q-btn color="warning" label="🔄 มอบหมายต่อ" class="full-width q-py-md" unelevated />
-            </div>
+          <div v-else class="card q-pa-xl text-center">
+            <div class="alert alert-success q-mb-md">บันทึกข้อมูลการลงพื้นที่เรียบร้อยแล้ว</div>
+            <p class="text-gray-500">ขอบคุณสำหรับความร่วมมือในการติดตามนักเรียนครับ</p>
           </div>
         </div>
 
@@ -224,8 +237,14 @@ const otpLoading = ref(false);
 const students = ref<Student[]>([]);
 const attendanceSelections = reactive<Record<string, string>>({});
 const saving = ref(false);
+const showVisitResults = ref(false);
 const isExpired = ref(false);
 const countdownText = ref('--:--');
+
+const visitData = reactive({
+  notes: '',
+  status: 'IN_PROGRESS'
+});
 
 let timer: ReturnType<typeof setInterval> | null = null;
 
@@ -309,6 +328,23 @@ const verifyOTP = async () => {
 
 const setStatus = (id: string, status: string) => {
   attendanceSelections[id] = status;
+};
+
+const submitVisit = async (status: string) => {
+  saving.value = true;
+  visitData.status = status;
+  try {
+    const res = await api.post(`/api/tasks/${token}/submission`, visitData);
+    if (res.data.success) {
+      $q.notify({ message: 'บันทึกข้อมูลการลงพื้นที่แล้ว', color: 'positive' });
+      showVisitResults.value = true;
+    }
+  } catch (err) {
+    console.error(err);
+    $q.notify({ message: 'เกิดข้อผิดพลาดในการบันทึก', color: 'negative' });
+  } finally {
+    saving.value = false;
+  }
 };
 
 const attendanceStats = computed(() => {
@@ -424,6 +460,38 @@ onUnmounted(() => {
 .container {
   max-width: 600px;
   margin: 1.5rem auto 0;
+}
+
+/* Forms */
+.form-group {
+    margin-bottom: 20px;
+    text-align: left;
+    
+    label {
+        display: block;
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: #64748b;
+        margin-bottom: 8px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    
+    textarea {
+        width: 100%;
+        padding: 12px 16px;
+        border: 1.5px solid #e2e8f0;
+        border-radius: 12px;
+        font-size: 1rem;
+        min-height: 120px;
+        transition: all 0.2s;
+        
+        &:focus {
+            outline: none;
+            border-color: #2563eb;
+            box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
+        }
+    }
 }
 
 /* OTP */
