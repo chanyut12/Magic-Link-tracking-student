@@ -3,33 +3,43 @@
     <div style="max-width:1300px; width:100%; margin: 0 auto;">
       
       <!-- Summary Stats -->
-      <div class="stats-grid q-mb-md">
-        <div class="stat-card stat-card--total">
-          <div class="stat-label">ลิงก์ทั้งหมด</div>
-          <div class="stat-value">{{ cardStats.total }}</div>
-          <div class="stat-sub">ลิงก์</div>
+      <div class="row q-col-gutter-md q-mb-md">
+        <div class="col-6 col-md-3">
+          <div class="stat-card stat-card--total full-height">
+            <div class="stat-label">ลิงก์ทั้งหมด</div>
+            <div class="stat-value text-h4">{{ cardStats.total }}</div>
+            <div class="stat-sub">ลิงก์</div>
+          </div>
         </div>
-        <div class="stat-card stat-card--progress">
-          <div class="stat-label">Active</div>
-          <div class="stat-value">{{ cardStats.active }}</div>
-          <div class="stat-sub">ลิงก์</div>
+        <div class="col-6 col-md-3">
+          <div class="stat-card stat-card--progress full-height">
+            <div class="stat-label">Active</div>
+            <div class="stat-value text-h4">{{ cardStats.active }}</div>
+            <div class="stat-sub">ลิงก์</div>
+          </div>
         </div>
-        <div class="stat-card stat-card--resolved">
-          <div class="stat-label">ถูกล็อก</div>
-          <div class="stat-value">{{ cardStats.locked }}</div>
-          <div class="stat-sub">ลิงก์</div>
+        <div class="col-6 col-md-3">
+          <div class="stat-card stat-card--resolved full-height">
+            <div class="stat-label">ถูกล็อก</div>
+            <div class="stat-value text-h4">{{ cardStats.locked }}</div>
+            <div class="stat-sub">ลิงก์</div>
+          </div>
         </div>
-        <div class="stat-card stat-card--today">
-          <div class="stat-label">หมดอายุ</div>
-          <div class="stat-value">{{ cardStats.expired }}</div>
-          <div class="stat-sub">ลิงก์</div>
+        <div class="col-6 col-md-3">
+          <div class="stat-card stat-card--today full-height">
+            <div class="stat-label">หมดอายุ</div>
+            <div class="stat-value text-h4">{{ cardStats.expired }}</div>
+            <div class="stat-sub">ลิงก์</div>
+          </div>
         </div>
       </div>
 
       <!-- Toolbar -->
-      <div class="q-card q-pa-lg q-mb-md row items-center justify-between shadow-xs">
-        <div class="text-h6 text-weight-bold text-gray-700">จัดการลิงก์เช็คชื่อ</div>
-        <q-btn color="primary" label="+ สร้างลิงก์เช็คชื่อใหม่" to="/create" unelevated padding="10px 20px" />
+      <div class="q-card q-pa-lg q-mb-md shadow-xs">
+        <div class="row items-center justify-between q-col-gutter-sm">
+          <div class="text-h6 text-weight-bold text-gray-700">จัดการลิงก์เช็คชื่อ</div>
+          <q-btn color="primary" label="+ สร้างลิงก์เช็คชื่อใหม่" to="/create" unelevated padding="10px 20px" class="full-width-mobile" />
+        </div>
       </div>
 
       <!-- Filters -->
@@ -314,6 +324,35 @@ onMounted(async () => {
 <style lang="scss" scoped>
 .shadow-xs {
   box-shadow: 0 1px 2px rgba(0,0,0,0.05) !important;
+}
+
+@media (max-width: 600px) {
+  .full-width-mobile {
+    width: 100%;
+  }
+}
+
+.table-wrap {
+  border-radius: 12px;
+  border: 1px solid #f1f5f9;
+  background: white;
+  overflow-x: auto;
+}
+
+:deep(.q-table) {
+  thead tr th {
+    background-color: #f8fafc;
+    color: #64748b;
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+    padding: 16px;
+  }
+}
+
+:deep(.q-table__container) {
+  min-width: 900px;
 }
 
 .action-btn {

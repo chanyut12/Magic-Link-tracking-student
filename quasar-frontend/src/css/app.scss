@@ -9,8 +9,9 @@ body {
 
 // Layout adjustments
 .q-header {
-  background: $primary !important;
-  box-shadow: $shadow-md !important;
+  background: #fff !important;
+  color: $gray-800 !important;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05) !important;
 }
 
 .q-toolbar {
@@ -24,18 +25,19 @@ body {
 
 // Sidebar (Original Design)
 .logo-section {
-  padding: 24px;
-  font-size: 1.2rem;
+  height: 64px;
+  padding: 0 24px;
+  font-size: 1.125rem;
   font-weight: 700;
   display: flex;
   align-items: center;
   gap: 12px;
   color: $gray-900;
-  border-bottom: 1px solid $gray-200;
+  border-bottom: 1px solid $gray-100;
   
   i {
     color: $primary;
-    font-size: 1.5rem;
+    font-size: 1.25rem;
   }
 }
 
@@ -74,20 +76,17 @@ body {
 }
 
 .user-profile {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  padding: 16px;
+  padding: 16px 20px;
   background: #fff;
   border-top: 1px solid $gray-200;
   display: flex;
   align-items: center;
   gap: 12px;
+  margin-top: auto;
   
   .avatar {
-    width: 40px;
-    height: 40px;
+    width: 36px;
+    height: 36px;
     background: $primary;
     color: #fff;
     border-radius: 50%;
@@ -95,7 +94,7 @@ body {
     align-items: center;
     justify-content: center;
     font-weight: 700;
-    font-size: 1.1rem;
+    font-size: 0.9rem;
   }
 }
 

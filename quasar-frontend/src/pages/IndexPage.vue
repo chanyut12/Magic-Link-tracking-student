@@ -3,26 +3,34 @@
     <div style="max-width:1300px; width:100%; margin: 0 auto;">
       
       <!-- Summary Stats -->
-      <div class="stats-grid q-mb-md">
-        <div class="stat-card stat-card--total">
-          <div class="stat-label">เคสทั้งหมด</div>
-          <div class="stat-value">{{ stats.total }}</div>
-          <div class="stat-sub">รายการ</div>
+      <div class="row q-col-gutter-md q-mb-md">
+        <div class="col-6 col-md-3">
+          <div class="stat-card stat-card--total full-height">
+            <div class="stat-label">เคสทั้งหมด</div>
+            <div class="stat-value text-h4">{{ stats.total }}</div>
+            <div class="stat-sub">รายการ</div>
+          </div>
         </div>
-        <div class="stat-card stat-card--progress">
-          <div class="stat-label">กำลังติดตาม</div>
-          <div class="stat-value">{{ stats.inProgress }}</div>
-          <div class="stat-sub">รายการ</div>
+        <div class="col-6 col-md-3">
+          <div class="stat-card stat-card--progress full-height">
+            <div class="stat-label">กำลังติดตาม</div>
+            <div class="stat-value text-h4">{{ stats.inProgress }}</div>
+            <div class="stat-sub">รายการ</div>
+          </div>
         </div>
-        <div class="stat-card stat-card--resolved">
-          <div class="stat-label">ปิดเคสสำเร็จ</div>
-          <div class="stat-value">{{ stats.resolved }}</div>
-          <div class="stat-sub">รายการ</div>
+        <div class="col-6 col-md-3">
+          <div class="stat-card stat-card--resolved full-height">
+            <div class="stat-label">ปิดเคสสำเร็จ</div>
+            <div class="stat-value text-h4">{{ stats.resolved }}</div>
+            <div class="stat-sub">รายการ</div>
+          </div>
         </div>
-        <div class="stat-card stat-card--today">
-          <div class="stat-label">เคสวันนี้</div>
-          <div class="stat-value">{{ stats.today }}</div>
-          <div class="stat-sub">รายการ</div>
+        <div class="col-6 col-md-3">
+          <div class="stat-card stat-card--today full-height">
+            <div class="stat-label">เคสวันนี้</div>
+            <div class="stat-value text-h4">{{ stats.today }}</div>
+            <div class="stat-sub">รายการ</div>
+          </div>
         </div>
       </div>
 
@@ -42,9 +50,11 @@
       </div>
 
       <!-- Manage Toolbar -->
-      <div class="q-card q-pa-lg q-mb-md row items-center justify-between shadow-xs">
-        <div class="text-h6 text-weight-bold text-gray-700">จัดการระบบ</div>
-        <q-btn color="primary" label="+ สร้างภารกิจใหม่" to="/create" unelevated padding="10px 20px" />
+      <div class="q-card q-pa-lg q-mb-md shadow-xs">
+        <div class="row items-center justify-between q-col-gutter-sm">
+          <div class="text-h6 text-weight-bold text-gray-700">จัดการระบบ</div>
+          <q-btn color="primary" label="+ สร้างภารกิจใหม่" to="/create" unelevated padding="10px 20px" class="full-width-mobile" />
+        </div>
       </div>
 
       <!-- Filters -->
@@ -93,7 +103,7 @@
       </div>
 
       <!-- Table -->
-      <div class="table-wrap">
+      <div class="table-wrap overflow-hidden">
         <q-table
           :rows="filteredCases"
           :columns="columns"
@@ -103,6 +113,7 @@
           no-data-label="ยังไม่มีเคส — กด 'สร้างภารกิจใหม่' เพื่อเริ่มต้น"
           :pagination="{ rowsPerPage: 0 }"
           hide-pagination
+          class="sticky-last-column"
         >
           <template v-slot:body-cell-index="props">
             <q-td :props="props" class="text-gray-400">
@@ -283,5 +294,40 @@ onMounted(fetchData);
 }
 .border-1 {
   border: 1px solid #e5e7eb;
+}
+
+@media (max-width: 600px) {
+  .full-width-mobile {
+    width: 100%;
+  }
+}
+
+.table-wrap {
+  border-radius: 12px;
+  border: 1px solid #f1f5f9;
+  background: white;
+  overflow-x: auto;
+}
+
+:deep(.q-table) {
+  thead tr th {
+    background-color: #f8fafc;
+    color: #64748b;
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+    padding: 16px;
+  }
+  
+  tbody tr td {
+    padding: 16px;
+    border-color: #f1f5f9;
+  }
+}
+
+// Ensure columns don't shrink too much on mobile
+:deep(.q-table__container) {
+  min-width: 800px;
 }
 </style>

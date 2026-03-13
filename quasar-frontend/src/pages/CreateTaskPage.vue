@@ -276,7 +276,7 @@ const getLineUrl = (link: string) => {
 .step-indicator {
   display: flex;
   justify-content: center;
-  gap: 3rem;
+  gap: 1.5rem;
 }
 
 .step {
@@ -395,7 +395,10 @@ const getLineUrl = (link: string) => {
 
 @media (max-width: 600px) {
     .type-selection { grid-template-columns: 1fr; }
-    .step-indicator { gap: 1rem; }
-    .step { font-size: 0.9rem; }
+    .step-indicator { gap: 0.75rem; }
+    .step { font-size: 0.8rem; }
+    .type-card { padding: 2rem 1rem; }
+    .type-icon { font-size: 2.5rem; }
+    .type-title { font-size: 1.2rem; }
 }
 </style>

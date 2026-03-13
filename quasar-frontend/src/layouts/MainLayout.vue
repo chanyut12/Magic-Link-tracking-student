@@ -1,6 +1,6 @@
 <template>
   <q-layout view="lHh Lpr lFf">
-    <q-header v-if="!hideNavigation" class="q-header">
+    <q-header v-if="!hideNavigation" class="bg-white text-gray-800" style="border-bottom: 1px solid #e2e8f0;">
       <q-toolbar class="q-toolbar">
         <q-btn
           flat
@@ -10,13 +10,14 @@
           aria-label="Menu"
           @click="toggleLeftDrawer"
           class="q-mr-sm"
+          color="primary"
         />
 
         <q-toolbar-title class="text-weight-bold" style="font-size: 1.125rem;">
           {{ pageTitle }}
         </q-toolbar-title>
 
-        <div class="text-caption opacity-70">v1.1.0</div>
+        <div class="text-caption text-gray-400">v1.1.0</div>
       </q-toolbar>
     </q-header>
 
@@ -28,50 +29,56 @@
       :width="260"
       class="q-drawer"
     >
-      <div class="logo-section">
-        <i class="fas fa-graduation-cap"></i>
-        <span>ระบบติดตามนักเรียน</span>
-      </div>
-
-      <div class="menu-label">เมนู</div>
-
-      <q-list padding class="q-px-none">
-        <q-item clickable v-ripple to="/" exact class="nav-item">
-          <q-item-section avatar min-width="44px">
-            <i class="fas fa-home"></i>
-          </q-item-section>
-          <q-item-section>Dashboard</q-item-section>
-        </q-item>
-
-        <q-item clickable v-ripple to="/create" class="nav-item">
-          <q-item-section avatar min-width="44px">
-            <i class="fas fa-link"></i>
-          </q-item-section>
-          <q-item-section>สร้างลิงค์</q-item-section>
-        </q-item>
-
-        <q-item clickable v-ripple to="/attendance" class="nav-item">
-          <q-item-section avatar min-width="44px">
-            <i class="fas fa-clipboard-check"></i>
-          </q-item-section>
-          <q-item-section>เช็คชื่อ</q-item-section>
-        </q-item>
-
-        <q-item clickable v-ripple to="/attendance-dashboard" class="nav-item">
-          <q-item-section avatar min-width="44px">
-            <i class="fas fa-chart-bar"></i>
-          </q-item-section>
-          <q-item-section>Dashboard เช็คชื่อ</q-item-section>
-        </q-item>
-      </q-list>
-
-      <div class="user-profile">
-        <div class="avatar">A</div>
-        <div>
-          <div style="font-weight:600;font-size:0.9rem">ผู้ดูแลระบบ</div>
-          <div style="font-size:0.75rem;color:#94a3b8">Admin</div>
+      <div class="column no-wrap" style="height: 100vh;">
+        <!-- Pinned Logo Section -->
+        <div class="logo-section">
+          <i class="fas fa-graduation-cap"></i>
+          <span>ระบบติดตามนักเรียน</span>
         </div>
-        <q-btn flat round color="grey-5" icon="fa-solid fa-right-from-bracket" size="10px" @click="logout" class="q-ml-auto" />
+
+        <!-- Scrollable Menu Area -->
+        <div class="col" style="overflow-y: auto;">
+          <div class="menu-label">เมนู</div>
+          <q-list padding class="q-px-none">
+            <q-item clickable v-ripple to="/" exact class="nav-item">
+              <q-item-section avatar min-width="44px">
+                <i class="fas fa-home"></i>
+              </q-item-section>
+              <q-item-section>Dashboard</q-item-section>
+            </q-item>
+
+            <q-item clickable v-ripple to="/create" class="nav-item">
+              <q-item-section avatar min-width="44px">
+                <i class="fas fa-link"></i>
+              </q-item-section>
+              <q-item-section>สร้างลิงค์</q-item-section>
+            </q-item>
+
+            <q-item clickable v-ripple to="/attendance" class="nav-item">
+              <q-item-section avatar min-width="44px">
+                <i class="fas fa-clipboard-check"></i>
+              </q-item-section>
+              <q-item-section>เช็คชื่อ</q-item-section>
+            </q-item>
+
+            <q-item clickable v-ripple to="/attendance-dashboard" class="nav-item">
+              <q-item-section avatar min-width="44px">
+                <i class="fas fa-chart-bar"></i>
+              </q-item-section>
+              <q-item-section>Dashboard เช็คชื่อ</q-item-section>
+            </q-item>
+          </q-list>
+        </div>
+
+        <!-- Pinned Logout Section -->
+        <div class="user-profile">
+          <div class="avatar">A</div>
+          <div>
+            <div style="font-weight:600;font-size:0.9rem">ผู้ดูแลระบบ</div>
+            <div style="font-size:0.75rem;color:#94a3b8">Admin</div>
+          </div>
+          <q-btn flat round color="primary" icon="fa-solid fa-right-from-bracket" size="md" @click="logout" class="q-ml-auto" />
+        </div>
       </div>
     </q-drawer>
 

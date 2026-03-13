@@ -2,58 +2,74 @@
   <q-page class="q-pa-lg">
     <div style="max-width: 1000px; margin: 0 auto;">
       
-      <!-- Tabs -->
-      <div class="tabs-container q-mb-lg">
-        <div 
-          class="tab-item" 
-          :class="{ active: currentTab === 'today' }" 
-          @click="currentTab = 'today'"
-        >
-          เช็คชื่อวันนี้
+      <!-- Sticky Header Area -->
+      <div class="sticky-header bg-white q-pb-md">
+        <!-- Tabs -->
+        <div class="tabs-container q-mb-lg">
+          <div 
+            class="tab-item" 
+            :class="{ active: currentTab === 'today' }" 
+            @click="currentTab = 'today'"
+          >
+            เช็คชื่อวันนี้
+          </div>
+          <div 
+            class="tab-item" 
+            :class="{ active: currentTab === 'history' }" 
+            @click="currentTab = 'history'"
+          >
+            ประวัติการเช็คชื่อ
+          </div>
         </div>
-        <div 
-          class="tab-item" 
-          :class="{ active: currentTab === 'history' }" 
-          @click="currentTab = 'history'"
-        >
-          ประวัติการเช็คชื่อ
-        </div>
-      </div>
 
-      <!-- Filters & Search -->
-      <div class="row items-center q-col-gutter-md q-mb-lg">
-        <div class="col-12 col-sm-4">
-          <div class="search-container">
-            <i class="fas fa-search"></i>
-            <input 
-              type="text" 
-              class="search-input" 
-              placeholder="ค้นหาชื่อหรือรหัส..."
-              v-model="searchQuery"
+        <!-- Filters & Search & Actions -->
+        <div class="row items-center q-col-gutter-sm">
+          <div class="col-12 col-sm-4">
+            <div class="search-container">
+              <i class="fas fa-search"></i>
+              <input 
+                type="text" 
+                class="search-input" 
+                placeholder="ค้นหาชื่อหรือรหัส..."
+                v-model="searchQuery"
+              >
+            </div>
+          </div>
+
+          <div class="col-12 col-sm-auto row items-center q-col-gutter-sm">
+            <div class="col-auto">
+              <select v-model="filters.grade" class="filter-select">
+                <option v-for="gl in gradeLevels" :key="gl.id" :value="gl.label">{{ gl.label }}</option>
+              </select>
+            </div>
+            <div class="col-auto">
+              <select v-model="filters.room" class="filter-select">
+                <option v-for="r in rooms" :key="r" :value="r">ห้อง {{ r }}</option>
+              </select>
+            </div>
+            
+            <div v-if="currentTab === 'history'" class="col-auto">
+              <div class="date-picker-container">
+                <i class="far fa-calendar-alt" style="color: #64748b;"></i>
+                <input type="date" v-model="historyDate" class="date-picker-input">
+              </div>
+            </div>
+          </div>
+
+          <q-space class="gt-xs" />
+
+          <div v-if="currentTab === 'today'" class="col-12 col-sm-auto">
+            <q-btn 
+              unelevated 
+              color="primary" 
+              class="full-width-mobile action-btn-top"
+              :loading="saving"
+              @click="saveAttendance"
+              padding="10px 24px"
             >
-          </div>
-        </div>
-
-        <div class="col-12 col-sm-auto row q-col-gutter-sm">
-          <div class="col-auto">
-            <select v-model="filters.grade" class="filter-select">
-              <option v-for="gl in gradeLevels" :key="gl.id" :value="gl.label">{{ gl.label }}</option>
-            </select>
-          </div>
-          <div class="col-auto">
-            <select v-model="filters.room" class="filter-select">
-              <option v-for="r in rooms" :key="r" :value="r">ห้อง {{ r }}</option>
-            </select>
-            <div v-if="rooms.length === 0" class="text-caption text-negative q-mt-xs">ไม่พบข้อมูลห้อง</div>
-          </div>
-        </div>
-
-        <q-space />
-
-        <div v-if="currentTab === 'history'" class="col-12 col-sm-auto">
-          <div class="date-picker-container">
-            <i class="far fa-calendar-alt" style="color: #64748b;"></i>
-            <input type="date" v-model="historyDate" class="date-picker-input">
+              <i class="fas fa-save q-mr-sm"></i>
+              บันทึกข้อมูล
+            </q-btn>
           </div>
         </div>
       </div>
@@ -148,13 +164,6 @@
         </div>
       </div>
 
-      <!-- Save Bar -->
-      <div v-if="currentTab === 'today'" class="save-bar">
-        <button class="btn-save" @click="saveAttendance" :disabled="saving">
-          <span>บันทึกข้อมูลวันนี้</span>
-          <i class="fas fa-save"></i>
-        </button>
-      </div>
 
     </div>
   </q-page>
@@ -571,10 +580,12 @@ onMounted(async () => {
 }
 
 .save-bar { 
-    position: fixed; bottom: 1.5rem; left: 260px; right: 0; 
+    position: fixed; bottom: 1.5rem; left: 0; right: 0; 
     z-index: 1000; padding: 0 1.5rem; display: flex; justify-content: flex-end;
+    pointer-events: none; // Allow clicks through container
 }
 .btn-save {
+    pointer-events: auto; // Re-enable clicks for button
     background: linear-gradient(135deg, #2563eb, #1e40af); 
     color: white; padding: 16px 32px; border-radius: 16px;
     font-weight: 800; font-size: 1.1rem; display: flex; 
@@ -595,6 +606,23 @@ onMounted(async () => {
     p { font-size: 1rem; color: #64748b; }
 }
 
+@media (max-width: 1024px) {
+    .save-bar { left: 0; }
+}
+
+.sticky-header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.action-btn-top {
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 1rem;
+    box-shadow: 0 4px 10px rgba(37, 99, 235, 0.2);
+}
+
 @media (max-width: 768px) {
     .d-none-mobile { display: none !important; }
     .student-card { grid-template-columns: 1fr; gap: 1rem; border-radius: 16px; padding: 1.25rem; }
@@ -603,7 +631,6 @@ onMounted(async () => {
     .count-label { font-size: 0.7rem; color: #94a3b8; text-transform: uppercase; font-weight: 700; }
     .attendance-options { justify-content: space-between; gap: 0.5rem; }
     .status-btn { flex: 1; padding: 10px 4px; min-width: 0; font-size: 0.8rem; }
-    .save-bar { left: 0; padding: 0 1rem; bottom: 1rem; }
-    .btn-save { width: 100%; justify-content: center; }
+    .full-width-mobile { width: 100%; }
 }
 </style>

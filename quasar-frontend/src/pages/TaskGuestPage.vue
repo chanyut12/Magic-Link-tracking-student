@@ -432,8 +432,8 @@ onUnmounted(() => {
   box-shadow: 0 10px 30px rgba(30, 64, 175, 0.2);
   position: relative;
   
-  h1 { font-size: 1.8rem; font-weight: 900; margin: 0 0 0.5rem; letter-spacing: -0.02em; }
-  .subtitle { opacity: 0.9; font-size: 1.1rem; font-weight: 600; }
+  h1 { font-size: 1.5rem; font-weight: 900; margin: 0 0 0.5rem; letter-spacing: -0.02em; }
+  .subtitle { opacity: 0.9; font-size: 1rem; font-weight: 600; }
 }
 
 .expiry-box {
@@ -582,7 +582,7 @@ onUnmounted(() => {
 .floating-footer {
   position: fixed; bottom: 0; left: 0; right: 0; 
   background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px); 
-  padding: 1rem 1.5rem 1.5rem; border-top: 1px solid #e2e8f0; z-index: 1000;
+  padding: 1rem; border-top: 1px solid #e2e8f0; z-index: 1000;
 }
 
 .btn-save {
@@ -598,5 +598,11 @@ onUnmounted(() => {
   &:last-child { border-bottom: none; }
   .label { font-weight: 700; color: #64748b; font-size: 0.9rem; }
   .value { font-weight: 600; color: #1e293b; text-align: right; }
+}
+
+@media (max-width: 480px) {
+  .guest-header { padding: 2rem 1rem 2.5rem; }
+  .otp-container { padding: 1.5rem; }
+  .stat-mini-card { padding: 0.75rem; .value { font-size: 1.25rem; } }
 }
 </style>
