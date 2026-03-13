@@ -1,16 +1,17 @@
 # Node
 node_modules/
-**/node_modules/
+nest-backend/node_modules/
+quasar-frontend/node_modules/
 
 # Build
-dist/
-**/dist/
-.quasar/
-**/.quasar/
+nest-backend/dist/
+quasar-frontend/dist/
+quasar-frontend/.quasar/
 
 # Environment
 .env
-**/.env
+nest-backend/.env
+quasar-frontend/.env
 
 # DB
 db/*.db-wal
