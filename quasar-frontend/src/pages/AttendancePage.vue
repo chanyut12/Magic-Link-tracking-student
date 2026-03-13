@@ -38,6 +38,17 @@
 
           <div class="col-12 col-sm-auto row items-center q-col-gutter-sm">
             <div class="col-auto">
+              <q-btn 
+                outline 
+                color="primary" 
+                class="filter-select-btn"
+                @click="showFilterDialog = true"
+              >
+                {{ selectedSchoolName }}
+                <i class="fas fa-chevron-down q-ml-sm" style="font-size: 0.7rem;"></i>
+              </q-btn>
+            </div>
+            <div class="col-auto">
               <select v-model="filters.grade" class="filter-select">
                 <option v-for="gl in gradeLevels" :key="gl.id" :value="gl.label">{{ gl.label }}</option>
               </select>
@@ -48,18 +59,20 @@
               </select>
             </div>
             
-            <div v-if="currentTab === 'history'" class="col-auto">
-              <div class="date-picker-container">
-                <i class="far fa-calendar-alt" style="color: #64748b;"></i>
-                <input type="date" v-model="historyDate" class="date-picker-input">
+            <div class="col-auto">
+              <div class="student-count-chip">
+                <i class="fas fa-users"></i>
+                <span>{{ filteredStudents.length }} คน</span>
               </div>
             </div>
           </div>
 
           <q-space class="gt-xs" />
 
-          <div v-if="currentTab === 'today'" class="col-12 col-sm-auto">
+          <div class="col-12 col-sm-auto">
+            <!-- Save Button (Today Tab) -->
             <q-btn 
+              v-if="currentTab === 'today'"
               unelevated 
               color="primary" 
               class="full-width-mobile action-btn-top"
@@ -70,6 +83,12 @@
               <i class="fas fa-save q-mr-sm"></i>
               บันทึกข้อมูล
             </q-btn>
+
+            <!-- Date Picker (History Tab) -->
+            <div v-if="currentTab === 'history'" class="date-picker-container">
+              <i class="far fa-calendar-alt" style="color: #64748b;"></i>
+              <input type="date" v-model="historyDate" class="date-picker-input">
+            </div>
           </div>
         </div>
       </div>
@@ -166,6 +185,70 @@
 
 
     </div>
+
+    <!-- Advanced Filter Dialog -->
+    <q-dialog v-model="showFilterDialog" persistent>
+      <q-card style="min-width: 350px; border-radius: 20px;" class="q-pa-md">
+        <q-card-section class="row items-center q-pb-none">
+          <div class="text-h6 font-weight-bold color-primary">ค้นหาโรงเรียน</div>
+          <q-space />
+          <q-btn icon="close" flat round dense v-close-popup />
+        </q-card-section>
+
+        <q-card-section class="q-pt-md">
+          <div class="q-gutter-md">
+            <!-- Province -->
+            <div>
+              <label class="q-mb-sm block text-caption text-weight-bold text-grey-7">จังหวัด</label>
+              <select v-model="tempFilters.province" class="filter-select full-width" @change="onProvinceChange">
+                <option value="">เลือกจังหวัด</option>
+                <option v-for="p in locationData.provinces" :key="p" :value="p">{{ p }}</option>
+              </select>
+            </div>
+
+            <!-- District -->
+            <div>
+              <label class="q-mb-sm block text-caption text-weight-bold text-grey-7">อำเภอ</label>
+              <select v-model="tempFilters.district" class="filter-select full-width" @change="onDistrictChange" :disabled="!tempFilters.province">
+                <option value="">เลือกอำเภอ</option>
+                <option v-for="d in filteredDistricts" :key="d" :value="d">{{ d }}</option>
+              </select>
+            </div>
+
+            <!-- Sub-district -->
+            <div>
+              <label class="q-mb-sm block text-caption text-weight-bold text-grey-7">ตำบล</label>
+              <select v-model="tempFilters.subDistrict" class="filter-select full-width" @change="onSubDistrictChange" :disabled="!tempFilters.district">
+                <option value="">เลือกตำบล</option>
+                <option v-for="sd in filteredSubDistricts" :key="sd" :value="sd">{{ sd }}</option>
+              </select>
+            </div>
+
+            <!-- School -->
+            <div>
+              <label class="q-mb-sm block text-caption text-weight-bold text-grey-7">โรงเรียน</label>
+              <select v-model="tempFilters.schoolId" class="filter-select full-width" :disabled="!tempFilters.subDistrict">
+                <option value="">เลือกโรงเรียน</option>
+                <option v-for="s in tempSchools" :key="s.id" :value="String(s.id)">{{ s.name }}</option>
+              </select>
+            </div>
+          </div>
+        </q-card-section>
+
+        <q-card-actions align="right" class="q-mt-md">
+          <q-btn flat label="ยกเลิก" color="grey-7" v-close-popup />
+          <q-btn 
+            unelevated 
+            label="ตกลง" 
+            color="primary" 
+            @click="applyFilters"
+            :disabled="!tempFilters.schoolId"
+            padding="8px 24px"
+            class="action-btn-top"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
@@ -199,6 +282,22 @@ interface GradeLevel {
   category: string;
 }
 
+interface School {
+  id: number;
+  name: string;
+}
+
+interface District {
+  province: string;
+  district: string;
+}
+
+interface SubDistrict {
+  province: string;
+  district: string;
+  sub_district: string;
+}
+
 const $q = useQuasar();
 const currentTab = ref('today');
 const searchQuery = ref('');
@@ -207,14 +306,105 @@ const saving = ref(false);
 
 const students = ref<Student[]>([]);
 const gradeLevels = ref<GradeLevel[]>([]);
+const schools = ref<School[]>([]);
 const history = ref<AttendanceRecord[]>([]);
 const rooms = ref<string[]>([]);
 const attendanceSelections = reactive<Record<string, string>>({});
 
 const filters = reactive({
+  schoolId: '',
   grade: '',
   room: '1'
 });
+
+const showFilterDialog = ref(false);
+const tempFilters = reactive({
+  province: '',
+  district: '',
+  subDistrict: '',
+  schoolId: ''
+});
+
+const locationData = reactive({
+  provinces: [] as string[],
+  districts: [] as District[],
+  subDistricts: [] as SubDistrict[]
+});
+
+const tempSchools = ref<School[]>([]);
+
+const selectedSchoolName = computed(() => {
+  const school = schools.value.find(s => String(s.id) === filters.schoolId);
+  return school ? school.name : 'เลือกโรงเรียน';
+});
+
+const filteredDistricts = computed(() => {
+  if (!tempFilters.province) return [];
+  return Array.from(new Set(
+    locationData.districts
+      .filter(d => d.province === tempFilters.province)
+      .map(d => d.district)
+  ));
+});
+
+const filteredSubDistricts = computed(() => {
+  if (!tempFilters.district) return [];
+  return Array.from(new Set(
+    locationData.subDistricts
+      .filter(sd => sd.province === tempFilters.province && sd.district === tempFilters.district)
+      .map(sd => sd.sub_district)
+  ));
+});
+
+const fetchLocations = async () => {
+  try {
+    const res = await api.get('/api/attendance/locations');
+    Object.assign(locationData, res.data.data);
+  } catch (err) {
+    console.error('Fetch locations error:', err);
+  }
+};
+
+const onProvinceChange = () => {
+  tempFilters.district = '';
+  tempFilters.subDistrict = '';
+  tempFilters.schoolId = '';
+  tempSchools.value = [];
+};
+
+const onDistrictChange = () => {
+  tempFilters.subDistrict = '';
+  tempFilters.schoolId = '';
+  tempSchools.value = [];
+};
+
+const onSubDistrictChange = async () => {
+  tempFilters.schoolId = '';
+  if (!tempFilters.subDistrict) return;
+  try {
+    const res = await api.get('/api/attendance/schools', {
+      params: {
+        province: tempFilters.province,
+        district: tempFilters.district,
+        subDistrict: tempFilters.subDistrict
+      }
+    });
+    tempSchools.value = res.data.data;
+  } catch (err) {
+    console.error('Fetch temp schools error:', err);
+  }
+};
+
+const applyFilters = () => {
+  filters.schoolId = tempFilters.schoolId;
+  // If school not in schools list, add it or just rely on fetchStudents
+  // We should refresh the 'schools' list so the computed 'selectedSchoolName' works
+  const chosen = tempSchools.value.find(s => String(s.id) === filters.schoolId);
+  if (chosen && !schools.value.find(s => s.id === chosen.id)) {
+    schools.value.push(chosen);
+  }
+  showFilterDialog.value = false;
+};
 
 const fetchGradeLevels = async () => {
   try {
@@ -223,19 +413,31 @@ const fetchGradeLevels = async () => {
     if (gradeLevels.value.length > 0 && !filters.grade) {
       filters.grade = gradeLevels.value[0]?.label || '';
     }
-    if (filters.grade) await fetchRooms();
   } catch (err) {
     console.error('Fetch grade levels error:', err);
   }
 };
 
+const fetchSchools = async () => {
+  try {
+    const res = await api.get('/api/attendance/schools');
+    schools.value = res.data.data;
+    if (schools.value.length > 0 && !filters.schoolId) {
+      filters.schoolId = String(schools.value[0]?.id || '');
+    }
+  } catch (err) {
+    console.error('Fetch schools error:', err);
+  }
+};
+
 const fetchStudents = async () => {
-  if (!filters.grade || !filters.room) return;
+  if (!filters.grade || !filters.room || !filters.schoolId) return;
   try {
     const res = await api.get('/api/attendance/students', {
       params: { 
         grade: filters.grade,
-        room: filters.room
+        room: filters.room,
+        schoolId: filters.schoolId
       }
     });
     students.value = res.data.data;
@@ -265,9 +467,14 @@ const fetchTodayRecords = async () => {
 };
 
 const fetchRooms = async () => {
-  if (!filters.grade) return;
+  if (!filters.grade || !filters.schoolId) return;
   try {
-    const res = await api.get('/api/attendance/rooms', { params: { grade: filters.grade } });
+    const res = await api.get('/api/attendance/rooms', { 
+      params: { 
+        grade: filters.grade,
+        schoolId: filters.schoolId
+      } 
+    });
     rooms.value = res.data.data;
     if (rooms.value.length > 0) {
       // If current room is not in the new rooms list, select the first one
@@ -368,6 +575,12 @@ const getStatusLabel = (status: string) => {
   return 'ไม่ได้เช็คชื่อ';
 };
 
+watch(() => filters.schoolId, async () => {
+  await fetchRooms();
+  if (currentTab.value === 'today') void fetchStudents();
+  else void fetchHistory();
+});
+
 watch(() => filters.grade, async () => {
   await fetchRooms();
   if (currentTab.value === 'today') void fetchStudents();
@@ -389,7 +602,10 @@ watch(historyDate, () => {
 });
 
 onMounted(async () => {
+  await fetchLocations();
+  await fetchSchools(); // Fetch default schools (first batch)
   await fetchGradeLevels();
+  await fetchRooms();
   await fetchStudents();
   await fetchTodayRecords();
 });
@@ -457,8 +673,32 @@ onMounted(async () => {
     }
 }
 
+.filter-select-btn {
+    border-radius: 12px;
+    padding: 0 16px;
+    height: 40px;
+    min-height: 40px;
+    font-weight: 700;
+    text-transform: none;
+    background: white;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+    
+    &:hover {
+      background: #f8fafc;
+    }
+}
+
+.color-primary {
+  color: #1e40af;
+}
+
+.full-width {
+  width: 100%;
+}
+
 .filter-select {
-    padding: 8px 16px;
+    padding: 0 16px;
+    height: 40px;
     border-radius: 12px;
     border: 1px solid #e2e8f0;
     background: white;
@@ -467,6 +707,11 @@ onMounted(async () => {
     font-weight: 700;
     color: #1e40af;
     cursor: pointer;
+    transition: all 0.2s;
+
+    &:hover {
+        border-color: #3b82f6;
+    }
 }
 
 .date-picker-container {
@@ -614,6 +859,26 @@ onMounted(async () => {
     position: sticky;
     top: 0;
     z-index: 100;
+}
+
+.student-count-chip {
+    padding: 0 16px;
+    height: 40px;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    background: #f8fafc;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #64748b;
+    box-sizing: border-box;
+
+    i {
+        color: #3b82f6;
+        font-size: 0.95rem;
+    }
 }
 
 .action-btn-top {
