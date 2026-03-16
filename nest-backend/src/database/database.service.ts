@@ -22,7 +22,9 @@ export class DatabaseService implements OnModuleInit {
 
     try {
       await this.pool.query('SELECT 1');
-      this.logger.log(`Database connected to PostgreSQL at ${process.env.DB_HOST}:${process.env.DB_PORT}`);
+      this.logger.log(
+        `Database connected to PostgreSQL at ${process.env.DB_HOST}:${process.env.DB_PORT}`,
+      );
       await this.runMigrations();
     } catch (error) {
       this.logger.error('Failed to connect to PostgreSQL', error);
@@ -33,7 +35,7 @@ export class DatabaseService implements OnModuleInit {
   private async runMigrations() {
     this.logger.log('Running migrations...');
     const client = await this.pool.connect();
-    
+
     try {
       await client.query('BEGIN');
       await client.query(`
@@ -60,6 +62,7 @@ export class DatabaseService implements OnModuleInit {
           student_lng REAL,
           reason_flagged TEXT,
           status TEXT DEFAULT 'OPEN',
+          result_summary TEXT,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
@@ -92,7 +95,7 @@ export class DatabaseService implements OnModuleInit {
           admin_locked INTEGER DEFAULT 0,
           admin_lock_reason TEXT,
           admin_lock_at TIMESTAMP,
-          expires_at TIMESTAMP NOT NULL,
+          expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
@@ -105,6 +108,10 @@ export class DatabaseService implements OnModuleInit {
           cause_detail TEXT,
           photo_paths TEXT,
           recommendation TEXT,
+          address_changed BOOLEAN DEFAULT FALSE,
+          updated_student_address TEXT,
+          updated_lat REAL,
+          updated_lng REAL,
           submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
@@ -256,6 +263,19 @@ export class DatabaseService implements OnModuleInit {
         CREATE INDEX IF NOT EXISTS idx_case_reviews_case_id ON case_reviews(case_id);
         CREATE INDEX IF NOT EXISTS idx_attendance_person_id ON attendance("PersonID_Onec");
         CREATE INDEX IF NOT EXISTS idx_attendance_date ON attendance("AttendanceDate");
+
+        -- Fix timezone columns for existing databases
+        ALTER TABLE task_links ALTER COLUMN expires_at TYPE TIMESTAMP WITH TIME ZONE;
+        ALTER TABLE task_links ALTER COLUMN otp_expires_at TYPE TIMESTAMP WITH TIME ZONE USING otp_expires_at AT TIME ZONE 'UTC';
+        ALTER TABLE task_links ALTER COLUMN admin_lock_at TYPE TIMESTAMP WITH TIME ZONE USING admin_lock_at AT TIME ZONE 'UTC';
+        ALTER TABLE task_links ALTER COLUMN created_at TYPE TIMESTAMP WITH TIME ZONE USING created_at AT TIME ZONE 'UTC';
+        
+        -- Add missing columns
+        ALTER TABLE cases ADD COLUMN IF NOT EXISTS result_summary TEXT;
+        ALTER TABLE task_submissions ADD COLUMN IF NOT EXISTS address_changed BOOLEAN DEFAULT FALSE;
+        ALTER TABLE task_submissions ADD COLUMN IF NOT EXISTS updated_student_address TEXT;
+        ALTER TABLE task_submissions ADD COLUMN IF NOT EXISTS updated_lat REAL;
+        ALTER TABLE task_submissions ADD COLUMN IF NOT EXISTS updated_lng REAL;
       `);
       await client.query('COMMIT');
       this.logger.log('Migrations complete.');
@@ -276,7 +296,9 @@ export class DatabaseService implements OnModuleInit {
     return this.pool.query(sql, params);
   }
 
-  async transaction<T>(callback: (client: PoolClient) => Promise<T>): Promise<T> {
+  async transaction<T>(
+    callback: (client: PoolClient) => Promise<T>,
+  ): Promise<T> {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');

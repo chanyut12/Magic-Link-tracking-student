@@ -22,3 +22,5 @@ db/*.db
 # System
 .DS_Store
 Thumbs.db
+
+.agents

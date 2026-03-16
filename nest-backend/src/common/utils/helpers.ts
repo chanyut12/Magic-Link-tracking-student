@@ -14,9 +14,10 @@ export function maskName(name: string): string {
   if (parts.length >= 2) {
     const prefix = parts[0];
     const firstName = parts[1];
-    const masked = firstName.length > 2
-      ? firstName.slice(0, 2) + '****'
-      : firstName + '****';
+    const masked =
+      firstName.length > 2
+        ? firstName.slice(0, 2) + '****'
+        : firstName + '****';
     return prefix + ' ' + masked;
   }
   if (name.length <= 2) return name;
@@ -25,9 +26,19 @@ export function maskName(name: string): string {
 
 export function sanitize(str: string): string {
   if (!str) return str;
-  return String(str).replace(/[<>"'&]/g, c => ({
-    '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;', '&': '&amp;'
-  } as Record<string, string>)[c]);
+  return String(str).replace(
+    /[<>"'&]/g,
+    (c) =>
+      (
+        ({
+          '<': '&lt;',
+          '>': '&gt;',
+          '"': '&quot;',
+          "'": '&#39;',
+          '&': '&amp;',
+        }) as Record<string, string>
+      )[c],
+  );
 }
 
 export function clean(str: any): string | null {

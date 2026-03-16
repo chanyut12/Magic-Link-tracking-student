@@ -85,6 +85,10 @@ async function importExcel() {
           cause_detail TEXT,
           photo_paths TEXT,
           recommendation TEXT,
+          address_changed BOOLEAN DEFAULT FALSE,
+          updated_student_address TEXT,
+          updated_lat REAL,
+          updated_lng REAL,
           submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
@@ -169,39 +173,55 @@ async function importExcel() {
     `);
 
     console.log('Seeding schools with location data...');
-    const activePath_seed = path.resolve(__dirname, '../../../../student2567เทอม1-2_mockup_v2.xlsx');
+    const activePath_seed = path.resolve(
+      __dirname,
+      '../../../../student2567เทอม1-2_mockup_v2.xlsx',
+    );
     const activeWorkbook_seed = xlsx.readFile(activePath_seed);
-    const activeData_seed: any[] = xlsx.utils.sheet_to_json(activeWorkbook_seed.Sheets[activeWorkbook_seed.SheetNames[0]]);
-    
+    const activeData_seed: any[] = xlsx.utils.sheet_to_json(
+      activeWorkbook_seed.Sheets[activeWorkbook_seed.SheetNames[0]],
+    );
+
     // School data is often more complete in student records if we map name from dropout or hardcode if missing
-    const dropoutPath_ls = path.resolve(__dirname, '../../../../studentหลุดจากระบบ2567_mockup_v2.xlsx');
+    const dropoutPath_ls = path.resolve(
+      __dirname,
+      '../../../../studentหลุดจากระบบ2567_mockup_v2.xlsx',
+    );
     const dropoutWorkbook_ls = xlsx.readFile(dropoutPath_ls);
-    const dropoutData_ls: any[] = xlsx.utils.sheet_to_json(dropoutWorkbook_ls.Sheets[dropoutWorkbook_ls.SheetNames[0]]);
-    
+    const dropoutData_ls: any[] = xlsx.utils.sheet_to_json(
+      dropoutWorkbook_ls.Sheets[dropoutWorkbook_ls.SheetNames[0]],
+    );
+
     const schoolNameMap = new Map<number, string>();
-    dropoutData_ls.forEach(row => {
+    dropoutData_ls.forEach((row) => {
       if (row.SchoolID_Onec && row.SchoolName_Onec) {
         schoolNameMap.set(row.SchoolID_Onec, row.SchoolName_Onec);
       }
     });
 
-    const schoolInfoMap = new Map<number, { name: string, province: string, district: string, sub_district: string }>();
-    
-    activeData_seed.forEach(row => {
+    const schoolInfoMap = new Map<
+      number,
+      { name: string; province: string; district: string; sub_district: string }
+    >();
+
+    activeData_seed.forEach((row) => {
       if (row.SchoolID_Onec) {
         if (!schoolInfoMap.has(row.SchoolID_Onec)) {
           schoolInfoMap.set(row.SchoolID_Onec, {
-            name: schoolNameMap.get(row.SchoolID_Onec) || `โรงเรียนรหัส ${row.SchoolID_Onec}`,
+            name:
+              schoolNameMap.get(row.SchoolID_Onec) ||
+              `โรงเรียนรหัส ${row.SchoolID_Onec}`,
             province: row.ProvinceNameThai_Onec || 'ไม่ระบุ',
             district: row.DistrictNameThai_Onec || 'ไม่ระบุ',
-            sub_district: row.SubDistrictNameThai_Onec || 'ไม่ระบุ'
+            sub_district: row.SubDistrictNameThai_Onec || 'ไม่ระบุ',
           });
         }
       }
     });
 
     for (const [id, info] of schoolInfoMap.entries()) {
-      await client.query(`
+      await client.query(
+        `
         INSERT INTO schools (id, name, province, district, sub_district) 
         VALUES ($1, $2, $3, $4, $5) 
         ON CONFLICT (id) DO UPDATE SET 
@@ -209,7 +229,9 @@ async function importExcel() {
           province = EXCLUDED.province,
           district = EXCLUDED.district,
           sub_district = EXCLUDED.sub_district
-      `, [id, info.name, info.province, info.district, info.sub_district]);
+      `,
+        [id, info.name, info.province, info.district, info.sub_district],
+      );
     }
 
     console.log('Seeding grade_levels...');
@@ -231,17 +253,27 @@ async function importExcel() {
     `);
 
     // Load active students from V2
-    const activePath = path.resolve(__dirname, '../../../../student2567เทอม1-2_mockup_v2.xlsx');
+    const activePath = path.resolve(
+      __dirname,
+      '../../../../student2567เทอม1-2_mockup_v2.xlsx',
+    );
     console.log(`Reading ${activePath}...`);
     const activeWorkbook = xlsx.readFile(activePath);
-    const activeData: any[] = xlsx.utils.sheet_to_json(activeWorkbook.Sheets[activeWorkbook.SheetNames[0]]);
+    const activeData: any[] = xlsx.utils.sheet_to_json(
+      activeWorkbook.Sheets[activeWorkbook.SheetNames[0]],
+    );
     console.log(`Found ${activeData.length} active students.`);
 
     for (const row of activeData) {
-      const year = row.AcademicYear_Onec === 2567 ? 2569 : row.AcademicYear_Onec;
-      const admissionYear = row.SchoolAdmissionYear_Onec === 2565 ? 2567 : row.SchoolAdmissionYear_Onec;
+      const year =
+        row.AcademicYear_Onec === 2567 ? 2569 : row.AcademicYear_Onec;
+      const admissionYear =
+        row.SchoolAdmissionYear_Onec === 2565
+          ? 2567
+          : row.SchoolAdmissionYear_Onec;
 
-      await client.query(`
+      await client.query(
+        `
         INSERT INTO student_term (
           "AcademicYear_Onec", "Semester_Onec", "DepartmentID_Onec", "SchoolID_Onec", 
           "PersonID_Onec", "PassportNumber_Onec", "PrefixID_Onec", "FirstName_Onec", 
@@ -254,30 +286,60 @@ async function importExcel() {
         )
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)
         ON CONFLICT ("PersonID_Onec") DO NOTHING
-      `, [
-        year, row.Semester_Onec, row.DepartmentID_Onec, row.SchoolID_Onec,
-        row.PersonID_Onec, row.PassportNumber_Onec, row.PrefixID_Onec, row.FirstName_Onec,
-        row.MiddleName_Onec, row.LastName_Onec, row.GenderID_Onec, row.NationalityID_Onec,
-        row.DisabilityID_Onec, row.DisadvantageEducationID_Onec, String(row.VillageNumber_Onec || ''),
-        row.Street_Onec, row.Soi_Onec, row.Trok_Onec, row.SubDistrictID_Onec,
-        admissionYear, row.GradeLevelID_Onec, row.RoomID_Onec, row.GPAX_Onec,
-        row.StudentStatusID_Onec, row.ProvinceNameThai_Onec, row.DistrictNameThai_Onec,
-        row.SubDistrictNameThai_Onec
-      ]);
+      `,
+        [
+          year,
+          row.Semester_Onec,
+          row.DepartmentID_Onec,
+          row.SchoolID_Onec,
+          row.PersonID_Onec,
+          row.PassportNumber_Onec,
+          row.PrefixID_Onec,
+          row.FirstName_Onec,
+          row.MiddleName_Onec,
+          row.LastName_Onec,
+          row.GenderID_Onec,
+          row.NationalityID_Onec,
+          row.DisabilityID_Onec,
+          row.DisadvantageEducationID_Onec,
+          String(row.VillageNumber_Onec || ''),
+          row.Street_Onec,
+          row.Soi_Onec,
+          row.Trok_Onec,
+          row.SubDistrictID_Onec,
+          admissionYear,
+          row.GradeLevelID_Onec,
+          row.RoomID_Onec,
+          row.GPAX_Onec,
+          row.StudentStatusID_Onec,
+          row.ProvinceNameThai_Onec,
+          row.DistrictNameThai_Onec,
+          row.SubDistrictNameThai_Onec,
+        ],
+      );
     }
 
     // Load dropout students from V2
-    const dropoutPath = path.resolve(__dirname, '../../../../studentหลุดจากระบบ2567_mockup_v2.xlsx');
+    const dropoutPath = path.resolve(
+      __dirname,
+      '../../../../studentหลุดจากระบบ2567_mockup_v2.xlsx',
+    );
     console.log(`Reading ${dropoutPath}...`);
     const dropoutWorkbook = xlsx.readFile(dropoutPath);
-    const dropoutData: any[] = xlsx.utils.sheet_to_json(dropoutWorkbook.Sheets[dropoutWorkbook.SheetNames[0]]);
+    const dropoutData: any[] = xlsx.utils.sheet_to_json(
+      dropoutWorkbook.Sheets[dropoutWorkbook.SheetNames[0]],
+    );
     console.log(`Found ${dropoutData.length} dropout students.`);
 
     for (const row of dropoutData) {
-      const year = row.AcademicYearPresent_Onec === 2567 ? 2569 : row.AcademicYearPresent_Onec;
+      const year =
+        row.AcademicYearPresent_Onec === 2567
+          ? 2569
+          : row.AcademicYearPresent_Onec;
       const acadYear = row.ACADYEAR === 2567 ? 2569 : row.ACADYEAR;
 
-      await client.query(`
+      await client.query(
+        `
         INSERT INTO student_dropouts (
           "ProvinceNameThai_Onec", "DistrictNameThai_Onec", "SubDistrictNameThai_Onec", 
           "PersonID_Onec", "Fullname_Onec", "Gender_Onec", "NationalityName_Onec", 
@@ -289,20 +351,38 @@ async function importExcel() {
         )
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
         ON CONFLICT ("PersonID_Onec") DO NOTHING
-      `, [
-        row.ProvinceNameThai_Onec, row.DistrictNameThai_Onec, row.SubDistrictNameThai_Onec,
-        row.PersonID_Onec, row.Fullname_Onec, row.Gender_Onec, row.NationalityName_Onec,
-        row.BirthDate_Onec, row.HouseNumber_Onec, String(row.VillageNumber_Onec || ''), row.Street_Onec,
-        row.Soi_Onec, row.Trok_Onec, String(row.StatusCodeCause_Onec), row.Remark_Onec,
-        row.SchoolName_Onec, row.GradeLevelID_Onec, year,
-        row.DropoutTransferID_Onec, acadYear, row.RoomID_Onec, row.SchoolID_Onec,
-        row.GenderID_Onec, row.GPAX_Onec
-      ]);
+      `,
+        [
+          row.ProvinceNameThai_Onec,
+          row.DistrictNameThai_Onec,
+          row.SubDistrictNameThai_Onec,
+          row.PersonID_Onec,
+          row.Fullname_Onec,
+          row.Gender_Onec,
+          row.NationalityName_Onec,
+          row.BirthDate_Onec,
+          row.HouseNumber_Onec,
+          String(row.VillageNumber_Onec || ''),
+          row.Street_Onec,
+          row.Soi_Onec,
+          row.Trok_Onec,
+          String(row.StatusCodeCause_Onec),
+          row.Remark_Onec,
+          row.SchoolName_Onec,
+          row.GradeLevelID_Onec,
+          year,
+          row.DropoutTransferID_Onec,
+          acadYear,
+          row.RoomID_Onec,
+          row.SchoolID_Onec,
+          row.GenderID_Onec,
+          row.GPAX_Onec,
+        ],
+      );
     }
 
     await client.query('COMMIT');
     console.log('V2 Reset and Grade Levels Import successfully completed.');
-
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('Error importing data:', err);

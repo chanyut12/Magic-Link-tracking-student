@@ -52,12 +52,110 @@
             <input type="text" v-model="formData.student_school" placeholder="เช่น โรงเรียนบ้านหนองไผ่">
           </div>
           <div class="form-group">
-            <label>ที่อยู่</label>
-            <textarea v-model="formData.student_address" placeholder="ที่อยู่บ้านนักเรียน"></textarea>
+            <label>ที่อยู่บ้านนักเรียน (ละเอียด) *</label>
+            <div class="row q-col-gutter-md">
+              <div class="col-12 col-sm-4">
+                <input type="text" v-model="formData.student_address_house_no" placeholder="บ้านเลขที่">
+              </div>
+              <div class="col-12 col-sm-4">
+                <input type="text" v-model="formData.student_address_moo" placeholder="หมู่">
+              </div>
+              <div class="col-12 col-sm-4">
+                <input type="text" v-model="formData.student_address_village" placeholder="หมู่บ้าน/อาคาร (ถ้ามี)">
+              </div>
+            </div>
+            <div class="row q-col-gutter-md q-mt-sm">
+              <div class="col-12 col-sm-6">
+                <input type="text" v-model="formData.student_address_soi" placeholder="ซอย">
+              </div>
+              <div class="col-12 col-sm-6">
+                <input type="text" v-model="formData.student_address_road" placeholder="ถนน">
+              </div>
+            </div>
+            <div class="row q-col-gutter-md q-mt-sm">
+              <div class="col-12 col-sm-3">
+                <input type="text" v-model="formData.student_address_subdistrict" placeholder="ตำบล/แขวง">
+              </div>
+              <div class="col-12 col-sm-3">
+                <input type="text" v-model="formData.student_address_district" placeholder="อำเภอ/เขต">
+              </div>
+              <div class="col-12 col-sm-3">
+                <input type="text" v-model="formData.student_address_province" placeholder="จังหวัด">
+              </div>
+              <div class="col-12 col-sm-3">
+                <input
+                  type="text"
+                  v-model="formData.student_address_postal_code"
+                  placeholder="รหัสไปรษณีย์"
+                  inputmode="numeric"
+                  maxlength="5"
+                >
+              </div>
+            </div>
+            <div class="q-mt-sm">
+              <input type="text" v-model="formData.student_address_note" placeholder="รายละเอียดเพิ่มเติม/จุดสังเกต (ถ้ามี)">
+            </div>
+            <div v-if="formattedStudentAddress" class="address-preview q-mt-sm">
+              <span class="text-weight-bold">ที่อยู่ที่จะบันทึก:</span> {{ formattedStudentAddress }}
+            </div>
           </div>
           <div class="form-group">
             <label>สาเหตุที่ถูก Flag</label>
             <input type="text" v-model="formData.reason_flagged" placeholder="เช่น ขาดเรียนติดต่อกัน 5 วัน">
+          </div>
+
+          <div class="form-group">
+            <label>พิกัดบ้านนักเรียน (Google Maps)</label>
+            <div class="coord-grid">
+              <input type="number" step="any" v-model.number="formData.student_lat" placeholder="Latitude">
+              <input type="number" step="any" v-model.number="formData.student_lng" placeholder="Longitude">
+            </div>
+            <div class="coord-actions">
+              <q-btn
+                flat
+                color="primary"
+                icon="my_location"
+                label="ใช้พิกัดตำแหน่งปัจจุบัน"
+                no-caps
+                @click="useCurrentLocation"
+              />
+              <q-btn
+                flat
+                color="grey-7"
+                icon="open_in_new"
+                label="เลือกตำแหน่งบน Google Maps"
+                no-caps
+                :href="getMapsPickerUrl()"
+                target="_blank"
+              />
+            </div>
+            <div class="q-mt-sm">
+              <div class="map-picker-help">
+                เลือกตำแหน่งใน Google Maps แล้วคัดลอกลิงก์มาวางด้านล่าง ระบบจะดึงพิกัดให้อัตโนมัติ
+              </div>
+              <div class="coord-grid map-picker-grid q-mt-xs">
+                <input
+                  type="text"
+                  v-model.trim="mapPickerInput"
+                  placeholder="วางลิงก์ Google Maps หรือพิกัด เช่น 13.7563,100.5018"
+                >
+                <q-btn
+                  color="secondary"
+                  icon="place"
+                  label="ดึงพิกัดจากลิงก์"
+                  no-caps
+                  @click="applyCoordinatesFromMapInput"
+                />
+              </div>
+            </div>
+            <div v-if="hasValidCoordinates" class="map-preview-wrap q-mt-sm">
+              <iframe
+                class="map-preview"
+                :src="getEmbedMapUrl()"
+                loading="lazy"
+                referrerpolicy="no-referrer-when-downgrade"
+              />
+            </div>
           </div>
         </div>
 
@@ -173,12 +271,25 @@ const loading = ref(false);
 const showResult = ref(false);
 const resultLink = ref('');
 const qrCodeUrl = ref('');
+const mapPickerInput = ref('');
 
 const formData = reactive({
   type: '',
   student_name: '',
   student_school: '',
   student_address: '',
+  student_address_house_no: '',
+  student_address_moo: '',
+  student_address_village: '',
+  student_address_soi: '',
+  student_address_road: '',
+  student_address_subdistrict: '',
+  student_address_district: '',
+  student_address_province: '',
+  student_address_postal_code: '',
+  student_address_note: '',
+  student_lat: null as number | null,
+  student_lng: null as number | null,
   reason_flagged: '',
   target_grade: '',
   target_room: '',
@@ -215,10 +326,53 @@ const pageTitle = computed(() => {
   return formData.type === 'VISIT' ? 'สร้างภารกิจลงพื้นที่' : 'สร้างภารกิจเช็คชื่อ';
 });
 
+const hasValidCoordinates = computed(() => {
+  if (formData.student_lat == null || formData.student_lng == null) return false;
+  return (
+    Number.isFinite(formData.student_lat) &&
+    Number.isFinite(formData.student_lng) &&
+    formData.student_lat >= -90 &&
+    formData.student_lat <= 90 &&
+    formData.student_lng >= -180 &&
+    formData.student_lng <= 180
+  );
+});
+
 const selectType = (type: string) => {
   formData.type = type;
   currentStep.value = 2;
 };
+
+const normalizeAddressPart = (value: string) => value.trim().replace(/\s+/g, ' ');
+
+const buildDetailedAddress = (data: typeof formData) => {
+  const parts: string[] = [];
+  const houseNo = normalizeAddressPart(data.student_address_house_no);
+  const moo = normalizeAddressPart(data.student_address_moo);
+  const village = normalizeAddressPart(data.student_address_village);
+  const soi = normalizeAddressPart(data.student_address_soi);
+  const road = normalizeAddressPart(data.student_address_road);
+  const subdistrict = normalizeAddressPart(data.student_address_subdistrict);
+  const district = normalizeAddressPart(data.student_address_district);
+  const province = normalizeAddressPart(data.student_address_province);
+  const postalCode = normalizeAddressPart(data.student_address_postal_code);
+  const note = normalizeAddressPart(data.student_address_note);
+
+  if (houseNo) parts.push(`บ้านเลขที่ ${houseNo}`);
+  if (moo) parts.push(`หมู่ ${moo}`);
+  if (village) parts.push(village);
+  if (soi) parts.push(`ซอย${soi}`);
+  if (road) parts.push(`ถนน${road}`);
+  if (subdistrict) parts.push(`ตำบล/แขวง${subdistrict}`);
+  if (district) parts.push(`อำเภอ/เขต${district}`);
+  if (province) parts.push(`จังหวัด${province}`);
+  if (postalCode) parts.push(postalCode);
+  if (note) parts.push(`(${note})`);
+
+  return parts.join(' ');
+};
+
+const formattedStudentAddress = computed(() => buildDetailedAddress(formData));
 
 const submitForm = async () => {
   // Simple validation
@@ -226,17 +380,38 @@ const submitForm = async () => {
     $q.notify({ message: 'กรุณากรอกข้อมูลให้ครบถ้วน', color: 'negative' });
     return;
   }
+  if (formData.type === 'VISIT') {
+    const hasRequiredAddressParts = [
+      formData.student_address_house_no,
+      formData.student_address_subdistrict,
+      formData.student_address_district,
+      formData.student_address_province,
+      formData.student_address_postal_code,
+    ].every((value) => value.trim().length > 0);
+
+    if (!hasRequiredAddressParts) {
+      $q.notify({ message: 'กรุณากรอกที่อยู่ให้ครบ (บ้านเลขที่, ตำบล/แขวง, อำเภอ/เขต, จังหวัด, รหัสไปรษณีย์)', color: 'negative' });
+      return;
+    }
+
+    if (!/^\d{5}$/.test(formData.student_address_postal_code.trim())) {
+      $q.notify({ message: 'รหัสไปรษณีย์ต้องเป็นตัวเลข 5 หลัก', color: 'negative' });
+      return;
+    }
+  }
 
   loading.value = true;
   try {
     const payload = {
       ...formData,
-      task_type: formData.type // Backend expects task_type
+      student_address: formData.type === 'VISIT' ? buildDetailedAddress(formData) : formData.student_address,
+      task_type: formData.type, // Backend expects task_type
+      subject: formData.target_subject || null,
     };
     const res = await api.post('/api/tasks', payload);
-    resultLink.value = res.data.magic_link;
+    resultLink.value = normalizePublicLink(res.data.magic_link);
     // We don't have a QR code generator in this mock yet, so just leave it empty or use dummy
-    qrCodeUrl.value = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(res.data.magic_link)}`;
+    qrCodeUrl.value = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(resultLink.value)}`;
     showResult.value = true;
   } catch (err: unknown) {
     console.error(err);
@@ -255,6 +430,86 @@ const copyLink = () => {
 
 const getLineUrl = (link: string) => {
   return `https://social-plugins.line.me/lineit/share?url=${encodeURIComponent(link)}`;
+};
+
+const isValidCoordinatePair = (lat: number, lng: number) => {
+  return Number.isFinite(lat) && Number.isFinite(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
+};
+
+const parseCoordinatesFromText = (text: string): { lat: number; lng: number } | null => {
+  const value = text.trim();
+  if (!value) return null;
+
+  const patterns: RegExp[] = [
+    /@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/, // .../@13.7563,100.5018,17z
+    /[?&](?:q|query|destination|center)=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/, // ...?q=13.7,100.5
+    /!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/, // ...!3d13.7!4d100.5
+    /(-?\d{1,2}(?:\.\d+)?)[,\s]+(-?\d{1,3}(?:\.\d+)?)/, // fallback: "13.7,100.5"
+  ];
+
+  for (const pattern of patterns) {
+    const match = value.match(pattern);
+    if (!match) continue;
+    const lat = Number(match[1]);
+    const lng = Number(match[2]);
+    if (isValidCoordinatePair(lat, lng)) return { lat, lng };
+  }
+
+  return null;
+};
+
+const useCurrentLocation = () => {
+  if (!navigator.geolocation) {
+    $q.notify({ message: 'เบราว์เซอร์นี้ไม่รองรับการดึงตำแหน่ง', color: 'negative' });
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      formData.student_lat = Number(position.coords.latitude.toFixed(6));
+      formData.student_lng = Number(position.coords.longitude.toFixed(6));
+      $q.notify({ message: 'ดึงพิกัดสำเร็จ', color: 'positive' });
+    },
+    () => {
+      $q.notify({ message: 'ไม่สามารถดึงพิกัดได้ กรุณาอนุญาตตำแหน่ง', color: 'negative' });
+    },
+    { enableHighAccuracy: true, timeout: 10000 },
+  );
+};
+
+const applyCoordinatesFromMapInput = () => {
+  const coords = parseCoordinatesFromText(mapPickerInput.value);
+  if (!coords) {
+    $q.notify({ message: 'ไม่พบพิกัดในข้อความที่วาง กรุณาวางลิงก์ Google Maps หรือพิกัด เช่น 13.7563,100.5018', color: 'negative' });
+    return;
+  }
+
+  formData.student_lat = Number(coords.lat.toFixed(6));
+  formData.student_lng = Number(coords.lng.toFixed(6));
+  $q.notify({ message: 'ดึงพิกัดจากลิงก์สำเร็จ', color: 'positive' });
+};
+
+const getMapsPickerUrl = () => {
+  if (!hasValidCoordinates.value) return 'https://www.google.com/maps';
+  return `https://www.google.com/maps/@${formData.student_lat},${formData.student_lng},17z`;
+};
+
+const getEmbedMapUrl = () => {
+  if (!hasValidCoordinates.value) return '';
+  return `https://maps.google.com/maps?q=${formData.student_lat},${formData.student_lng}&z=15&output=embed`;
+};
+
+const normalizePublicLink = (rawLink: string) => {
+  if (!rawLink) return rawLink;
+  try {
+    const url = new URL(rawLink, window.location.origin);
+    if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') {
+      url.protocol = window.location.protocol;
+      url.host = window.location.host;
+    }
+    return url.toString();
+  } catch {
+    return rawLink;
+  }
 };
 </script>
 
@@ -376,6 +631,50 @@ const getLineUrl = (link: string) => {
     select { width: 120px; }
 }
 
+.coord-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.map-picker-grid {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.coord-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.map-picker-help {
+  font-size: 0.82rem;
+  color: #64748b;
+}
+
+.map-preview-wrap {
+  border: 1.5px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.map-preview {
+  width: 100%;
+  height: 220px;
+  border: 0;
+}
+
+.address-preview {
+  border-radius: 10px;
+  border: 1px solid #dbeafe;
+  background: #eff6ff;
+  color: #1e3a8a;
+  padding: 10px 12px;
+  font-size: 0.9rem;
+}
+
 .magic-link-box {
     background: #f1f5f9;
     padding: 16px;
@@ -400,5 +699,7 @@ const getLineUrl = (link: string) => {
     .type-card { padding: 2rem 1rem; }
     .type-icon { font-size: 2.5rem; }
     .type-title { font-size: 1.2rem; }
+    .coord-grid { grid-template-columns: 1fr; }
+    .map-picker-grid { grid-template-columns: 1fr; }
 }
 </style>

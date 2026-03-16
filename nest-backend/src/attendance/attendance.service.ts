@@ -9,7 +9,9 @@ export class AttendanceService {
 
   async getGradeLevels() {
     try {
-      const result = await this.db.query('SELECT id, label, category FROM grade_levels ORDER BY id');
+      const result = await this.db.query(
+        'SELECT id, label, category FROM grade_levels ORDER BY id',
+      );
       return { success: true, data: result.rows };
     } catch (err) {
       this.logger.error(`getGradeLevels error: ${err.message}`);
@@ -19,7 +21,8 @@ export class AttendanceService {
 
   async getSchools(province?: string, district?: string, subDistrict?: string) {
     try {
-      let query = 'SELECT id, name, province, district, sub_district FROM schools WHERE 1=1';
+      let query =
+        'SELECT id, name, province, district, sub_district FROM schools WHERE 1=1';
       const params: any[] = [];
 
       if (province) {
@@ -47,19 +50,27 @@ export class AttendanceService {
   async getLocations() {
     try {
       // Get unique provinces
-      const provinceRes = await this.db.query('SELECT DISTINCT province FROM schools ORDER BY province ASC');
+      const provinceRes = await this.db.query(
+        'SELECT DISTINCT province FROM schools ORDER BY province ASC',
+      );
       // Get unique districts
-      const districtRes = await this.db.query('SELECT DISTINCT province, district FROM schools ORDER BY province ASC, district ASC');
+      const districtRes = await this.db.query(
+        'SELECT DISTINCT province, district FROM schools ORDER BY province ASC, district ASC',
+      );
       // Get unique sub-districts
-      const subDistrictRes = await this.db.query('SELECT DISTINCT province, district, sub_district FROM schools ORDER BY province ASC, district ASC, sub_district ASC');
+      const subDistrictRes = await this.db.query(
+        'SELECT DISTINCT province, district, sub_district FROM schools ORDER BY province ASC, district ASC, sub_district ASC',
+      );
 
       return {
         success: true,
         data: {
-          provinces: provinceRes.rows.map((r: { province: string }) => r.province),
+          provinces: provinceRes.rows.map(
+            (r: { province: string }) => r.province,
+          ),
           districts: districtRes.rows,
-          subDistricts: subDistrictRes.rows
-        }
+          subDistricts: subDistrictRes.rows,
+        },
       };
     } catch (err) {
       this.logger.error(`getLocations error: ${err.message}`);
@@ -82,7 +93,7 @@ export class AttendanceService {
         WHERE 1=1
       `;
       const params: any[] = [];
-      
+
       if (grade && grade !== 'ALL') {
         params.push(grade);
         query += ` AND gl.label = $${params.length}`;
@@ -97,7 +108,7 @@ export class AttendanceService {
       }
 
       query += ` ORDER BY s."GradeLevelID_Onec" ASC, s."RoomID_Onec" ASC, s."PersonID_Onec" ASC`;
-      
+
       const result = await this.db.query(query, params);
       return { success: true, data: result.rows };
     } catch (err) {
@@ -108,7 +119,8 @@ export class AttendanceService {
 
   async getHistory(date: string) {
     try {
-      const result = await this.db.query(`
+      const result = await this.db.query(
+        `
         SELECT 
           a.*, 
           (s."FirstName_Onec" || ' ' || s."LastName_Onec") as name,
@@ -120,13 +132,22 @@ export class AttendanceService {
         LEFT JOIN grade_levels gl ON s."GradeLevelID_Onec" = gl.id
         WHERE a."AttendanceDate" = $1
         ORDER BY s."GradeLevelID_Onec" ASC, s."RoomID_Onec" ASC
-      `, [date]);
+      `,
+        [date],
+      );
 
-      // Map back to frontend expected status strings if needed, 
+      // Map back to frontend expected status strings if needed,
       // but let's keep them as integers or map here
       const mapped = result.rows.map((r: any) => ({
         ...r,
-        status: r.status === 1 ? 'P_PRESENT' : r.status === 2 ? 'P_ABSENT' : r.status === 3 ? 'P_LATE' : 'NONE'
+        status:
+          r.status === 1
+            ? 'P_PRESENT'
+            : r.status === 2
+              ? 'P_ABSENT'
+              : r.status === 3
+                ? 'P_LATE'
+                : 'NONE',
       }));
 
       return { success: true, data: mapped };
@@ -141,21 +162,27 @@ export class AttendanceService {
     try {
       await this.db.transaction(async (client) => {
         // Only delete existing records for the students in this specific batch for today
-        const studentIds = records.map(r => r.student_id);
+        const studentIds = records.map((r) => r.student_id);
         if (studentIds.length > 0) {
-          await client.query(`
+          await client.query(
+            `
             DELETE FROM attendance 
             WHERE "AttendanceDate" = $1 AND "PersonID_Onec" = ANY($2)
-          `, [today, studentIds]);
+          `,
+            [today, studentIds],
+          );
         }
 
         for (const record of records) {
           // Fetch student metadata to satisfy the attendance table constraints
-          const studentRes = await client.query(`
+          const studentRes = await client.query(
+            `
             SELECT "SchoolID_Onec", "GradeLevelID_Onec", "RoomID_Onec", "AcademicYear_Onec", "Semester_Onec"
             FROM student_term 
             WHERE "PersonID_Onec" = $1
-          `, [record.student_id]);
+          `,
+            [record.student_id],
+          );
 
           if (studentRes.rows.length === 0) continue;
           const s = studentRes.rows[0];
@@ -165,18 +192,28 @@ export class AttendanceService {
           if (record.status === 'P_ABSENT') statusCode = 2;
           else if (record.status === 'P_LATE') statusCode = 3;
 
-          await client.query(`
+          await client.query(
+            `
             INSERT INTO attendance (
               "PersonID_Onec", "SchoolID_Onec", "GradeLevelID_Onec", "RoomID_Onec", 
               "AcademicYear_Onec", "Semester_Onec", "AttendanceDate", "Period", 
               "AttendanceStatus", "RecordedBy"
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-          `, [
-            record.student_id, s.SchoolID_Onec, s.GradeLevelID_Onec, s.RoomID_Onec,
-            s.AcademicYear_Onec, s.Semester_Onec, today, 1, // Default to Period 1 for now
-            statusCode, 'Admin'
-          ]);
+          `,
+            [
+              record.student_id,
+              s.SchoolID_Onec,
+              s.GradeLevelID_Onec,
+              s.RoomID_Onec,
+              s.AcademicYear_Onec,
+              s.Semester_Onec,
+              today,
+              1, // Default to Period 1 for now
+              statusCode,
+              'Admin',
+            ],
+          );
         }
       });
       return { success: true };
@@ -229,7 +266,10 @@ export class AttendanceService {
 
       query += ` ORDER BY room ASC`;
       const result = await this.db.query(query, params);
-      return { success: true, data: result.rows.map((r: { room: string }) => r.room) };
+      return {
+        success: true,
+        data: result.rows.map((r: { room: string }) => r.room),
+      };
     } catch (err) {
       this.logger.error(`getRooms error: ${err.message}`);
       throw err;

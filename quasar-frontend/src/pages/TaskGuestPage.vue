@@ -15,9 +15,9 @@
           เช็คชื่อนักเรียนชั้น {{ task.target_grade }}/{{ task.target_room }}
         </div>
         <div class="subtitle" v-else>
-          มอบหมายแด่: {{ task.assigned_to_name }}
+          มอบหมาย: {{ task.assigned_to_name }}
         </div>
-        
+
         <div class="expiry-box" v-if="!isExpired">
           <i class="fas fa-clock"></i>
           <span>ลิงก์หมดอายุใน: {{ countdownText }}</span>
@@ -29,7 +29,7 @@
       </div>
 
       <div class="container q-pa-lg">
-        
+
         <!-- OTP Screen -->
         <div v-if="authRequired" class="otp-container">
           <div class="otp-icon"><i class="fas fa-shield-alt"></i></div>
@@ -37,32 +37,32 @@
           <div class="otp-desc">{{ otpSent ? 'รหัส OTP ถูกส่งไปยังอีเมลของคุณแล้ว (โปรดตรวจสอบใน Log ระบบ)' : 'กรุณากดปุ่มด้านล่างเพื่อรับรหัส OTP ทางอีเมลที่ลงทะเบียนไว้' }}</div>
 
           <div v-if="!otpSent">
-            <q-btn 
-              unelevated 
-              color="primary" 
-              label="รับรหัส OTP" 
-              class="full-width q-py-md" 
-              :loading="otpLoading" 
-              @click="requestOTP" 
+            <q-btn
+              unelevated
+              color="primary"
+              label="รับรหัส OTP"
+              class="full-width q-py-md"
+              :loading="otpLoading"
+              @click="requestOTP"
             />
           </div>
 
           <div v-else class="otp-input-group">
-            <input 
-              type="text" 
-              v-model="otpInput" 
-              class="otp-input" 
-              maxlength="6" 
+            <input
+              type="text"
+              v-model="otpInput"
+              class="otp-input"
+              maxlength="6"
               placeholder="000000"
               inputmode="numeric"
             />
-            <q-btn 
-              unelevated 
-              color="primary" 
-              label="ตรวจสอบรหัส" 
-              class="full-width q-py-md" 
-              :loading="otpLoading" 
-              @click="verifyOTP" 
+            <q-btn
+              unelevated
+              color="primary"
+              label="ตรวจสอบรหัส"
+              class="full-width q-py-md"
+              :loading="otpLoading"
+              @click="verifyOTP"
             />
             <div class="resend-link q-mt-md" @click="otpSent = false">ส่งรหัสอีกครั้ง</div>
           </div>
@@ -95,22 +95,22 @@
                 </div>
               </div>
               <div class="status-options">
-                <button 
-                  class="status-btn present" 
+                <button
+                  class="status-btn present"
                   :class="{ active: (attendanceSelections[s.id] || 'P_PRESENT') === 'P_PRESENT' }"
                   @click="setStatus(s.id, 'P_PRESENT')"
                 >
                   <i class="fas fa-check"></i> มา
                 </button>
-                <button 
-                  class="status-btn absent" 
+                <button
+                  class="status-btn absent"
                   :class="{ active: attendanceSelections[s.id] === 'P_ABSENT' }"
                   @click="setStatus(s.id, 'P_ABSENT')"
                 >
                   <i class="fas fa-times"></i> ขาด
                 </button>
-                <button 
-                  class="status-btn late" 
+                <button
+                  class="status-btn late"
                   :class="{ active: attendanceSelections[s.id] === 'P_LATE' }"
                   @click="setStatus(s.id, 'P_LATE')"
                 >
@@ -143,32 +143,65 @@
             </div>
           </div>
 
-          <div class="card q-mb-lg" v-if="task.student_lat">
+          <div class="card q-mb-lg" v-if="task.student_lat != null && task.student_lng != null">
             <div class="card-title">พิกัดบ้านนักเรียน</div>
-            <div style="background: #f1f5f9; height: 150px; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #64748b;">
-              <i class="fas fa-map-marked-alt q-mr-sm"></i>
-              <span>แผนที่จะแสดงที่นี่ ({{ task.student_lat }}, {{ task.student_lng }})</span>
-            </div>
+            <iframe
+              class="map-frame"
+              :src="getEmbedMapUrl()"
+              loading="lazy"
+              referrerpolicy="no-referrer-when-downgrade"
+            />
             <q-btn outline color="primary" label="🗺️ เปิดใน Google Maps" class="full-width q-mt-md" :href="getGmapsUrl()" target="_blank" />
           </div>
 
-          <!-- Visit Submission Form -->
-          <div class="card q-mb-lg" v-if="!showVisitResults">
-            <div class="card-title">สรุปผลการลงพื้นที่</div>
-            <div class="form-group">
+          <!-- Action Selector -->
+          <div class="card q-mb-lg" v-if="!showVisitResults && !visitMode">
+            <div class="card-title">เลือกการดำเนินการ</div>
+            <p class="text-gray-500 q-mb-md">กรุณาเลือกว่าจะลงพื้นที่เอง หรือมอบหมายให้ผู้อื่นดำเนินการแทน</p>
+            <q-btn
+              color="positive"
+              label="📍 ลงพื้นที่"
+              class="full-width q-py-md q-mb-sm"
+              unelevated
+              @click="startVisit"
+            />
+            <q-btn
+              v-if="canDelegate"
+              color="warning"
+              icon="group"
+              label="มอบหมายให้ผู้อื่น"
+              class="full-width q-py-md"
+              unelevated
+              :to="`/task/${token}/delegate`"
+            />
+          </div>
+
+          <!-- Visit Detail: show only after user chooses "ลงพื้นที่" -->
+          <template v-if="!showVisitResults && visitMode">
+            <div class="card q-mb-lg">
+              <div class="card-title">ลงพื้นที่เอง</div>
+              <p class="text-gray-500 q-mb-md">บันทึก GPS และถ่ายรูปประกอบรายงาน</p>
+              <q-btn
+                color="positive"
+                label="📍 ลงพื้นที่พร้อมรูปภาพ"
+                icon="camera_alt"
+                class="full-width q-py-md"
+                unelevated
+                :to="`/task/${token}/report`"
+              />
+            </div>
+
+            <div class="card q-mb-lg">
+              <div class="card-title text-gray-500">หรือสรุปผลแบบเร็ว</div>
+              <div class="form-group">
                 <label>รายละเอียดการเยี่ยมบ้าน</label>
                 <textarea v-model="visitData.notes" placeholder="กรอกข้อมูลที่พบจากการลงพื้นที่..."></textarea>
+              </div>
+              <q-btn color="positive" label="✅ บันทึกสำเร็จ" class="full-width q-py-md q-mb-sm" unelevated @click="submitVisit('COMPLETED')" :loading="saving" />
+              <q-btn flat color="grey-7" label="ย้อนกลับ" class="full-width q-mt-sm" @click="visitMode = false" />
             </div>
-            <div class="row q-col-gutter-md">
-                <div class="col-6">
-                    <q-btn color="positive" label="สำเร็จ" icon="check" class="full-width q-py-md" unelevated @click="submitVisit('COMPLETED')" :loading="saving" />
-                </div>
-                <div class="col-6">
-                    <q-btn color="warning" label="อยู่ระหว่างดำเนินการ" icon="history" class="full-width q-py-md" unelevated @click="submitVisit('IN_PROGRESS')" :loading="saving" />
-                </div>
-            </div>
-          </div>
-          
+          </template>
+
           <div v-else class="card q-pa-xl text-center">
             <div class="alert alert-success q-mb-md">บันทึกข้อมูลการลงพื้นที่เรียบร้อยแล้ว</div>
             <p class="text-gray-500">ขอบคุณสำหรับความร่วมมือในการติดตามนักเรียนครับ</p>
@@ -179,10 +212,10 @@
 
       <!-- Floating Footer (for Attendance) -->
       <div v-if="!authRequired && task.type === 'ATTENDANCE'" class="floating-footer">
-        <q-btn 
-          unelevated 
-          class="btn-save" 
-          @click="saveAttendance" 
+        <q-btn
+          unelevated
+          class="btn-save"
+          @click="saveAttendance"
           :loading="saving"
           :disabled="isExpired"
         >
@@ -196,7 +229,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { api } from 'boot/axios';
 import { useQuasar } from 'quasar';
 
@@ -215,6 +248,9 @@ interface TaskData {
   student_lat?: number;
   student_lng?: number;
   auth_required?: boolean;
+  can_delegate?: boolean;
+  delegation_depth?: number;
+  max_delegation_depth?: number;
 }
 
 interface Student {
@@ -226,6 +262,7 @@ interface Student {
 
 const $q = useQuasar();
 const route = useRoute();
+const router = useRouter();
 const token = route.params.token as string;
 
 const loading = ref(true);
@@ -238,6 +275,7 @@ const students = ref<Student[]>([]);
 const attendanceSelections = reactive<Record<string, string>>({});
 const saving = ref(false);
 const showVisitResults = ref(false);
+const visitMode = ref(false);
 const isExpired = ref(false);
 const countdownText = ref('--:--');
 
@@ -251,13 +289,20 @@ let timer: ReturnType<typeof setInterval> | null = null;
 const fetchData = async () => {
   try {
     const res = await api.get(`/api/tasks/${token}`);
+
+    if (res.data.status === 'EXPIRED') {
+      void router.push(`/task/${token}/expired`);
+      return;
+    }
+
     task.value = res.data;
     authRequired.value = !!res.data.auth_required;
-    
+
     if (res.data.expires_at) {
+      console.log('[DEBUG] fetchData - expires_at raw:', res.data.expires_at);
       startCountdown(new Date(res.data.expires_at));
     }
-    
+
     if (!authRequired.value) {
       await loadTaskData();
     }
@@ -274,11 +319,11 @@ const loadTaskData = async () => {
     if (task.value?.type === 'ATTENDANCE') {
       const res = await api.get(`/api/tasks/${token}/students`);
       if (res.data.success) {
-        students.value = res.data.data.filter((s: Student) => 
+        students.value = res.data.data.filter((s: Student) =>
           s.grade === task.value?.target_grade && s.room === task.value?.target_room
         );
         students.value.forEach(s => { attendanceSelections[s.id] = 'P_PRESENT'; });
-        
+
         // Load history to prefill
         const today = new Date().toISOString().split('T')[0];
         const hRes = await api.get(`/api/tasks/${token}/history?date=${today}`);
@@ -303,8 +348,26 @@ const requestOTP = async () => {
     otpSent.value = true;
     $q.notify({ message: 'ส่งรหัส OTP เรียบร้อยแล้ว', color: 'positive' });
   } catch (err: unknown) {
-    const error = err as { response?: { data?: { error?: string } } };
-    $q.notify({ message: error.response?.data?.error || 'ส่ง OTP ไม่สำเร็จ', color: 'negative' });
+    const error = err as {
+      response?: { data?: { message?: string | string[]; error?: string } };
+    };
+    const message = error.response?.data?.message;
+    const normalizedMessage = Array.isArray(message) ? message[0] : message;
+    if (normalizedMessage === 'No email found for this link') {
+      const taskRes = await api.get(`/api/tasks/${token}`);
+      task.value = taskRes.data;
+      authRequired.value = false;
+      await loadTaskData();
+      $q.notify({
+        message: 'ลิงก์นี้ไม่ได้ลงทะเบียนอีเมล จึงข้าม OTP อัตโนมัติ',
+        color: 'warning'
+      });
+      return;
+    }
+    $q.notify({
+      message: normalizedMessage || error.response?.data?.error || 'ส่ง OTP ไม่สำเร็จ',
+      color: 'negative'
+    });
   } finally {
     otpLoading.value = false;
   }
@@ -316,7 +379,11 @@ const verifyOTP = async () => {
   try {
     const res = await api.post(`/api/tasks/${token}/verify`, { otp: otpInput.value });
     if (res.data.success) {
+      // Re-fetch task to get unmasked student data
+      const taskRes = await api.get(`/api/tasks/${token}`);
+      task.value = taskRes.data;
       authRequired.value = false;
+      visitMode.value = false;
       await loadTaskData();
     }
   } catch {
@@ -331,20 +398,30 @@ const setStatus = (id: string, status: string) => {
 };
 
 const submitVisit = async (status: string) => {
+  console.log('[DEBUG] submitVisit called with status:', status);
   saving.value = true;
   visitData.status = status;
   try {
-    const res = await api.post(`/api/tasks/${token}/submission`, visitData);
+    console.log('[DEBUG] Sending submission:', { token, visitData });
+    const res = await api.post(`/api/tasks/${token}/submit`, visitData);
+    console.log('[DEBUG] Submission response:', res.data);
     if (res.data.success) {
       $q.notify({ message: 'บันทึกข้อมูลการลงพื้นที่แล้ว', color: 'positive' });
       showVisitResults.value = true;
+    } else {
+      $q.notify({ message: res.data.error || 'บันทึกไม่สำเร็จ', color: 'negative' });
     }
-  } catch (err) {
-    console.error(err);
-    $q.notify({ message: 'เกิดข้อผิดพลาดในการบันทึก', color: 'negative' });
+  } catch (err: unknown) {
+    console.error('[DEBUG] Submission error:', err);
+    const axiosErr = err as { response?: { data?: { message?: string } } };
+    $q.notify({ message: axiosErr?.response?.data?.message || 'เกิดข้อผิดพลาดในการบันทึก', color: 'negative' });
   } finally {
     saving.value = false;
   }
+};
+
+const startVisit = () => {
+  visitMode.value = true;
 };
 
 const attendanceStats = computed(() => {
@@ -358,13 +435,20 @@ const attendanceStats = computed(() => {
   return stats;
 });
 
+const canDelegate = computed(() => {
+  if (!task.value) return false;
+  const depth = task.value.delegation_depth ?? 0;
+  const maxDepth = task.value.max_delegation_depth ?? 3;
+  return depth < maxDepth;
+});
+
 const saveAttendance = async () => {
   saving.value = true;
   const records = Object.entries(attendanceSelections).map(([id, status]) => ({
     student_id: id,
     status
   }));
-  
+
   try {
     const res = await api.post(`/api/tasks/${token}/attendance`, { records });
     if (res.data.success) {
@@ -378,10 +462,14 @@ const saveAttendance = async () => {
   }
 };
 
-const startCountdown = (expiry: Date) => {
+ const startCountdown = (expiry: Date | null) => {
+  if (!expiry) return;
+
+  const expiryDate = typeof expiry === 'string' ? new Date(expiry) : expiry;
+
   const update = () => {
     const now = new Date().getTime();
-    const diff = expiry.getTime() - now;
+    const diff = expiryDate.getTime() - now;
     if (diff <= 0) {
       isExpired.value = true;
       countdownText.value = 'หมดอายุแล้ว';
@@ -401,18 +489,23 @@ const startCountdown = (expiry: Date) => {
 };
 
 const getGmapsUrl = () => {
-  if (!task.value?.student_lat || !task.value?.student_lng) return '#';
+  if (task.value?.student_lat == null || task.value?.student_lng == null) return '#';
   return `https://www.google.com/maps/search/?api=1&query=${task.value.student_lat},${task.value.student_lng}`;
+};
+
+const getEmbedMapUrl = () => {
+  if (task.value?.student_lat == null || task.value?.student_lng == null) return '';
+  return `https://maps.google.com/maps?q=${task.value.student_lat},${task.value.student_lng}&z=15&output=embed`;
 };
 
 onMounted(() => {
   void fetchData();
 });
-onUnmounted(() => { 
+onUnmounted(() => {
   if (timer) {
     clearInterval(timer);
     timer = null;
-  } 
+  }
 });
 </script>
 
@@ -431,7 +524,7 @@ onUnmounted(() => {
   border-bottom-right-radius: 40px;
   box-shadow: 0 10px 30px rgba(30, 64, 175, 0.2);
   position: relative;
-  
+
   h1 { font-size: 1.5rem; font-weight: 900; margin: 0 0 0.5rem; letter-spacing: -0.02em; }
   .subtitle { opacity: 0.9; font-size: 1rem; font-weight: 600; }
 }
@@ -453,7 +546,7 @@ onUnmounted(() => {
   gap: 10px;
   white-space: nowrap;
   border: 1.5px solid #fee2e2;
-  
+
   &.expired { color: #94a3b8; border-color: #f1f5f9; }
 }
 
@@ -466,7 +559,7 @@ onUnmounted(() => {
 .form-group {
     margin-bottom: 20px;
     text-align: left;
-    
+
     label {
         display: block;
         font-size: 0.85rem;
@@ -476,7 +569,7 @@ onUnmounted(() => {
         text-transform: uppercase;
         letter-spacing: 0.05em;
     }
-    
+
     textarea {
         width: 100%;
         padding: 12px 16px;
@@ -485,7 +578,7 @@ onUnmounted(() => {
         font-size: 1rem;
         min-height: 120px;
         transition: all 0.2s;
-        
+
         &:focus {
             outline: none;
             border-color: #2563eb;
@@ -519,7 +612,7 @@ onUnmounted(() => {
   outline: none;
   margin-bottom: 1.5rem;
   transition: all 0.2s;
-  
+
   &:focus { border-color: #2563eb; box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1); }
 }
 
@@ -540,11 +633,11 @@ onUnmounted(() => {
   text-align: center;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.02);
   border-bottom: 5px solid transparent;
-  
+
   &.present { border-color: #22c55e; }
   &.late { border-color: #eab308; }
   &.absent { border-color: #ef4444; }
-  
+
   .label { font-size: 0.75rem; color: #64748b; font-weight: 700; text-transform: uppercase; display: block; margin-bottom: 6px; }
   .value { font-size: 1.5rem; font-weight: 800; color: #1e293b; }
 }
@@ -552,15 +645,15 @@ onUnmounted(() => {
 /* Student List */
 .student-list { display: flex; flex-direction: column; gap: 0.75rem; padding-bottom: 120px; }
 .student-card {
-  background: white; border-radius: 20px; padding: 1.25rem; 
+  background: white; border-radius: 20px; padding: 1.25rem;
   display: flex; flex-direction: column; gap: 1rem;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.02);
 }
 
 .student-info { display: flex; align-items: center; gap: 1rem; }
-.student-avatar { 
-    width: 48px; height: 48px; border-radius: 50%; 
-    background: #f1f5f9; display: flex; align-items: center; 
+.student-avatar {
+    width: 48px; height: 48px; border-radius: 50%;
+    background: #f1f5f9; display: flex; align-items: center;
     justify-content: center; font-weight: 800; color: #94a3b8; font-size: 1.2rem;
 }
 .student-name { font-weight: 800; color: #1e293b; font-size: 1rem; }
@@ -568,11 +661,11 @@ onUnmounted(() => {
 
 .status-options { display: flex; gap: 0.5rem; }
 .status-btn {
-  flex: 1; padding: 10px 4px; border-radius: 12px; border: 1.5px solid #e2e8f0; 
-  background: white; color: #64748b; font-size: 0.85rem; font-weight: 700; 
-  cursor: pointer; transition: all 0.2s; display: flex; 
+  flex: 1; padding: 10px 4px; border-radius: 12px; border: 1.5px solid #e2e8f0;
+  background: white; color: #64748b; font-size: 0.85rem; font-weight: 700;
+  cursor: pointer; transition: all 0.2s; display: flex;
   align-items: center; justify-content: center; gap: 6px;
-  
+
   &.present.active { background: #dcfce7; color: #15803d; border-color: #15803d; }
   &.absent.active { background: #fee2e2; color: #b91c1c; border-color: #b91c1c; }
   &.late.active { background: #fef3c7; color: #b45309; border-color: #b45309; }
@@ -580,15 +673,15 @@ onUnmounted(() => {
 
 /* Floating Footer */
 .floating-footer {
-  position: fixed; bottom: 0; left: 0; right: 0; 
-  background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px); 
+  position: fixed; bottom: 0; left: 0; right: 0;
+  background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px);
   padding: 1rem; border-top: 1px solid #e2e8f0; z-index: 1000;
 }
 
 .btn-save {
-  width: 100%; padding: 1.25rem; border-radius: 20px; 
-  background: #1e40af; color: white; font-weight: 800; 
-  font-size: 1.1rem; border: none; 
+  width: 100%; padding: 1.25rem; border-radius: 20px;
+  background: #1e40af; color: white; font-weight: 800;
+  font-size: 1.1rem; border: none;
   box-shadow: 0 10px 25px rgba(30, 64, 175, 0.3);
 }
 
@@ -598,6 +691,13 @@ onUnmounted(() => {
   &:last-child { border-bottom: none; }
   .label { font-weight: 700; color: #64748b; font-size: 0.9rem; }
   .value { font-weight: 600; color: #1e293b; text-align: right; }
+}
+
+.map-frame {
+  width: 100%;
+  height: 220px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
 }
 
 @media (max-width: 480px) {

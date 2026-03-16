@@ -1,4 +1,14 @@
-import { Controller, Post, Get, Body, Param, Req, HttpException, HttpStatus } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Body,
+  Param,
+  Query,
+  Req,
+  HttpException,
+  HttpStatus,
+} from '@nestjs/common';
 import { TaskService } from './task.service';
 import type { Request } from 'express';
 
@@ -6,10 +16,24 @@ import type { Request } from 'express';
 export class TaskController {
   constructor(private readonly taskService: TaskService) {}
 
+  private resolveBaseUrl(req: Request): string {
+    const envBase = process.env.FRONTEND_BASE_URL;
+    if (envBase) return envBase;
+
+    const origin = req.get('origin');
+    if (origin) return origin;
+
+    const xfProto = req.get('x-forwarded-proto');
+    const xfHost = req.get('x-forwarded-host');
+    if (xfHost) return `${xfProto || req.protocol}://${xfHost}`;
+
+    return `${req.protocol}://${req.get('host')}`;
+  }
+
   @Post()
   async createTask(@Body() body: any, @Req() req: Request) {
     try {
-      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      const baseUrl = this.resolveBaseUrl(req);
       return await this.taskService.createTask(body, baseUrl);
     } catch (err) {
       throw new HttpException(err.message, HttpStatus.BAD_REQUEST);
@@ -22,7 +46,11 @@ export class TaskController {
     if (!task) {
       throw new HttpException('Task not found', HttpStatus.NOT_FOUND);
     }
-    if (task.error) {
+    if (task.error && task.status === 'EXPIRED') {
+      throw new HttpException(
+        { error: task.error, status: 'EXPIRED' },
+        HttpStatus.GONE,
+      );
     }
     return task;
   }
@@ -30,6 +58,24 @@ export class TaskController {
   @Get(':token/students')
   async getTaskStudents(@Param('token') token: string) {
     return await this.taskService.getTaskStudents(token);
+  }
+
+  @Get(':token/history')
+  async getTaskHistory(
+    @Param('token') token: string,
+    @Query('date') date: string,
+  ) {
+    const targetDate = date || new Date().toISOString().split('T')[0];
+    return await this.taskService.getTaskHistory(token, targetDate);
+  }
+
+  @Get(':taskId/chain')
+  async getTaskChain(@Param('taskId') taskId: string) {
+    const result = await this.taskService.getTaskChain(taskId);
+    if (!result) {
+      throw new HttpException('Task not found', HttpStatus.NOT_FOUND);
+    }
+    return result;
   }
 
   @Post(':token/attendance')

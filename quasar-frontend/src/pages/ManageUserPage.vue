@@ -4,12 +4,12 @@
       
       <!-- Top Action Bar (Fixed at top of page) -->
       <div class="top-bar-sticky">
-        <div class="row items-center justify-between q-mb-md sticky-content">
-          <div class="search-bar">
-            <q-input 
-              outlined 
-              dense 
-              v-model="searchText" 
+        <div class="row items-center justify-between q-mb-md sticky-content q-col-gutter-sm">
+          <div class="col-12 col-sm-auto search-bar">
+            <q-input
+              outlined
+              dense
+              v-model="searchText"
               placeholder="ค้นหาผู้ใช้งาน"
               class="search-input"
               bg-color="white"
@@ -19,23 +19,25 @@
               </template>
             </q-input>
           </div>
-          
-          <q-btn 
-            color="blue-2" 
-            text-color="primary" 
-            unelevated
-            no-caps
-            class="add-user-btn"
-            @click="openAddDialog"
-          >
-            <div class="row items-center">
-              <q-icon name="fas fa-user-plus" size="xs" class="q-mr-sm" />
-              <span class="text-weight-bold">เพิ่มผู้ใช้งาน</span>
-            </div>
-          </q-btn>
+
+          <div class="col-12 col-sm-auto">
+            <q-btn
+              color="blue-2"
+              text-color="primary"
+              unelevated
+              no-caps
+              class="add-user-btn full-width"
+              @click="openAddDialog"
+            >
+              <div class="row items-center">
+                <q-icon name="fas fa-user-plus" size="xs" class="q-mr-sm" />
+                <span class="text-weight-bold">เพิ่มผู้ใช้งาน</span>
+              </div>
+            </q-btn>
+          </div>
         </div>
 
-        <div class="user-table-header row items-center q-px-lg q-mb-sm sticky-content">
+        <div v-if="!$q.screen.lt.sm" class="user-table-header row items-center q-px-lg q-mb-sm sticky-content">
           <div class="col-1 text-center text-weight-bold">ลำดับ</div>
           <div class="col-1 text-weight-bold">บัญชีผู้ใช้งาน</div>
           <div class="col-2 text-weight-bold">เลขบัตรประชาชน</div>
@@ -52,24 +54,71 @@
       </div>
 
       <div v-else class="user-list">
-        <div 
-          v-for="(user, index) in filteredUsers" 
-          :key="user.id ?? index"
-          class="user-card row items-center q-px-lg q-mb-md"
-        >
-          <div class="col-1 text-center user-index">{{ index + 1 }}</div>
-          <div class="col-1 text-weight-medium text-grey-8">{{ user.username }}</div>
-          <div class="col-2 text-grey-8 px-2">{{ user.PersonID_Onec || '-' }}</div>
-          <div class="col-2 text-weight-bold text-grey-9 text-truncate">
-            {{ (user.FirstName || '') + ' ' + (user.LastName || '') || user.fullname || '-' }}
+
+        <!-- Desktop Row Layout -->
+        <template v-if="!$q.screen.lt.sm">
+          <div
+            v-for="(user, index) in filteredUsers"
+            :key="user.id ?? index"
+            class="user-card row items-center q-px-lg q-mb-md"
+          >
+            <div class="col-1 text-center user-index">{{ index + 1 }}</div>
+            <div class="col-1 text-weight-medium text-grey-8">{{ user.username }}</div>
+            <div class="col-2 text-grey-8 px-2">{{ user.PersonID_Onec || '-' }}</div>
+            <div class="col-2 text-weight-bold text-grey-9 text-truncate">
+              {{ (user.FirstName || '') + ' ' + (user.LastName || '') || user.fullname || '-' }}
+            </div>
+            <div class="col-2 text-grey-8">{{ user.labels && user.labels.length > 0 ? user.labels.join(', ') : 'ไม่มีตำแหน่ง' }}</div>
+            <div class="col-1 text-grey-8">{{ user.affiliation || '-' }}</div>
+            <div class="col-3 text-right action-btns">
+              <q-btn unelevated color="primary" icon="fas fa-pencil" size="sm" class="q-mr-sm primary-action-btn" label="แก้ไข" no-caps @click="editUser(user)" />
+              <q-btn unelevated color="red" icon="fas fa-trash" size="sm" class="delete-action-btn" label="ลบ" no-caps @click="confirmDelete(user)" />
+            </div>
           </div>
-          <div class="col-2 text-grey-8">{{ user.labels && user.labels.length > 0 ? user.labels.join(', ') : 'ไม่มีตำแหน่ง' }}</div>
-          <div class="col-1 text-grey-8">{{ user.affiliation || '-' }}</div>
-          <div class="col-3 text-right action-btns">
-            <q-btn unelevated color="primary" icon="fas fa-pencil" size="sm" class="q-mr-sm primary-action-btn" label="แก้ไข" no-caps @click="editUser(user)" />
-            <q-btn unelevated color="red" icon="fas fa-trash" size="sm" class="delete-action-btn" label="ลบ" no-caps @click="confirmDelete(user)" />
+        </template>
+
+        <!-- Mobile Card Layout -->
+        <template v-else>
+          <div
+            v-for="(user, index) in filteredUsers"
+            :key="user.id ?? index"
+            class="user-mobile-card q-mb-md q-pa-md"
+          >
+            <div class="row items-center q-mb-sm">
+              <div class="user-mobile-index q-mr-sm">{{ index + 1 }}</div>
+              <div class="col">
+                <div class="text-weight-bold text-grey-9">
+                  {{ (user.FirstName || '') + ' ' + (user.LastName || '') || user.fullname || '-' }}
+                </div>
+                <div class="text-caption text-grey-6">{{ user.username }}</div>
+              </div>
+            </div>
+            <div class="user-mobile-info q-mb-sm">
+              <div class="row q-col-gutter-xs">
+                <div class="col-12">
+                  <span class="text-caption text-grey-5">บัตรประชาชน: </span>
+                  <span class="text-caption text-grey-8">{{ user.PersonID_Onec || '-' }}</span>
+                </div>
+                <div class="col-12">
+                  <span class="text-caption text-grey-5">ตำแหน่ง: </span>
+                  <span class="text-caption text-grey-8">{{ user.labels && user.labels.length > 0 ? user.labels.join(', ') : 'ไม่มีตำแหน่ง' }}</span>
+                </div>
+                <div class="col-12">
+                  <span class="text-caption text-grey-5">สังกัด: </span>
+                  <span class="text-caption text-grey-8">{{ user.affiliation || '-' }}</span>
+                </div>
+              </div>
+            </div>
+            <div class="row q-col-gutter-sm">
+              <div class="col-6">
+                <q-btn unelevated color="primary" icon="fas fa-pencil" size="sm" class="full-width primary-action-btn" label="แก้ไข" no-caps @click="editUser(user)" />
+              </div>
+              <div class="col-6">
+                <q-btn unelevated color="red" icon="fas fa-trash" size="sm" class="full-width delete-action-btn" label="ลบ" no-caps @click="confirmDelete(user)" />
+              </div>
+            </div>
           </div>
-        </div>
+        </template>
 
         <div v-if="filteredUsers.length === 0" class="text-center q-pa-xl text-grey-6">
           ไม่พบข้อมูลผู้ใช้งาน
@@ -681,6 +730,21 @@ onMounted(() => {
   }
 }
 
+@media (max-width: 599px) {
+  .search-input {
+    width: 100%;
+  }
+  .add-user-btn {
+    width: 100%;
+  }
+  .user-dialog-card {
+    border-radius: 24px !important;
+  }
+  .save-all-btn {
+    width: 100%;
+  }
+}
+
 .add-user-btn {
   border-radius: 15px;
   height: 48px;
@@ -859,6 +923,33 @@ onMounted(() => {
 
 .primary-action-btn { border-radius: 10px; }
 .delete-action-btn { border-radius: 10px; }
+
+.user-mobile-card {
+  background: white;
+  border-radius: 20px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.04);
+  border: 1px solid rgba(0,0,0,0.04);
+}
+
+.user-mobile-index {
+  background: #f1f5f9;
+  color: #94a3b8;
+  font-weight: 600;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+
+.user-mobile-info {
+  padding: 8px 12px;
+  background: #f8fafc;
+  border-radius: 12px;
+}
 
 .custom-pagination {
   :deep(.q-btn) {

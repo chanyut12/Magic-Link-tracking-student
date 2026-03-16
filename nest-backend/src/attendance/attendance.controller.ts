@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Body, Query, HttpException, HttpStatus } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Query,
+  HttpException,
+  HttpStatus,
+} from '@nestjs/common';
 import { AttendanceService } from './attendance.service';
 
 @Controller('api/attendance')
@@ -14,9 +22,13 @@ export class AttendanceController {
   async getSchools(
     @Query('province') province?: string,
     @Query('district') district?: string,
-    @Query('subDistrict') subDistrict?: string
+    @Query('subDistrict') subDistrict?: string,
   ) {
-    return await this.attendanceService.getSchools(province, district, subDistrict);
+    return await this.attendanceService.getSchools(
+      province,
+      district,
+      subDistrict,
+    );
   }
 
   @Get('locations')
@@ -28,7 +40,7 @@ export class AttendanceController {
   async getStudents(
     @Query('grade') grade?: string,
     @Query('room') room?: string,
-    @Query('schoolId') schoolId?: string
+    @Query('schoolId') schoolId?: string,
   ) {
     return await this.attendanceService.getStudents(grade, room, schoolId);
   }
@@ -42,7 +54,9 @@ export class AttendanceController {
   }
 
   @Post()
-  async saveAttendance(@Body() body: { records: { student_id: string; status: string }[] }) {
+  async saveAttendance(
+    @Body() body: { records: { student_id: string; status: string }[] },
+  ) {
     if (!body.records || !Array.isArray(body.records)) {
       throw new HttpException('Invalid records', HttpStatus.BAD_REQUEST);
     }
@@ -57,7 +71,7 @@ export class AttendanceController {
   @Get('rooms')
   async getRooms(
     @Query('grade') grade: string,
-    @Query('schoolId') schoolId?: string
+    @Query('schoolId') schoolId?: string,
   ) {
     if (!grade) {
       throw new HttpException('Grade is required', HttpStatus.BAD_REQUEST);

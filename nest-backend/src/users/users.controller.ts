@@ -1,4 +1,14 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, HttpException, HttpStatus } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Body,
+  Param,
+  HttpException,
+  HttpStatus,
+} from '@nestjs/common';
 import { UsersService } from './users.service';
 
 @Controller('api/users')
@@ -44,9 +54,15 @@ export class UsersController {
 
   @Post('login')
   async login(@Body() body: any) {
-    const user = await this.usersService.validateUser(body.username, body.password);
+    const user = await this.usersService.validateUser(
+      body.username,
+      body.password,
+    );
     if (!user) {
-      throw new HttpException('ชื่อผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง', HttpStatus.UNAUTHORIZED);
+      throw new HttpException(
+        'ชื่อผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง',
+        HttpStatus.UNAUTHORIZED,
+      );
     }
     return user;
   }

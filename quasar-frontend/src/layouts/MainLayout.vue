@@ -64,19 +64,32 @@
               <q-item-section>สร้างลิงค์</q-item-section>
             </q-item>
 
-            <q-item clickable v-ripple to="/attendance" class="nav-item">
-              <q-item-section avatar min-width="44px">
-                <i class="fas fa-clipboard-check"></i>
-              </q-item-section>
-              <q-item-section>เช็คชื่อ</q-item-section>
-            </q-item>
+            <q-expansion-item
+              clickable
+              class="nav-item"
+              :default-opened="isAttendanceRoute"
+            >
+              <template #header>
+                <q-item-section avatar min-width="44px">
+                  <i class="fas fa-clipboard-check"></i>
+                </q-item-section>
+                <q-item-section>ระบบเช็คชื่อ</q-item-section>
+              </template>
 
-            <q-item clickable v-ripple to="/attendance-dashboard" class="nav-item">
-              <q-item-section avatar min-width="44px">
-                <i class="fas fa-chart-bar"></i>
-              </q-item-section>
-              <q-item-section>Dashboard เช็คชื่อ</q-item-section>
-            </q-item>
+              <q-item clickable v-ripple to="/attendance-dashboard" class="nav-sub-item">
+                <q-item-section avatar min-width="44px">
+                  <i class="fas fa-chart-bar"></i>
+                </q-item-section>
+                <q-item-section>Dashboard เช็คชื่อ</q-item-section>
+              </q-item>
+
+              <q-item clickable v-ripple to="/attendance" class="nav-sub-item">
+                <q-item-section avatar min-width="44px">
+                  <i class="fas fa-edit"></i>
+                </q-item-section>
+                <q-item-section>เช็คชื่อ</q-item-section>
+              </q-item>
+            </q-expansion-item>
 
             <q-item clickable v-ripple to="/manage-users" class="nav-item">
               <q-item-section avatar min-width="44px">
@@ -170,6 +183,10 @@ const userInitials = computed(() => {
 
 const hideNavigation = computed(() => !!route.meta.hideNav);
 
+const isAttendanceRoute = computed(() => 
+  route.path === '/attendance' || route.path === '/attendance-dashboard'
+);
+
 const pageTitle = computed(() => {
   if (route.path === '/') return 'หน้าหลัก';
   if (route.path === '/dashboard') return 'รายงานนักเรียน';
@@ -208,6 +225,21 @@ async function logout() {
   .q-item__section--avatar {
     min-width: 32px !important;
     padding-right: 0 !important;
+  }
+}
+
+.nav-sub-item {
+  padding-left: 24px !important;
+  background: #f8fafc;
+  
+  .q-item__section--avatar {
+    min-width: 32px !important;
+    padding-right: 0 !important;
+  }
+  
+  &.q-router-link--active {
+    background: #eff6ff;
+    border-left: 3px solid var(--q-primary);
   }
 }
 

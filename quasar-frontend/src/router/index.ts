@@ -33,20 +33,17 @@ export default defineRouter(function (/* { store, ssrContext } */) {
     history: createHistory(process.env.VUE_ROUTER_BASE),
   });
 
-  Router.beforeEach((to, from, next) => {
+  Router.beforeEach((to) => {
     const isAdmin = localStorage.getItem('admin_access') === 'true';
     if (to.matched.some(record => record.meta.requiresAuth)) {
       if (!isAdmin) {
-        next({
+        return {
           path: '/admin-access',
           query: { next: to.fullPath }
-        });
-      } else {
-        next();
+        };
       }
-    } else {
-      next();
     }
+    return true;
   });
 
   return Router;

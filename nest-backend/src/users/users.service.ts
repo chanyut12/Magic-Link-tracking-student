@@ -26,30 +26,39 @@ export class UsersService {
   async createUser(data: any) {
     try {
       return await this.db.transaction(async (client) => {
-        const userRes = await client.query(`
+        const userRes = await client.query(
+          `
           INSERT INTO users (username, password, "FirstName", "LastName", "PersonID_Onec", phone, email, affiliation, status, permissions)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
           RETURNING id
-        `, [
-          data.username, 
-          data.password || '123456', // Assuming password hashing happens elsewhere or is handled by default
-          data.FirstName, 
-          data.LastName, 
-          data.PersonID_Onec,
-          data.phone, 
-          data.email, 
-          data.affiliation, 
-          data.status || 'ACTIVE',
-          JSON.stringify(data.permissions || [])
-        ]);
+        `,
+          [
+            data.username,
+            data.password || '123456', // Assuming password hashing happens elsewhere or is handled by default
+            data.FirstName,
+            data.LastName,
+            data.PersonID_Onec,
+            data.phone,
+            data.email,
+            data.affiliation,
+            data.status || 'ACTIVE',
+            JSON.stringify(data.permissions || []),
+          ],
+        );
 
         const userId = userRes.rows[0].id;
 
         if (data.roles && Array.isArray(data.roles)) {
           for (const roleName of data.roles) {
-            const roleRes = await client.query('SELECT id FROM roles WHERE name = $1', [roleName]);
+            const roleRes = await client.query(
+              'SELECT id FROM roles WHERE name = $1',
+              [roleName],
+            );
             if (roleRes.rows[0]) {
-              await client.query('INSERT INTO user_roles (user_id, role_id) VALUES ($1, $2)', [userId, roleRes.rows[0].id]);
+              await client.query(
+                'INSERT INTO user_roles (user_id, role_id) VALUES ($1, $2)',
+                [userId, roleRes.rows[0].id],
+              );
             }
           }
         }
@@ -65,7 +74,7 @@ export class UsersService {
     try {
       return await this.db.transaction(async (client) => {
         // Construct the SET clause dynamically for optional password update
-        let setClauses = [
+        const setClauses = [
           `username = $1`,
           `"FirstName" = $2`,
           `"LastName" = $3`,
@@ -74,41 +83,50 @@ export class UsersService {
           `email = $6`,
           `affiliation = $7`,
           `status = $8`,
-          `permissions = $9`
+          `permissions = $9`,
         ];
         const queryParams = [
-          data.username, 
-          data.FirstName, 
-          data.LastName, 
+          data.username,
+          data.FirstName,
+          data.LastName,
           data.PersonID_Onec,
-          data.phone, 
-          data.email, 
-          data.affiliation, 
-          data.status, 
-          JSON.stringify(data.permissions || [])
+          data.phone,
+          data.email,
+          data.affiliation,
+          data.status,
+          JSON.stringify(data.permissions || []),
         ];
         let paramIndex = queryParams.length + 1;
 
         if (data.password) {
           // Assuming password hashing happens elsewhere or is handled by default
           setClauses.push(`password = $${paramIndex++}`);
-          queryParams.push(data.password); 
+          queryParams.push(data.password);
         }
-        
+
         queryParams.push(id); // Add id for WHERE clause
 
-        await client.query(`
+        await client.query(
+          `
           UPDATE users
           SET ${setClauses.join(', ')}
           WHERE id = $${paramIndex}
-        `, queryParams);
+        `,
+          queryParams,
+        );
 
         if (data.roles && Array.isArray(data.roles)) {
           await client.query('DELETE FROM user_roles WHERE user_id = $1', [id]);
           for (const roleName of data.roles) {
-            const roleRes = await client.query('SELECT id FROM roles WHERE name = $1', [roleName]);
+            const roleRes = await client.query(
+              'SELECT id FROM roles WHERE name = $1',
+              [roleName],
+            );
             if (roleRes.rows[0]) {
-              await client.query('INSERT INTO user_roles (user_id, role_id) VALUES ($1, $2)', [id, roleRes.rows[0].id]);
+              await client.query(
+                'INSERT INTO user_roles (user_id, role_id) VALUES ($1, $2)',
+                [id, roleRes.rows[0].id],
+              );
             }
           }
         }
@@ -126,8 +144,10 @@ export class UsersService {
         this.logger.log(`Attempting to delete user with ID: ${id}`);
         // Explicitly delete user roles first to be safe, even though we have ON DELETE CASCADE
         await client.query('DELETE FROM user_roles WHERE user_id = $1', [id]);
-        const result = await client.query('DELETE FROM users WHERE id = $1', [id]);
-        
+        const result = await client.query('DELETE FROM users WHERE id = $1', [
+          id,
+        ]);
+
         if (result.rowCount === 0) {
           throw new Error('ไม่พบข้อมูลผู้ใช้งานที่ต้องการลบ');
         }
