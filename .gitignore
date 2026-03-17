@@ -1,14 +1,26 @@
+# Node
 node_modules/
-.claude
-/skill
+nest-backend/node_modules/
+quasar-frontend/node_modules/
+
+# Build
+nest-backend/dist/
+quasar-frontend/dist/
+quasar-frontend/.quasar/
+
+# Environment
 .env
+nest-backend/.env
+quasar-frontend/.env
+
+# DB
 db/*.db-wal
 db/*.db-shm
-uploads/*
-!uploads/.gitkeep
-/docs
-/UI
-/node_modules
+db/*.db
+!db/.gitkeep
+
+# System
 .DS_Store
-~$*.docx
-db/test.db
+Thumbs.db
+
+.agents
