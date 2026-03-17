@@ -25,7 +25,8 @@ export class CaseService {
 
   private getCaseStatusByAction(action: ReviewAction): string {
     if (action === 'CLOSE') return 'RESOLVED';
-    return 'IN_PROGRESS';
+    if (action === 'FORWARD') return 'AWAITING_HELP';
+    return 'IN_PROGRESS'; // ASSIST — วนกลับเข้ากระบวนการติดตามใหม่
   }
 
   async reviewCase(caseId: number, body: Record<string, unknown>) {
@@ -77,6 +78,43 @@ export class CaseService {
       };
     } catch (err) {
       this.logger.error(`reviewCase error: ${err.message}`);
+      throw err;
+    }
+  }
+
+  async getTasksByCase(caseId: number) {
+    try {
+      const caseResult = await this.db.query(
+        `SELECT id FROM cases WHERE id = $1 LIMIT 1`,
+        [caseId],
+      );
+      if (!caseResult.rows[0]) {
+        throw new Error('Case not found');
+      }
+
+      const result = await this.db.query(
+        `
+        SELECT
+          t.id AS task_id,
+          t.created_at,
+          tl.assigned_to_name AS initial_assignee,
+          (SELECT COUNT(*) FROM task_links WHERE task_id = t.id) AS link_count,
+          EXISTS(
+            SELECT 1 FROM task_links tl2
+            JOIN task_submissions ts ON ts.task_link_id = tl2.id
+            WHERE tl2.task_id = t.id
+          ) AS has_submission
+        FROM tasks t
+        LEFT JOIN task_links tl ON tl.task_id = t.id AND tl.delegation_depth = 0
+        WHERE t.case_id = $1
+        ORDER BY t.created_at ASC
+        `,
+        [caseId],
+      );
+
+      return { success: true, data: result.rows };
+    } catch (err) {
+      this.logger.error(`getTasksByCase error: ${err.message}`);
       throw err;
     }
   }

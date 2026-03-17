@@ -34,6 +34,24 @@ export class CaseController {
     }
   }
 
+  @Get(':caseId/tasks')
+  async getCaseTasks(@Param('caseId') caseIdParam: string) {
+    const caseId = Number(caseIdParam);
+    if (!Number.isInteger(caseId) || caseId <= 0) {
+      throw new HttpException('Invalid case id', HttpStatus.BAD_REQUEST);
+    }
+
+    try {
+      return await this.caseService.getTasksByCase(caseId);
+    } catch (err) {
+      const status =
+        err.message === 'Case not found'
+          ? HttpStatus.NOT_FOUND
+          : HttpStatus.BAD_REQUEST;
+      throw new HttpException(err.message, status);
+    }
+  }
+
   @Get(':caseId/reviews')
   async getCaseReviews(@Param('caseId') caseIdParam: string) {
     const caseId = Number(caseIdParam);

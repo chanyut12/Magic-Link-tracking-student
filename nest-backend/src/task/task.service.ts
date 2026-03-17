@@ -63,30 +63,47 @@ export class TaskService {
         let caseId: number | null = null;
 
         if (taskType === 'VISIT') {
-          const studentName = clean(data.student_name);
-          if (!studentName)
-            throw new Error('student_name is required for Field Visit');
+          const existingCaseId = data.existing_case_id
+            ? Number(data.existing_case_id)
+            : null;
 
-          const caseResult = await client.query(
-            `
-            INSERT INTO cases (student_name, student_school, student_address, student_lat, student_lng, reason_flagged)
-            VALUES ($1, $2, $3, $4, $5, $6)
-            RETURNING id
-          `,
-            [
-              studentName,
-              clean(data.student_school),
-              clean(data.student_address),
-              parseFloat(data.student_lat) || null,
-              parseFloat(data.student_lng) || null,
-              clean(data.reason_flagged),
-            ],
-          );
-          caseId = caseResult.rows[0].id;
-          await client.query(
-            `UPDATE cases SET status = 'IN_PROGRESS' WHERE id = $1`,
-            [caseId],
-          );
+          if (existingCaseId) {
+            const caseCheck = await client.query(
+              `SELECT id FROM cases WHERE id = $1 LIMIT 1`,
+              [existingCaseId],
+            );
+            if (!caseCheck.rows[0]) throw new Error('Case not found');
+            caseId = existingCaseId;
+            await client.query(
+              `UPDATE cases SET status = 'IN_PROGRESS' WHERE id = $1`,
+              [caseId],
+            );
+          } else {
+            const studentName = clean(data.student_name);
+            if (!studentName)
+              throw new Error('student_name is required for Field Visit');
+
+            const caseResult = await client.query(
+              `
+              INSERT INTO cases (student_name, student_school, student_address, student_lat, student_lng, reason_flagged)
+              VALUES ($1, $2, $3, $4, $5, $6)
+              RETURNING id
+            `,
+              [
+                studentName,
+                clean(data.student_school),
+                clean(data.student_address),
+                parseFloat(data.student_lat) || null,
+                parseFloat(data.student_lng) || null,
+                clean(data.reason_flagged),
+              ],
+            );
+            caseId = caseResult.rows[0].id;
+            await client.query(
+              `UPDATE cases SET status = 'IN_PROGRESS' WHERE id = $1`,
+              [caseId],
+            );
+          }
         }
 
         await client.query(
