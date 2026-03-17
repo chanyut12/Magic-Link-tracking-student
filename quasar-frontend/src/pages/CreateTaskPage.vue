@@ -8,14 +8,15 @@
           <h1 class="text-h4 text-weight-bolder text-gray-900 q-mb-xs">{{ pageTitle }}</h1>
           <div class="text-gray-500 font-weight-bold">เลือกประเภทและกรอกข้อมูลให้ครบถ้วน</div>
         </div>
-        <q-btn flat class="btn-back-home" to="/" no-caps>
-          <i class="fas fa-arrow-left q-mr-sm"></i> ย้อนกลับหน้าหลัก
-        </q-btn>
       </div>
 
       <!-- Step Indicator -->
       <div class="step-indicator q-mb-xl" v-if="!showResult">
-        <div class="step" :class="{ active: currentStep === 1 }">
+        <div 
+          class="step" 
+          :class="{ active: currentStep === 1, 'cursor-pointer': currentStep > 1 }"
+          @click="currentStep > 1 ? currentStep = 1 : null"
+        >
           <span class="step-num">1</span> เลือกประเภท
         </div>
         <div class="step" :class="{ active: currentStep === 2 }">
@@ -668,6 +669,18 @@ const normalizePublicLink = (rawLink: string) => {
   gap: 0.75rem;
   color: #94a3b8;
   font-weight: 700;
+  transition: all 0.2s ease;
+  
+  &.cursor-pointer:hover {
+    color: #2563eb;
+    transform: translateY(-1px);
+    
+    .step-num {
+      background: rgba(37, 99, 235, 0.1);
+      color: #2563eb;
+      border-color: #2563eb;
+    }
+  }
   
   &.active {
     color: #2563eb;
