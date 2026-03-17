@@ -9,14 +9,14 @@
           <div 
             class="tab-item" 
             :class="{ active: currentTab === 'today' }" 
-            @click="currentTab = 'today'"
+            @click="currentTab = 'today'; fetchTodayRecords()"
           >
             เช็คชื่อวันนี้
           </div>
           <div 
             class="tab-item" 
             :class="{ active: currentTab === 'history' }" 
-            @click="currentTab = 'history'"
+            @click="currentTab = 'history'; fetchHistory()"
           >
             ประวัติการเช็คชื่อ
           </div>
@@ -62,7 +62,7 @@
             <div class="col-12 col-sm-auto">
               <div class="student-count-chip full-width justify-center">
                 <i class="fas fa-users"></i>
-                <span>{{ filteredStudents.length }} คน</span>
+                <span>{{ filteredDisplayList.length }} คน</span>
               </div>
             </div>
           </div>
@@ -120,8 +120,8 @@
       <!-- Table Header (Desktop) -->
       <div class="table-header d-none-mobile" v-if="filteredDisplayList.length > 0">
         <div>ชื่อ - นามสกุล</div>
-        <div class="text-center">{{ currentTab === 'today' ? 'ขาด' : 'วันที่ประมวลผล' }}</div>
-        <div class="text-center">{{ currentTab === 'today' ? 'สาย' : '-' }}</div>
+        <div class="text-center">{{ currentTab === 'today' ? 'ขาด' : '' }}</div>
+        <div class="text-center">{{ currentTab === 'today' ? 'สาย' : '' }}</div>
         <div class="text-right">สถานะเช็คชื่อ</div>
       </div>
 
@@ -181,8 +181,8 @@
           </template>
 
           <template v-else>
-            <div class="count-badge" style="font-size: 0.8rem; color: #94a3b8;">{{ 'check_date' in s ? s.check_date || '-' : '-' }}</div>
-            <div class="count-badge">-</div>
+            <div></div>
+            <div></div>
             <div class="text-right">
               <div :class="['status-display', getStatusClass('status' in s ? s.status : 'NONE')]">
                 <i :class="['fas', getStatusIcon('status' in s ? s.status : 'NONE')]"></i>
@@ -278,7 +278,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, watch } from 'vue';
+import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue';
 import { api } from 'boot/axios';
 import { useQuasar } from 'quasar';
 
@@ -299,6 +299,7 @@ interface AttendanceRecord {
   status: string;
   check_date?: string;
   PersonID_Onec?: string;
+  school_id?: string | number;
 }
 
 interface GradeLevel {
@@ -558,7 +559,13 @@ const fetchHistory = async () => {
   if (!historyDate.value) return;
   try {
     const res = await api.get(`/api/attendance/history?date=${historyDate.value}`);
-    history.value = res.data.data;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    history.value = res.data.data.map((r: any) => ({
+      ...r,
+      id: r.PersonID_Onec || r.student_id || r.id,
+      name: r.name || r.student_name,
+      recorded_by: r.RecordedBy || r.recorded_by || 'Admin'
+    }));
   } catch (err) {
     console.error('Fetch history error:', err);
   }
@@ -596,19 +603,24 @@ const saveAttendance = async () => {
 };
 
 const filteredStudents = computed(() => {
-  return students.value.filter(s => {
-    const matchesSearch = s.name.toLowerCase().includes(searchQuery.value.toLowerCase()) || s.id.includes(searchQuery.value);
-    return matchesSearch;
-  });
+  return students.value
+    .filter(s => {
+      const matchesSearch = s.name.toLowerCase().includes(searchQuery.value.toLowerCase()) || s.id.includes(searchQuery.value);
+      return matchesSearch;
+    })
+    .sort((a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name));
 });
 
 const filteredHistory = computed(() => {
-  return history.value.filter(h => {
-    const matchesSearch = h.name.toLowerCase().includes(searchQuery.value.toLowerCase()) || h.id.includes(searchQuery.value);
-    const matchesGrade = h.grade === filters.grade;
-    const matchesRoom = h.room === filters.room;
-    return matchesSearch && matchesGrade && matchesRoom;
-  });
+  return history.value
+    .filter(h => {
+      const matchesSearch = h.name.toLowerCase().includes(searchQuery.value.toLowerCase()) || h.id.includes(searchQuery.value);
+      const matchesGrade = h.grade === filters.grade;
+      const matchesRoom = h.room === filters.room;
+      const matchesSchool = !filters.schoolId || String(h.school_id) === String(filters.schoolId);
+      return matchesSearch && matchesGrade && matchesRoom && matchesSchool;
+    })
+    .sort((a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name));
 });
 
 const filteredDisplayList = computed(() => {
@@ -672,13 +684,24 @@ watch(historyDate, () => {
   void fetchHistory();
 });
 
+let polling: ReturnType<typeof setInterval> | null = null;
+
 onMounted(async () => {
   await fetchLocations();
-  await fetchSchools(); // Fetch default schools (first batch)
+  await fetchSchools(); 
   await fetchGradeLevels();
   await fetchRooms();
   await fetchStudents();
   await fetchTodayRecords();
+
+  polling = setInterval(() => {
+    if (currentTab.value === 'today') void fetchTodayRecords();
+    else void fetchHistory();
+  }, 5000); // 5 seconds
+});
+
+onUnmounted(() => {
+  if (polling) clearInterval(polling);
 });
 </script>
 
@@ -686,6 +709,7 @@ onMounted(async () => {
 .attendance-page {
   background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
   min-height: 100vh;
+  overflow-y: scroll; /* Prevent scrollbar layout shift */
 }
 
 .page-container {
@@ -833,13 +857,16 @@ onMounted(async () => {
   align-items: center;
   gap: 0.75rem;
   background: white;
-  padding: 8px 16px;
-  border-radius: 12px;
-  border: 1px solid #e2e8f0;
+  padding: 0 16px;
+  height: 40px; /* Match height of filter buttons */
+  border-radius: 99px; /* Match rounded visual style */
+  border: 1.5px solid #dbeafe; /* Match primary soft border */
   transition: all 0.2s;
+  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.05); /* Match subtle shadow */
   
   &:hover {
     border-color: #3b82f6;
+    background-color: #f8fbff;
   }
 }
 

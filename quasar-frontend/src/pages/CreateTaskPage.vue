@@ -161,12 +161,51 @@
 
         <!-- Attendance Form -->
         <div v-if="formData.type === 'ATTENDANCE'" class="card q-mb-md">
-          <div class="card-title">ข้อมูลชั้นเรียน</div>
+          <div class="card-title">ข้อมูลชั้นเรียน & สถานศึกษา</div>
+          
+          <div class="q-gutter-y-md q-mb-md">
+            <!-- Province -->
+            <div class="form-group">
+              <label>จังหวัด *</label>
+              <select v-model="tempFilters.province" @change="onProvinceChange">
+                <option value="">-- เลือกจังหวัด --</option>
+                <option v-for="p in locationData.provinces" :key="p" :value="p">{{ p }}</option>
+              </select>
+            </div>
+
+            <!-- District -->
+            <div class="form-group">
+              <label>อำเภอ *</label>
+              <select v-model="tempFilters.district" @change="onDistrictChange" :disabled="!tempFilters.province">
+                <option value="">-- เลือกอำเภอ --</option>
+                <option v-for="d in filteredDistricts" :key="d" :value="d">{{ d }}</option>
+              </select>
+            </div>
+
+            <!-- Sub-district -->
+            <div class="form-group">
+              <label>ตำบล *</label>
+              <select v-model="tempFilters.subDistrict" @change="onSubDistrictChange" :disabled="!tempFilters.district">
+                <option value="">-- เลือกตำบล --</option>
+                <option v-for="sd in filteredSubDistricts" :key="sd" :value="sd">{{ sd }}</option>
+              </select>
+            </div>
+
+            <!-- School -->
+            <div class="form-group">
+              <label>โรงเรียน *</label>
+              <select v-model="formData.target_school_id" :disabled="!tempFilters.subDistrict">
+                <option value="">-- เลือกโรงเรียน --</option>
+                <option v-for="s in tempSchools" :key="s.id" :value="String(s.id)">{{ s.name }}</option>
+              </select>
+            </div>
+          </div>
+
           <div class="row q-col-gutter-md">
             <div class="col-12 col-sm-6">
               <div class="form-group">
                 <label>ระดับชั้น *</label>
-                <select v-model="formData.target_grade">
+                <select v-model="formData.target_grade" style="width: 100% !important; height: 48px; display: block;">
                   <option value="">-- เลือกชั้น --</option>
                   <option v-for="gl in gradeLevels" :key="gl.id" :value="gl.label">{{ gl.label }}</option>
                 </select>
@@ -175,7 +214,7 @@
             <div class="col-12 col-sm-6">
               <div class="form-group">
                 <label>ห้อง *</label>
-                <select v-model="formData.target_room">
+                <select v-model="formData.target_room" style="width: 100% !important; height: 48px; display: block;">
                   <option value="">-- เลือกห้อง --</option>
                   <option v-for="r in ['1', '2', '3', '4', '5', '6']" :key="r" :value="r">{{ r }}</option>
                 </select>
@@ -297,29 +336,102 @@ const formData = reactive({
   assigned_to_name: '',
   assigned_to_email: '',
   expires_value: 1,
-  expires_unit: 'days'
+  expires_unit: 'days',
+  target_school_id: '', // Added for attendance scoping
 });
 
-interface GradeLevel {
-  id: number;
-  label: string;
-}
+interface GradeLevel { id: number; label: string; }
+interface School { id: number; name: string; }
+interface District { province: string; district: string; }
+interface SubDistrict { province: string; district: string; sub_district: string; }
 
 const gradeLevels = ref<GradeLevel[]>([]);
+
+// Location Cascade Data
+const locationData = reactive({
+  provinces: [] as string[],
+  districts: [] as District[],
+  subDistricts: [] as SubDistrict[]
+});
+
+const tempFilters = reactive({
+  province: '',
+  district: '',
+  subDistrict: '',
+});
+
+const tempSchools = ref<School[]>([]);
+
+const filteredDistricts = computed(() => {
+  if (!tempFilters.province) return [];
+  return Array.from(new Set(
+    locationData.districts
+      .filter((d: District) => d.province === tempFilters.province)
+      .map((d: District) => d.district)
+  ));
+});
+
+const filteredSubDistricts = computed(() => {
+  if (!tempFilters.district) return [];
+  return Array.from(new Set(
+    locationData.subDistricts
+      .filter((sd: SubDistrict) => sd.province === tempFilters.province && sd.district === tempFilters.district)
+      .map((sd: SubDistrict) => sd.sub_district)
+  ));
+});
+
+const fetchLocations = async () => {
+  try {
+    const res = await api.get('/api/attendance/locations');
+    Object.assign(locationData, res.data.data);
+  } catch (err) {
+    console.error('Fetch locations error:', err);
+  }
+};
+
+const onProvinceChange = () => {
+  tempFilters.district = '';
+  tempFilters.subDistrict = '';
+  formData.target_school_id = '';
+  tempSchools.value = [];
+};
+
+const onDistrictChange = () => {
+  tempFilters.subDistrict = '';
+  formData.target_school_id = '';
+  tempSchools.value = [];
+};
+
+const onSubDistrictChange = async () => {
+  formData.target_school_id = '';
+  if (!tempFilters.subDistrict) return;
+  try {
+    const res = await api.get('/api/attendance/schools', {
+      params: {
+        province: tempFilters.province,
+        district: tempFilters.district,
+        subDistrict: tempFilters.subDistrict
+      }
+    });
+    tempSchools.value = res.data.data;
+  } catch (err) {
+    console.error('Fetch temp schools error:', err);
+  }
+};
 
 const fetchGradeLevels = async () => {
   try {
     const res = await api.get('/api/attendance/grade-levels');
     gradeLevels.value = res.data.data;
-    if (gradeLevels.value.length > 0 && !formData.target_grade) {
-      formData.target_grade = gradeLevels.value[0]?.label || '';
-    }
   } catch (err) {
     console.error('Fetch grade levels error:', err);
   }
 };
 
-onMounted(fetchGradeLevels);
+onMounted(async () => {
+  await fetchGradeLevels();
+  void fetchLocations();
+});
 
 const pageTitle = computed(() => {
   if (currentStep.value === 1) return 'สร้างภารกิจ';
@@ -380,6 +492,21 @@ const submitForm = async () => {
     $q.notify({ message: 'กรุณากรอกข้อมูลให้ครบถ้วน', color: 'negative' });
     return;
   }
+
+  const validateEmail = (email: string) => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  };
+
+  if (!validateEmail(formData.assigned_to_email)) {
+    $q.notify({ message: 'รูปแบบอีเมลไม่ถูกต้อง', color: 'negative' });
+    return;
+  }
+  if (formData.type === 'ATTENDANCE') {
+    if (!formData.target_school_id || !formData.target_grade || !formData.target_room) {
+      $q.notify({ message: 'กรุณาเลือกโรงเรียน ระดับชั้น และห้องให้ครบถ้วน', color: 'negative' });
+      return;
+    }
+  }
   if (formData.type === 'VISIT') {
     const hasRequiredAddressParts = [
       formData.student_address_house_no,
@@ -407,6 +534,7 @@ const submitForm = async () => {
       student_address: formData.type === 'VISIT' ? buildDetailedAddress(formData) : formData.student_address,
       task_type: formData.type, // Backend expects task_type
       subject: formData.target_subject || null,
+      target_school_id: formData.type === 'ATTENDANCE' && formData.target_school_id ? parseInt(formData.target_school_id, 10) : null,
     };
     const res = await api.post('/api/tasks', payload);
     resultLink.value = normalizePublicLink(res.data.magic_link);

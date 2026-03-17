@@ -108,8 +108,8 @@ export class TaskService {
 
         await client.query(
           `
-          INSERT INTO tasks (id, case_id, task_type, target_grade, target_room, status)
-          VALUES ($1, $2, $3, $4, $5, 'IN_PROGRESS')
+          INSERT INTO tasks (id, case_id, task_type, target_grade, target_room, status, target_school_id)
+          VALUES ($1, $2, $3, $4, $5, 'IN_PROGRESS', $6)
         `,
           [
             taskId,
@@ -117,6 +117,7 @@ export class TaskService {
             taskType,
             clean(data.target_grade) || null,
             clean(data.target_room) || null,
+            data.target_school_id ? parseInt(data.target_school_id, 10) : null,
           ],
         );
 
@@ -167,9 +168,11 @@ export class TaskService {
 
     const resultLink = await this.db.query(
       `
-      SELECT tl.*, t.task_type, t.target_grade, t.target_room, t.status as task_status, t.max_delegation_depth
+      SELECT tl.*, t.task_type, t.target_grade, t.target_room, t.target_school_id, t.status as task_status, t.max_delegation_depth,
+             s.name as school_name
       FROM task_links tl
       JOIN tasks t ON t.id = tl.task_id
+      LEFT JOIN schools s ON s.id = t.target_school_id
       WHERE tl.token_hash = $1
     `,
       [tokenHash],
@@ -210,13 +213,21 @@ export class TaskService {
       task_type: link.task_type,
       target_grade: link.target_grade,
       target_room: link.target_room,
+      target_school_id: link.target_school_id,
       assigned_to_name: link.assigned_to_name,
       delegation_depth: link.delegation_depth,
       max_delegation_depth: link.max_delegation_depth,
       can_delegate: canDelegate,
       expires_at: link.expires_at,
       subject: link.subject,
+      school_name: link.school_name,
     };
+
+    const hasEmailForOtp =
+      typeof link.assigned_to_email === 'string' &&
+      link.assigned_to_email.trim().length > 0;
+
+    result.auth_required = !!(hasEmailForOtp && !link.otp_verified);
 
     if (link.task_type === 'VISIT') {
       const caseResult = await this.db.query(
@@ -228,12 +239,8 @@ export class TaskService {
         [link.task_id],
       );
       const caseData = caseResult.rows[0];
-      const hasEmailForOtp =
-        typeof link.assigned_to_email === 'string' &&
-        link.assigned_to_email.trim().length > 0;
 
-      if (hasEmailForOtp && !link.otp_verified) {
-        result.auth_required = true;
+      if (result.auth_required) {
         result.student_name = maskName(caseData?.student_name);
         result.student_school = maskName(caseData?.student_school);
         result.student_address = '*** (กรุณายืนยันตัวตน) ***';
@@ -241,7 +248,6 @@ export class TaskService {
         result.student_lat = null;
         result.student_lng = null;
       } else {
-        result.auth_required = false;
         result.student_name = caseData?.student_name || null;
         result.student_school = caseData?.student_school || null;
         result.student_address = caseData?.student_address || null;
@@ -249,8 +255,6 @@ export class TaskService {
         result.student_lng = caseData?.student_lng || null;
         result.reason_flagged = caseData?.reason_flagged || null;
       }
-    } else {
-      result.auth_required = false;
     }
 
     return result;
@@ -264,7 +268,7 @@ export class TaskService {
       }
 
       let query = `
-        SELECT 
+        SELECT DISTINCT ON (s."PersonID_Onec")
           s."PersonID_Onec" as id,
           (s."FirstName_Onec" || ' ' || s."LastName_Onec") as name,
           COALESCE(gl.label, 'ไม่ทราบ') as grade,
@@ -284,6 +288,13 @@ export class TaskService {
         query += ` AND s."RoomID_Onec" = $${params.length}`;
       }
 
+      if ('target_school_id' in task && task.target_school_id) {
+        params.push(task.target_school_id);
+        query += ` AND s."SchoolID_Onec" = $${params.length}`;
+      }
+
+      query += ` ORDER BY s."PersonID_Onec" ASC`;
+      
       const result = await this.db.query(query, params);
       return { success: true, data: result.rows };
     } catch (err) {
@@ -301,7 +312,7 @@ export class TaskService {
 
       const result = await this.db.query(
         `
-        SELECT 
+        SELECT DISTINCT ON (a."PersonID_Onec")
           a."PersonID_Onec" as student_id,
           (s."FirstName_Onec" || ' ' || s."LastName_Onec") as student_name,
           a."AttendanceStatus" as status
@@ -310,8 +321,11 @@ export class TaskService {
         WHERE a."AttendanceDate" = $1
           AND s."GradeLevelID_Onec" = (SELECT id FROM grade_levels WHERE label = $2)
           AND s."RoomID_Onec" = $3
+          AND a."Period" = 1
+          AND s."SchoolID_Onec" = $4
+        ORDER BY a."PersonID_Onec" ASC
       `,
-        [date, task.target_grade, parseInt(task.target_room || '0', 10)],
+        [date, task.target_grade, parseInt(task.target_room || '0', 10), task.target_school_id],
       );
 
       return { success: true, data: result.rows };
@@ -397,6 +411,9 @@ export class TaskService {
   async saveTaskAttendance(token: string, records: any[]) {
     const today = new Date().toISOString().split('T')[0];
     try {
+      const task = await this.getTaskByToken(token);
+      const recorder = task?.assigned_to_name || 'Teacher (Magic Link)';
+
       await this.db.transaction(async (client) => {
         for (const record of records) {
           // Fetch student metadata to satisfy new schema
@@ -442,7 +459,7 @@ export class TaskService {
                     ? 2
                     : 3,
                 1, // Default to Period 1 for demo
-                'Teacher (Magic Link)',
+                recorder,
               ],
             );
           }

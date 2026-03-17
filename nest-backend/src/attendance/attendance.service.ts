@@ -123,6 +123,7 @@ export class AttendanceService {
         `
         SELECT 
           a.*, 
+          a."SchoolID_Onec" as school_id,
           (s."FirstName_Onec" || ' ' || s."LastName_Onec") as name,
           COALESCE(gl.label, 'ไม่ทราบ') as grade,
           s."RoomID_Onec"::text as room,
