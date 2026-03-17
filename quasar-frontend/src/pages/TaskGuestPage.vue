@@ -295,6 +295,12 @@ const fetchData = async () => {
       return;
     }
 
+    if (res.data.status === 'ADMIN_LOCKED') {
+      const reason = res.data.reason ? `?reason=${encodeURIComponent(res.data.reason)}` : '';
+      void router.push(`/task/${token}/locked${reason}`);
+      return;
+    }
+
     task.value = res.data;
     authRequired.value = !!res.data.auth_required;
 

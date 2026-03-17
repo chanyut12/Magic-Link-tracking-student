@@ -153,6 +153,186 @@
           </div>
         </div>
 
+        <!-- ASSIST: สร้าง Link มอบหมายใหม่ -->
+        <div v-if="canCreateNewLink" class="assist-card q-mb-md">
+          <div class="assist-card__header">
+            <q-icon name="volunteer_activism" size="1.6rem" color="white" />
+            <div>
+              <div class="assist-card__title">มอบหมายงานรอบใหม่</div>
+              <div class="assist-card__sub">ผอ. อนุมัติให้ความช่วยเหลือ — กรุณาระบุผู้รับผิดชอบ</div>
+            </div>
+          </div>
+
+          <div class="assist-card__body">
+            <div class="assist-steps">
+              <div class="assist-step">
+                <div class="step-num">1</div>
+                <div class="step-label">ระบุผู้รับมอบหมาย</div>
+              </div>
+              <div class="step-divider"></div>
+              <div class="assist-step">
+                <div class="step-num">2</div>
+                <div class="step-label">กำหนดอายุ Link</div>
+              </div>
+              <div class="step-divider"></div>
+              <div class="assist-step">
+                <div class="step-num">3</div>
+                <div class="step-label">ส่ง Link ให้ผู้รับ</div>
+              </div>
+            </div>
+
+            <div class="assist-fields">
+              <q-input
+                v-model="newLinkForm.assigned_to_name"
+                label="ชื่อผู้รับมอบหมาย *"
+                outlined
+                dense
+                class="q-mb-sm"
+                placeholder="ชื่อ-นามสกุล"
+                bg-color="white"
+              >
+                <template #prepend><q-icon name="person" color="primary" /></template>
+              </q-input>
+
+              <q-input
+                v-model="newLinkForm.assigned_to_phone"
+                label="เบอร์โทรศัพท์"
+                outlined
+                dense
+                class="q-mb-sm"
+                placeholder="0xx-xxx-xxxx"
+                bg-color="white"
+              >
+                <template #prepend><q-icon name="phone" color="primary" /></template>
+              </q-input>
+
+              <q-input
+                v-model="newLinkForm.assigned_to_email"
+                label="อีเมล (ไม่บังคับ)"
+                outlined
+                dense
+                class="q-mb-sm"
+                placeholder="example@email.com"
+                bg-color="white"
+              >
+                <template #prepend><q-icon name="email" color="primary" /></template>
+              </q-input>
+
+              <div class="expires-row">
+                <span class="expires-label"><q-icon name="timer" color="primary" class="q-mr-xs" />อายุ Link</span>
+                <div class="expires-options">
+                  <button
+                    v-for="opt in [{ v: '24', l: '24 ชม.' }, { v: '48', l: '48 ชม.' }, { v: '72', l: '72 ชม.' }]"
+                    :key="opt.v"
+                    class="expires-btn"
+                    :class="{ active: newLinkForm.expires_value === opt.v }"
+                    @click="newLinkForm.expires_value = opt.v"
+                  >{{ opt.l }}</button>
+                </div>
+              </div>
+            </div>
+
+            <q-btn
+              unelevated
+              color="primary"
+              class="full-width q-mt-md assist-submit-btn"
+              :loading="newLinkSaving"
+              @click="submitNewLink"
+            >
+              <q-icon name="add_link" class="q-mr-sm" />
+              สร้าง Magic Link มอบหมายงาน
+            </q-btn>
+          </div>
+        </div>
+
+        <!-- FORWARD: ปิดเคสหลังหน่วยงานช่วยแล้ว -->
+        <div v-if="canCloseAwaiting" class="awaiting-card q-mb-md">
+          <div class="awaiting-card__banner">
+            <q-icon name="hourglass_top" size="1.4rem" />
+            <div>
+              <div class="awaiting-card__banner-title">รอรับความช่วยเหลือจากหน่วยงาน</div>
+              <div class="awaiting-card__banner-sub">เคสนี้ถูกส่งต่อหน่วยงานภายนอกแล้ว</div>
+            </div>
+            <q-chip color="amber-8" text-color="white" dense icon="schedule" class="q-ml-auto">
+              รอดำเนินการ
+            </q-chip>
+          </div>
+
+          <div class="awaiting-card__body">
+            <p class="awaiting-card__desc">
+              เมื่อนักเรียนได้รับความช่วยเหลือจากหน่วยงานแล้ว กรุณาบันทึกผลและปิดเคส
+            </p>
+
+            <q-input
+              v-model="closeAwaitingForm.reviewed_by"
+              label="ผู้บันทึก"
+              outlined
+              dense
+              class="q-mb-sm"
+              placeholder="เช่น ผอ.โรงเรียน..."
+              bg-color="white"
+            >
+              <template #prepend><q-icon name="badge" color="amber-8" /></template>
+            </q-input>
+
+            <q-input
+              v-model="closeAwaitingForm.review_note"
+              label="บันทึกผลการช่วยเหลือ"
+              outlined
+              type="textarea"
+              rows="3"
+              class="q-mb-md"
+              placeholder="สรุปผลลัพธ์จากหน่วยงาน / สิ่งที่นักเรียนได้รับ..."
+              bg-color="white"
+            />
+
+            <q-btn
+              unelevated
+              color="positive"
+              class="full-width close-awaiting-btn"
+              :loading="closeAwaitingSaving"
+              @click="submitCloseAwaiting"
+            >
+              <q-icon name="check_circle" class="q-mr-sm" />
+              ปิดเคส — ได้รับความช่วยเหลือแล้ว
+            </q-btn>
+          </div>
+        </div>
+
+        <!-- ประวัติการมอบหมายทั้งหมดในเคสนี้ -->
+        <div v-if="caseTasks.length > 1" class="card q-mb-md">
+          <div class="case-history-header">
+            <div class="card-title" style="margin-bottom: 0">ประวัติการมอบหมาย</div>
+            <q-badge color="primary" :label="`${caseTasks.length} รอบ`" class="q-ml-sm" />
+          </div>
+          <div class="case-history-timeline q-mt-md">
+            <div v-for="(t, i) in caseTasks" :key="t.task_id" class="history-item">
+              <div class="history-item__left">
+                <div class="history-round-badge" :class="i === caseTasks.length - 1 ? 'current' : ''">
+                  {{ i + 1 }}
+                </div>
+                <div v-if="i < caseTasks.length - 1" class="history-connector"></div>
+              </div>
+              <div class="history-item__right">
+                <div class="history-item__row">
+                  <span class="history-assignee">{{ t.initial_assignee || 'ไม่ระบุ' }}</span>
+                  <q-chip
+                    v-if="t.has_submission"
+                    dense size="sm" color="green-1" text-color="green-8" icon="check"
+                  >ส่งรายงานแล้ว</q-chip>
+                  <q-chip v-else dense size="sm" color="blue-1" text-color="blue-8" icon="schedule">
+                    รอดำเนินการ
+                  </q-chip>
+                </div>
+                <div class="history-date">{{ formatDateTime(t.created_at) }}</div>
+                <router-link :to="`/task-detail/${t.task_id}`" class="history-link">
+                  ดูรายละเอียดรอบนี้ <q-icon name="arrow_forward" size="0.8rem" />
+                </router-link>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div v-if="reviews.length > 0" class="card q-mb-md">
           <div class="card-title">ประวัติการประเมิน</div>
           <div v-for="review in reviews" :key="String(review.id)" class="review-item">
@@ -174,6 +354,40 @@
         <q-card-actions align="right">
           <q-btn flat label="ปิด" v-close-popup />
         </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <q-dialog v-model="newLinkDialog" persistent>
+      <q-card class="magic-link-dialog">
+        <div class="magic-link-dialog__header">
+          <q-icon name="check_circle" color="white" size="2rem" />
+          <div class="magic-link-dialog__title">สร้าง Magic Link สำเร็จ!</div>
+          <div class="magic-link-dialog__sub">ส่ง Link นี้ให้ผู้รับมอบหมาย</div>
+        </div>
+
+        <q-card-section class="q-pt-md q-pb-sm">
+          <div class="link-display-label">Magic Link</div>
+          <div class="link-display-box">
+            <span class="link-display-text">{{ newMagicLink }}</span>
+          </div>
+        </q-card-section>
+
+        <q-card-section class="q-pt-none">
+          <q-btn
+            unelevated
+            color="primary"
+            class="full-width q-mb-sm"
+            icon="content_copy"
+            label="คัดลอก Link"
+            @click="copyLink"
+          />
+          <q-btn
+            flat
+            class="full-width"
+            label="ปิด"
+            v-close-popup
+          />
+        </q-card-section>
       </q-card>
     </q-dialog>
   </q-page>
@@ -214,6 +428,14 @@ interface Review {
   review_note: string;
 }
 
+interface CaseTask {
+  task_id: string;
+  created_at: string;
+  initial_assignee: string;
+  link_count: number;
+  has_submission: boolean;
+}
+
 interface TaskChainData {
   task_id: string;
   case_id: number | null;
@@ -245,6 +467,23 @@ const reviewForm = reactive({
   reviewed_by: '',
 });
 
+const newLinkForm = reactive({
+  assigned_to_name: '',
+  assigned_to_phone: '',
+  assigned_to_email: '',
+  expires_value: '24',
+});
+
+const closeAwaitingForm = reactive({
+  reviewed_by: '',
+  review_note: '',
+});
+
+const newLinkSaving = ref(false);
+const closeAwaitingSaving = ref(false);
+const newLinkDialog = ref(false);
+const newMagicLink = ref('');
+
 const reviewActionOptions = [
   { label: 'ให้ความช่วยเหลือ', value: 'ASSIST' },
   { label: 'ส่งต่อหน่วยงาน/ผู้เกี่ยวข้อง', value: 'FORWARD' },
@@ -269,15 +508,23 @@ const submission = computed(() => {
 });
 
 const reviews = ref<Review[]>([]);
+const caseTasks = ref<CaseTask[]>([]);
+
 const toFiniteNumber = (value: unknown): number | null => {
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
 };
-const hasReviewCase = computed(
-  () => data.value?.task_type === 'VISIT' && !!data.value?.case_id,
-);
 const canReview = computed(
-  () => hasReviewCase.value && data.value?.case_status === 'PENDING_REVIEW',
+  () => data.value?.task_type === 'VISIT' && !!data.value?.case_id && data.value?.case_status === 'PENDING_REVIEW',
+);
+const hasReviewCase = computed(
+  () => data.value?.task_type === 'VISIT' && !!data.value?.case_id && data.value?.case_status === 'RESOLVED',
+);
+const canCreateNewLink = computed(
+  () => data.value?.task_type === 'VISIT' && !!data.value?.case_id && data.value?.case_status === 'IN_PROGRESS',
+);
+const canCloseAwaiting = computed(
+  () => data.value?.task_type === 'VISIT' && !!data.value?.case_id && data.value?.case_status === 'AWAITING_HELP',
 );
 
 const visitLat = computed(() => toFiniteNumber(submission.value?.visit_lat));
@@ -302,7 +549,10 @@ const fetchData = async () => {
     const res = await api.get(`/api/tasks/${taskId}/chain`);
     data.value = res.data;
     if (data.value?.case_id) {
-      await fetchCaseReviews(Number(data.value.case_id));
+      await Promise.all([
+        fetchCaseReviews(Number(data.value.case_id)),
+        fetchCaseTasks(Number(data.value.case_id)),
+      ]);
     } else {
       reviews.value = Array.isArray(data.value?.reviews) ? data.value.reviews : [];
     }
@@ -311,6 +561,75 @@ const fetchData = async () => {
     $q.notify({ message: 'ไม่สามารถโหลดข้อมูลได้', color: 'negative' });
   } finally {
     loading.value = false;
+  }
+};
+
+const fetchCaseTasks = async (caseId: number) => {
+  try {
+    const res = await api.get(`/api/cases/${caseId}/tasks`);
+    caseTasks.value = Array.isArray(res.data?.data) ? res.data.data : [];
+  } catch {
+    caseTasks.value = [];
+  }
+};
+
+const submitNewLink = async () => {
+  if (!data.value?.case_id || !canCreateNewLink.value) return;
+  if (!newLinkForm.assigned_to_name.trim()) {
+    $q.notify({ message: 'กรุณากรอกชื่อผู้รับมอบหมาย', color: 'warning' });
+    return;
+  }
+  newLinkSaving.value = true;
+  try {
+    const res = await api.post('/api/tasks', {
+      existing_case_id: data.value.case_id,
+      task_type: 'VISIT',
+      assigned_to_name: newLinkForm.assigned_to_name,
+      assigned_to_phone: newLinkForm.assigned_to_phone,
+      assigned_to_email: newLinkForm.assigned_to_email || undefined,
+      expires_value: newLinkForm.expires_value,
+      expires_unit: 'hours',
+    });
+    newMagicLink.value = res.data.magic_link;
+    newLinkDialog.value = true;
+    newLinkForm.assigned_to_name = '';
+    newLinkForm.assigned_to_phone = '';
+    newLinkForm.assigned_to_email = '';
+    $q.notify({ message: 'สร้าง Link มอบหมายใหม่สำเร็จ', color: 'positive' });
+    await fetchData();
+  } catch (err: unknown) {
+    const error = err as { response?: { data?: { message?: string } } };
+    $q.notify({ message: error.response?.data?.message || 'ไม่สามารถสร้าง Link ได้', color: 'negative' });
+  } finally {
+    newLinkSaving.value = false;
+  }
+};
+
+const submitCloseAwaiting = async () => {
+  if (!data.value?.case_id || !canCloseAwaiting.value) return;
+  closeAwaitingSaving.value = true;
+  try {
+    await api.post(`/api/cases/${data.value.case_id}/review`, {
+      review_action: 'CLOSE',
+      review_note: closeAwaitingForm.review_note,
+      reviewed_by: closeAwaitingForm.reviewed_by || 'ผอ.',
+    });
+    $q.notify({ message: 'ปิดเคสสำเร็จ', color: 'positive' });
+    await fetchData();
+  } catch (err: unknown) {
+    const error = err as { response?: { data?: { message?: string } } };
+    $q.notify({ message: error.response?.data?.message || 'ไม่สามารถปิดเคสได้', color: 'negative' });
+  } finally {
+    closeAwaitingSaving.value = false;
+  }
+};
+
+const copyLink = async () => {
+  try {
+    await navigator.clipboard.writeText(newMagicLink.value);
+    $q.notify({ message: 'คัดลอก Link แล้ว', color: 'positive' });
+  } catch {
+    $q.notify({ message: 'ไม่สามารถคัดลอกได้', color: 'warning' });
   }
 };
 
@@ -384,6 +703,7 @@ const getCaseStatusLabel = (status: string) => {
   const map: Record<string, string> = {
     PENDING_REVIEW: 'รอผอ.ประเมิน',
     IN_PROGRESS: 'กำลังดำเนินการ',
+    AWAITING_HELP: 'รอรับความช่วยเหลือจากหน่วยงาน',
     RESOLVED: 'ปิดเคสแล้ว',
   };
   return map[status] || status || '-';
@@ -633,6 +953,336 @@ onMounted(() => {
   margin-top: 0.5rem;
   font-size: 0.9rem;
   color: #64748b;
+}
+
+// ── ASSIST card ──────────────────────────────────────────
+.assist-card {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+
+  &__header {
+    background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+    padding: 1rem 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: white;
+  }
+
+  &__title {
+    font-weight: 800;
+    font-size: 1rem;
+    line-height: 1.2;
+  }
+
+  &__sub {
+    font-size: 0.8rem;
+    opacity: 0.85;
+    margin-top: 2px;
+  }
+
+  &__body {
+    padding: 1.25rem;
+  }
+}
+
+.assist-steps {
+  display: flex;
+  align-items: center;
+  margin-bottom: 1.25rem;
+  background: #f0f7ff;
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+}
+
+.assist-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+}
+
+.step-num {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #3b82f6;
+  color: white;
+  font-weight: 800;
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.step-label {
+  font-size: 0.72rem;
+  color: #1e3a8a;
+  font-weight: 600;
+  text-align: center;
+}
+
+.step-divider {
+  width: 24px;
+  height: 2px;
+  background: #bfdbfe;
+  flex-shrink: 0;
+}
+
+.assist-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.expires-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: #f8fafc;
+  border-radius: 10px;
+  padding: 0.6rem 0.75rem;
+  margin-top: 0.25rem;
+}
+
+.expires-label {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #475569;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+}
+
+.expires-options {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.expires-btn {
+  padding: 4px 14px;
+  border-radius: 20px;
+  border: 1.5px solid #e2e8f0;
+  background: white;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.15s;
+
+  &.active {
+    background: #3b82f6;
+    border-color: #3b82f6;
+    color: white;
+  }
+
+  &:hover:not(.active) {
+    border-color: #3b82f6;
+    color: #3b82f6;
+  }
+}
+
+.assist-submit-btn {
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 0.95rem;
+  padding: 0.7rem;
+}
+
+// ── AWAITING card ─────────────────────────────────────────
+.awaiting-card {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+
+  &__banner {
+    background: linear-gradient(135deg, #92400e 0%, #f59e0b 100%);
+    padding: 1rem 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: white;
+  }
+
+  &__banner-title {
+    font-weight: 800;
+    font-size: 1rem;
+  }
+
+  &__banner-sub {
+    font-size: 0.8rem;
+    opacity: 0.85;
+    margin-top: 2px;
+  }
+
+  &__body {
+    padding: 1.25rem;
+  }
+
+  &__desc {
+    font-size: 0.88rem;
+    color: #64748b;
+    margin-bottom: 1rem;
+    line-height: 1.5;
+  }
+}
+
+.close-awaiting-btn {
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 0.95rem;
+  padding: 0.7rem;
+}
+
+// ── Case history ─────────────────────────────────────────
+.case-history-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 0;
+}
+
+.case-history-timeline {
+  display: flex;
+  flex-direction: column;
+}
+
+.history-item {
+  display: flex;
+  gap: 0.75rem;
+
+  &__left {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 32px;
+    flex-shrink: 0;
+  }
+
+  &__right {
+    flex: 1;
+    padding-bottom: 1.25rem;
+  }
+
+  &__row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 2px;
+  }
+
+  &:last-child .history-item__right {
+    padding-bottom: 0;
+  }
+}
+
+.history-round-badge {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #e2e8f0;
+  color: #64748b;
+  font-weight: 800;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+
+  &.current {
+    background: #3b82f6;
+    color: white;
+  }
+}
+
+.history-connector {
+  width: 2px;
+  flex: 1;
+  background: #e2e8f0;
+  min-height: 20px;
+  margin: 4px 0;
+}
+
+.history-assignee {
+  font-weight: 700;
+  color: #1e293b;
+  font-size: 0.9rem;
+}
+
+.history-date {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  margin-bottom: 4px;
+}
+
+.history-link {
+  font-size: 0.82rem;
+  color: #3b82f6;
+  text-decoration: none;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+
+  &:hover { text-decoration: underline; }
+}
+
+// ── Magic Link dialog ────────────────────────────────────
+.magic-link-dialog {
+  border-radius: 20px !important;
+  overflow: hidden;
+  min-width: 320px;
+  max-width: 440px;
+
+  &__header {
+    background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+    padding: 1.5rem 1.25rem 1.25rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    text-align: center;
+    color: white;
+  }
+
+  &__title {
+    font-weight: 800;
+    font-size: 1.1rem;
+  }
+
+  &__sub {
+    font-size: 0.85rem;
+    opacity: 0.85;
+  }
+}
+
+.link-display-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #94a3b8;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin-bottom: 0.5rem;
+}
+
+.link-display-box {
+  background: #f1f5f9;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 0.9rem 1rem;
+  word-break: break-all;
+}
+
+.link-display-text {
+  font-family: 'Courier New', monospace;
+  font-size: 0.82rem;
+  color: #1e3a8a;
+  font-weight: 600;
+  line-height: 1.5;
 }
 
 .form-group {

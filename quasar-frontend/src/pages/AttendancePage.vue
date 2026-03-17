@@ -1,5 +1,5 @@
 <template>
-  <q-page class="q-pa-lg">
+  <q-page class="q-pa-lg attendance-page">
     <div style="max-width: 1000px; margin: 0 auto;">
       
       <!-- Sticky Header Area -->
@@ -95,19 +95,23 @@
 
       <!-- History Stats -->
       <div v-if="currentTab === 'history'" class="stats-cards q-mb-lg">
-        <div class="stat-card-mini">
+        <div class="stat-card-mini total">
+          <div class="stat-icon"><i class="fas fa-users"></i></div>
           <span class="label">นักเรียนทั้งหมด</span>
           <span class="value">{{ filteredHistory.length }}</span>
         </div>
-        <div class="stat-card-mini" style="border-left: 5px solid #22c55e;">
+        <div class="stat-card-mini present">
+          <div class="stat-icon"><i class="fas fa-check-circle"></i></div>
           <span class="label">มา</span>
           <span class="value">{{ historyStats.present }}</span>
         </div>
-        <div class="stat-card-mini" style="border-left: 5px solid #ef4444;">
+        <div class="stat-card-mini absent">
+          <div class="stat-icon"><i class="fas fa-times-circle"></i></div>
           <span class="label">ขาด</span>
           <span class="value">{{ historyStats.absent }}</span>
         </div>
-        <div class="stat-card-mini" style="border-left: 5px solid #eab308;">
+        <div class="stat-card-mini late">
+          <div class="stat-icon"><i class="fas fa-clock"></i></div>
           <span class="label">สาย</span>
           <span class="value">{{ historyStats.late }}</span>
         </div>
@@ -124,18 +128,24 @@
       <!-- Student List -->
       <div class="student-list">
         <div v-if="filteredDisplayList.length === 0" class="empty-state-box">
-          <i class="fas fa-layer-group"></i>
+          <div class="empty-icon-wrapper">
+            <i class="fas fa-clipboard-list"></i>
+          </div>
           <h2>พร้อมเริ่มเช็คชื่อหรือยัง?</h2>
           <p>กรุณาเลือก <strong>ชั้นเรียน</strong> และ <strong>ห้อง</strong> เพื่อแสดงรายชื่อนักเรียนครับ</p>
         </div>
 
         <div 
-          v-for="s in filteredDisplayList" 
+          v-for="(s, index) in filteredDisplayList" 
           :key="s.id" 
           class="student-card"
+          :style="{ animationDelay: `${index * 30}ms` }"
         >
           <div class="student-info">
-            <div class="student-avatar">{{ s.name[0] }}</div>
+            <div 
+              class="student-avatar" 
+              :style="getAvatarGradient(s.name)"
+            >{{ s.name[0] }}</div>
             <div class="student-details">
               <h3>{{ s.name }}</h3>
               <div class="student-id">รหัส: {{ s.id }}</div>
@@ -249,6 +259,21 @@
         </q-card-actions>
       </q-card>
     </q-dialog>
+
+    <!-- Confetti Celebration -->
+    <div v-if="showConfetti" class="confetti-container">
+      <div 
+        v-for="i in 50" 
+        :key="i"
+        class="confetti-piece"
+        :style="{
+          left: `${Math.random() * 100}%`,
+          backgroundColor: ['#22c55e', '#3b82f6', '#f59e0b', '#ec4899', '#8b5cf6', '#14b8a6'][Math.floor(Math.random() * 6)],
+          animationDelay: `${Math.random() * 0.5}s`,
+          animationDuration: `${2 + Math.random() * 1}s`
+        }"
+      />
+    </div>
   </q-page>
 </template>
 
@@ -303,6 +328,45 @@ const currentTab = ref('today');
 const searchQuery = ref('');
 const historyDate = ref(new Date().toISOString().split('T')[0]);
 const saving = ref(false);
+const showConfetti = ref(false);
+
+const avatarColors = [
+  ['#6366f1', '#8b5cf6'],
+  ['#ec4899', '#f43f5e'],
+  ['#14b8a6', '#06b6d4'],
+  ['#f59e0b', '#f97316'],
+  ['#10b981', '#22c55e'],
+  ['#3b82f6', '#0ea5e9'],
+  ['#8b5cf6', '#a855f7'],
+  ['#ef4444', '#f97316'],
+];
+
+const getAvatarGradient = (name: string) => {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % avatarColors.length;
+  const colorPair = avatarColors[index];
+  if (!colorPair) {
+    return {
+      background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+      color: 'white',
+      textShadow: '0 1px 2px rgba(0,0,0,0.2)',
+    };
+  }
+  const [c1, c2] = colorPair;
+  return {
+    background: `linear-gradient(135deg, ${c1}, ${c2})`,
+    color: 'white',
+    textShadow: '0 1px 2px rgba(0,0,0,0.2)',
+  };
+};
+
+const triggerConfetti = () => {
+  showConfetti.value = true;
+  setTimeout(() => { showConfetti.value = false; }, 2500);
+};
 
 const students = ref<Student[]>([]);
 const gradeLevels = ref<GradeLevel[]>([]);
@@ -514,7 +578,14 @@ const saveAttendance = async () => {
   try {
     const res = await api.post('/api/attendance', { records });
     if (res.data.success) {
-      $q.notify({ message: 'บันทึกสำเร็จ', color: 'positive', position: 'top' });
+      triggerConfetti();
+      $q.notify({ 
+        message: 'บันทึกสำเร็จ! 🎉', 
+        color: 'positive', 
+        position: 'top',
+        icon: 'check_circle',
+        timeout: 2000
+      });
       await fetchStudents();
     }
   } catch {
@@ -612,80 +683,98 @@ onMounted(async () => {
 </script>
 
 <style lang="scss" scoped>
-/* Tabs Styling */
+.attendance-page {
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  min-height: 100vh;
+}
+
 .tabs-container {
-    display: flex;
-    gap: 2rem;
-    border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  gap: 2rem;
+  border-bottom: 1px solid #e2e8f0;
 }
 
 .tab-item {
-    padding: 0.75rem 0;
-    font-weight: 700;
-    color: #64748b;
-    cursor: pointer;
-    position: relative;
-    transition: color 0.2s;
+  padding: 0.75rem 0;
+  font-weight: 700;
+  color: #64748b;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.2s cubic-bezier(0.25, 1, 0.5, 1);
+  
+  &:hover {
+    color: #3b82f6;
+  }
+  
+  &.active {
+    color: #2563eb;
     
-    &.active {
-        color: #2563eb;
-        
-        &::after {
-            content: '';
-            position: absolute;
-            bottom: -1px;
-            left: 0;
-            right: 0;
-            height: 3px;
-            background: #2563eb;
-            border-radius: 3px 3px 0 0;
-        }
+    &::after {
+      content: '';
+      position: absolute;
+      bottom: -1px;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, #3b82f6, #2563eb);
+      border-radius: 3px 3px 0 0;
     }
+  }
 }
 
-/* Search Row */
 .search-container {
-    position: relative;
-    width: 100%;
-    
-    i {
-        position: absolute;
-        left: 14px;
-        top: 50%;
-        transform: translateY(-50%);
-        color: #94a3b8;
-    }
+  position: relative;
+  width: 100%;
+  
+  i {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #94a3b8;
+    transition: color 0.2s;
+  }
+  
+  &:focus-within i {
+    color: #3b82f6;
+  }
 }
 
 .search-input {
-    width: 100%;
-    padding: 10px 12px 10px 36px;
-    border-radius: 99px;
-    border: 1px solid #e2e8f0;
-    background: white;
-    outline: none;
-    font-size: 0.95rem;
-    transition: border-color 0.2s;
-    
-    &:focus {
-        border-color: #2563eb;
-        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
-    }
+  width: 100%;
+  padding: 10px 12px 10px 36px;
+  border-radius: 99px;
+  border: 1px solid #e2e8f0;
+  background: white;
+  outline: none;
+  font-size: 0.95rem;
+  transition: all 0.2s cubic-bezier(0.25, 1, 0.5, 1);
+  
+  &:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  }
 }
 
 .filter-select-btn {
-    border-radius: 12px;
-    padding: 0 16px;
-    height: 40px;
-    min-height: 40px;
-    font-weight: 700;
-    text-transform: none;
-    background: white;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.02);
-    
-    &:hover {
-      background: #f8fafc;
-    }
+  border-radius: 12px;
+  padding: 0 16px;
+  height: 40px;
+  min-height: 40px;
+  font-weight: 700;
+  text-transform: none;
+  background: white;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+  transition: all 0.2s cubic-bezier(0.25, 1, 0.5, 1);
+  
+  &:hover {
+    background: linear-gradient(135deg, #eff6ff, #dbeafe);
+    transform: translateY(-1px);
+  }
+  
+  &:active {
+    transform: scale(0.98);
+  }
 }
 
 .color-primary {
@@ -697,205 +786,540 @@ onMounted(async () => {
 }
 
 .filter-select {
-    padding: 0 16px;
-    height: 40px;
-    border-radius: 12px;
-    border: 1px solid #e2e8f0;
-    background: white;
-    outline: none;
-    font-size: 0.95rem;
-    font-weight: 700;
-    color: #1e40af;
-    cursor: pointer;
-    transition: all 0.2s;
+  padding: 0 16px;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: white;
+  outline: none;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #1e40af;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.25, 1, 0.5, 1);
 
-    &:hover {
-        border-color: #3b82f6;
-    }
+  &:hover {
+    border-color: #3b82f6;
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
+  }
+  
+  &:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  }
 }
 
 .date-picker-container {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    background: white;
-    padding: 8px 16px;
-    border-radius: 12px;
-    border: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: white;
+  padding: 8px 16px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  transition: all 0.2s;
+  
+  &:hover {
+    border-color: #3b82f6;
+  }
 }
 
 .date-picker-input {
-    border: none;
-    outline: none;
-    font-family: inherit;
-    font-size: 0.95rem;
-    color: #2563eb;
-    font-weight: 700;
-    cursor: pointer;
+  border: none;
+  outline: none;
+  font-family: inherit;
+  font-size: 0.95rem;
+  color: #2563eb;
+  font-weight: 700;
+  cursor: pointer;
 }
 
-/* History Stats */
 .stats-cards {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 1.25rem;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
 }
 
 .stat-card-mini {
-    background: white;
-    padding: 1.25rem;
-    border-radius: 16px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
+  background: white;
+  padding: 1.5rem;
+  border-radius: 20px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+  
+  &:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+  }
+  
+  &.present {
+    background: linear-gradient(135deg, #f0fdf4, #dcfce7);
     
-    .label { font-size: 0.75rem; color: #64748b; font-weight: 600; text-transform: uppercase; }
-    .value { font-size: 1.5rem; font-weight: 800; }
+    .stat-icon {
+      color: #22c55e;
+    }
+    
+    .value {
+      color: #15803d;
+    }
+  }
+  
+  &.absent {
+    background: linear-gradient(135deg, #fef2f2, #fee2e2);
+    
+    .stat-icon {
+      color: #ef4444;
+    }
+    
+    .value {
+      color: #b91c1c;
+    }
+  }
+  
+  &.late {
+    background: linear-gradient(135deg, #fffbeb, #fef3c7);
+    
+    .stat-icon {
+      color: #f59e0b;
+    }
+    
+    .value {
+      color: #b45309;
+    }
+  }
+  
+  .stat-icon {
+    font-size: 1.75rem;
+    opacity: 0.9;
+  }
+  
+  .label {
+    font-size: 0.7rem;
+    color: #64748b;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  
+  .value {
+    font-size: 2.75rem;
+    font-weight: 900;
+    letter-spacing: -0.03em;
+    line-height: 1;
+  }
 }
 
-/* Table Header */
 .table-header {
-    display: grid;
-    grid-template-columns: 2.5fr 1fr 1fr 2fr;
-    padding: 0 1.5rem 0.75rem;
-    font-weight: 700;
-    color: #64748b;
-    font-size: 0.8rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+  display: grid;
+  grid-template-columns: 2.5fr 1fr 1fr 2fr;
+  padding: 0 1.5rem 0.75rem;
+  font-weight: 700;
+  color: #64748b;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
 .student-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-    padding-bottom: 5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding-bottom: 5rem;
 }
 
 .student-card {
-    background: white;
-    border-radius: 12px;
-    padding: 1rem 1.5rem;
-    display: grid;
-    grid-template-columns: 2.5fr 1fr 1fr 2fr;
-    align-items: center;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-    border: 1px solid #f1f5f9;
+  background: white;
+  border-radius: 16px;
+  padding: 1.25rem 1.5rem;
+  display: grid;
+  grid-template-columns: 2.5fr 1fr 1fr 2fr;
+  align-items: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+  border: 1px solid #f1f5f9;
+  opacity: 0;
+  animation: fade-in-up 0.4s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+  transition: all 0.2s cubic-bezier(0.25, 1, 0.5, 1);
+  
+  &:hover {
+    box-shadow: 0 8px 24px rgba(0,0,0,0.06);
+    transform: translateY(-2px);
+    border-color: #e2e8f0;
+  }
 }
 
-.student-info { display: flex; align-items: center; gap: 1rem; }
-.student-avatar { 
-    width: 44px; height: 44px; border-radius: 50%; 
-    background: #f1f5f9; display: flex; align-items: center; 
-    justify-content: center; font-weight: 800; color: #94a3b8; 
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
+
+.student-info {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.student-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 1.1rem;
+  color: white;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  flex-shrink: 0;
+}
+
 .student-details {
-    h3 { font-size: 1rem; font-weight: 700; margin: 0; color: #1e293b; }
-    .student-id { font-size: 0.75rem; color: #94a3b8; font-weight: 500; }
+  h3 {
+    font-size: 1.1rem;
+    font-weight: 800;
+    margin: 0;
+    color: #1e293b;
+    letter-spacing: -0.01em;
+  }
+  
+  .student-id {
+    font-size: 0.75rem;
+    color: #94a3b8;
+    font-weight: 600;
+    margin-top: 2px;
+  }
 }
 
-.count-badge { font-size: 1rem; font-weight: 700; color: #475569; text-align: center; }
+.count-badge {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #475569;
+  text-align: center;
+}
 
-.attendance-options { display: flex; justify-content: flex-end; gap: 0.5rem; }
+.attendance-options {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
 
 .status-btn {
-    padding: 6px 14px; border-radius: 20px; border: 1.5px solid #e2e8f0; background: white;
-    color: #64748b; font-size: 0.85rem; font-weight: 700; cursor: pointer; transition: all 0.2s;
-    display: flex; align-items: center; justify-content: center; gap: 6px; min-width: 76px;
+  padding: 8px 16px;
+  border-radius: 99px;
+  border: 1.5px solid #e2e8f0;
+  background: white;
+  color: #64748b;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 80px;
+  transition: all 0.15s cubic-bezier(0.25, 1, 0.5, 1);
+  
+  &:hover {
+    transform: translateY(-2px);
+  }
+  
+  &:active {
+    transform: scale(0.92);
+  }
+  
+  &.present {
+    &:hover, &.active {
+      background: linear-gradient(135deg, #dcfce7, #bbf7d0);
+      color: #15803d;
+      border-color: #22c55e;
+      box-shadow: 0 4px 12px rgba(34, 197, 94, 0.25);
+    }
     
-    &.present:hover, &.present.active { background: #dcfce7; color: #15803d; border-color: #15803d; }
-    &.absent:hover, &.absent.active { background: #fee2e2; color: #b91c1c; border-color: #b91c1c; }
-    &.late:hover, &.late.active { background: #fef3c7; color: #b45309; border-color: #b45309; }
+    &.active {
+      animation: pulse-success 0.4s ease-out;
+    }
+  }
+  
+  &.absent {
+    &:hover, &.active {
+      background: linear-gradient(135deg, #fee2e2, #fecaca);
+      color: #b91c1c;
+      border-color: #ef4444;
+      box-shadow: 0 4px 12px rgba(239, 68, 68, 0.25);
+    }
+    
+    &.active {
+      animation: pulse-success 0.4s ease-out;
+    }
+  }
+  
+  &.late {
+    &:hover, &.active {
+      background: linear-gradient(135deg, #fef3c7, #fde68a);
+      color: #b45309;
+      border-color: #f59e0b;
+      box-shadow: 0 4px 12px rgba(245, 158, 11, 0.25);
+    }
+    
+    &.active {
+      animation: pulse-success 0.4s ease-out;
+    }
+  }
+}
+
+@keyframes pulse-success {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+  100% { transform: scale(1); }
 }
 
 .status-display {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 16px;
-    border-radius: 20px;
-    font-weight: 700;
-    font-size: 0.85rem;
-    
-    &.present { background: #dcfce7; color: #15803d; }
-    &.absent { background: #fee2e2; color: #b91c1c; }
-    &.late { background: #fef3c7; color: #b45309; }
-    &.none { background: #f1f5f9; color: #94a3b8; }
-}
-
-.save-bar { 
-    position: fixed; bottom: 1.5rem; left: 0; right: 0; 
-    z-index: 1000; padding: 0 1.5rem; display: flex; justify-content: flex-end;
-    pointer-events: none; // Allow clicks through container
-}
-.btn-save {
-    pointer-events: auto; // Re-enable clicks for button
-    background: linear-gradient(135deg, #2563eb, #1e40af); 
-    color: white; padding: 16px 32px; border-radius: 16px;
-    font-weight: 800; font-size: 1.1rem; display: flex; 
-    align-items: center; gap: 12px; border: none; cursor: pointer; 
-    transition: all 0.2s; box-shadow: 0 10px 20px -5px rgba(30, 64, 175, 0.4);
-    
-    &:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 15px 25px -5px rgba(30, 64, 175, 0.5); }
-    &:active:not(:disabled) { transform: scale(0.98); }
-    &:disabled { opacity: 0.7; cursor: not-allowed; }
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  border-radius: 99px;
+  font-weight: 700;
+  font-size: 0.85rem;
+  
+  &.present {
+    background: linear-gradient(135deg, #dcfce7, #bbf7d0);
+    color: #15803d;
+  }
+  
+  &.absent {
+    background: linear-gradient(135deg, #fee2e2, #fecaca);
+    color: #b91c1c;
+  }
+  
+  &.late {
+    background: linear-gradient(135deg, #fef3c7, #fde68a);
+    color: #b45309;
+  }
+  
+  &.none {
+    background: #f1f5f9;
+    color: #94a3b8;
+  }
 }
 
 .empty-state-box {
-    text-align: center; padding: 4rem 2rem; color: #64748b; 
-    background: white; border-radius: 16px; border: 2.5px dashed #e2e8f0; margin-top: 1rem;
+  text-align: center;
+  padding: 5rem 2rem;
+  color: #64748b;
+  background: white;
+  border-radius: 24px;
+  border: 2.5px dashed #cbd5e1;
+  margin-top: 1rem;
+  
+  i {
+    font-size: 5rem;
+    margin-bottom: 1.5rem;
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: float 3s ease-in-out infinite;
+  }
+  
+  h2 {
+    color: #1e3a8a;
+    margin-bottom: 0.75rem;
+    font-weight: 900;
+    font-size: 2rem;
+    letter-spacing: -0.02em;
+  }
+  
+  p {
+    font-size: 1.05rem;
+    color: #64748b;
+    max-width: 320px;
+    margin: 0 auto;
+    line-height: 1.6;
     
-    i { font-size: 3.5rem; margin-bottom: 1.5rem; color: #3b82f6; opacity: 0.8; }
-    h2 { color: #1e3a8a; margin-bottom: 0.5rem; font-weight: 800; font-size: 1.5rem; }
-    p { font-size: 1rem; color: #64748b; }
+    strong {
+      color: #3b82f6;
+      font-weight: 700;
+    }
+  }
 }
 
-@media (max-width: 1024px) {
-    .save-bar { left: 0; }
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0) rotate(-2deg);
+  }
+  50% {
+    transform: translateY(-12px) rotate(2deg);
+  }
 }
 
 .sticky-header {
-    position: sticky;
-    top: 0;
-    z-index: 100;
+  position: sticky;
+  top: 0;
+  z-index: 100;
 }
 
 .student-count-chip {
-    padding: 0 16px;
-    height: 40px;
-    border-radius: 12px;
-    border: 1px solid #e2e8f0;
-    background: #f8fafc;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 0.95rem;
-    font-weight: 700;
-    color: #64748b;
-    box-sizing: border-box;
+  padding: 0 18px;
+  height: 40px;
+  border-radius: 99px;
+  background: linear-gradient(135deg, #eff6ff, #dbeafe);
+  border: 1.5px solid #93c5fd;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #1e40af;
+  box-sizing: border-box;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
+  transition: all 0.2s;
 
-    i {
-        color: #3b82f6;
-        font-size: 0.95rem;
-    }
+  i {
+    color: #3b82f6;
+    font-size: 0.95rem;
+  }
 }
 
 .action-btn-top {
-    border-radius: 12px;
-    font-weight: 700;
-    font-size: 1rem;
-    box-shadow: 0 4px 10px rgba(37, 99, 235, 0.2);
+  border-radius: 99px;
+  font-weight: 800;
+  font-size: 1rem;
+  box-shadow: 0 4px 16px rgba(37, 99, 235, 0.3);
+  transition: all 0.2s cubic-bezier(0.25, 1, 0.5, 1);
+  
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
+  }
+  
+  &:active {
+    transform: scale(0.96);
+  }
+}
+
+.confetti-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 9999;
+}
+
+.confetti-piece {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  animation: confetti-fall 2.5s ease-out forwards;
+}
+
+@keyframes confetti-fall {
+  0% {
+    transform: translateY(-100vh) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(100vh) rotate(720deg);
+    opacity: 0;
+  }
 }
 
 @media (max-width: 768px) {
-    .d-none-mobile { display: none !important; }
-    .student-card { grid-template-columns: 1fr; gap: 1rem; border-radius: 16px; padding: 1.25rem; }
-    .count-row { display: flex; justify-content: space-around; background: #f8fafc; padding: 0.75rem; border-radius: 12px; }
-    .count-item { display: flex; flex-direction: column; align-items: center; }
-    .count-label { font-size: 0.7rem; color: #94a3b8; text-transform: uppercase; font-weight: 700; }
-    .attendance-options { justify-content: space-between; gap: 0.5rem; }
-    .status-btn { flex: 1; padding: 10px 4px; min-width: 0; font-size: 0.8rem; }
-    .full-width-mobile { width: 100%; }
+  .stats-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .stat-card-mini {
+    padding: 1.25rem;
+    
+    .stat-icon {
+      font-size: 1.5rem;
+    }
+    
+    .value {
+      font-size: 2rem;
+    }
+  }
+  
+  .d-none-mobile {
+    display: none !important;
+  }
+  
+  .student-card {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    border-radius: 20px;
+    padding: 1.5rem;
+  }
+  
+  .attendance-options {
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+  
+  .status-btn {
+    flex: 1;
+    padding: 12px 8px;
+    min-width: 0;
+    font-size: 0.85rem;
+  }
+  
+  .full-width-mobile {
+    width: 100%;
+  }
+  
+  .empty-state-box {
+    padding: 3rem 1.5rem;
+    
+    i {
+      font-size: 4rem;
+    }
+    
+    h2 {
+      font-size: 1.5rem;
+    }
+    
+    p {
+      font-size: 0.95rem;
+    }
+  }
+}
+
+@media (max-width: 480px) {
+  .stats-cards {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+  }
+  
+  .stat-card-mini {
+    padding: 1rem;
+    
+    .stat-icon {
+      font-size: 1.25rem;
+    }
+    
+    .value {
+      font-size: 1.75rem;
+    }
+    
+    .label {
+      font-size: 0.65rem;
+    }
+  }
 }
 </style>

@@ -195,6 +195,7 @@ const pageTitle = computed(() => {
   if (route.path === '/attendance-dashboard') return 'Dashboard เช็คชื่อ';
   if (route.path === '/admin-access') return 'Admin Access';
   if (route.path === '/manage-users') return 'จัดการผู้ใช้งาน';
+  if (route.path.startsWith('/task-detail/')) return 'รายละเอียดเคส';
   return 'Student Tracking System';
 });
 

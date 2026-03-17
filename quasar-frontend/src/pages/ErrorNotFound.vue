@@ -3,7 +3,8 @@
     <div>
       <div style="font-size: 30vh">404</div>
 
-      <div class="text-h2" style="opacity: 0.4">Oops. Nothing here...</div>
+      <div class="text-h2" style="opacity: 0.4">ไม่พบหน้านี้</div>
+      <div class="text-body1 q-mt-md" style="opacity: 0.6">หน้าที่คุณค้นหาอาจถูกลบหรือย้ายไปแล้ว</div>
 
       <q-btn
         class="q-mt-xl"
@@ -11,7 +12,7 @@
         text-color="blue"
         unelevated
         to="/"
-        label="Go Home"
+        label="กลับหน้าหลัก"
         no-caps
       />
     </div>

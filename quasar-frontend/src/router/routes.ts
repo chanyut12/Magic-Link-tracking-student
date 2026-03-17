@@ -17,6 +17,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'task/:token/report', component: () => import('pages/ReportPage.vue'), meta: { hideNav: true } },
       { path: 'task/:token/success', component: () => import('pages/SuccessPage.vue'), meta: { hideNav: true } },
       { path: 'task/:token/expired', component: () => import('pages/ExpiredPage.vue'), meta: { hideNav: true } },
+      { path: 'task/:token/locked', component: () => import('pages/LockedPage.vue'), meta: { hideNav: true } },
       { path: 'admin-access', component: () => import('pages/AdminAccessPage.vue'), meta: { hideNav: true } },
     ],
   },
