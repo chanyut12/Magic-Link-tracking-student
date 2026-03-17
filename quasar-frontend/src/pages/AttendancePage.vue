@@ -1,9 +1,9 @@
 <template>
   <q-page class="q-pa-lg attendance-page">
-    <div style="max-width: 1000px; margin: 0 auto;">
+    <div class="page-container">
       
       <!-- Sticky Header Area -->
-      <div class="sticky-header bg-white q-pb-md">
+      <div class="sticky-header">
         <!-- Tabs -->
         <div class="tabs-container q-mb-lg">
           <div 
@@ -37,30 +37,30 @@
           </div>
 
           <div class="col-12 col-sm-auto row items-center q-col-gutter-sm">
-            <div class="col-auto">
+            <div class="col-12 col-sm-auto">
               <q-btn 
                 outline 
                 color="primary" 
-                class="filter-select-btn"
+                class="filter-select-btn full-width"
                 @click="showFilterDialog = true"
               >
                 {{ selectedSchoolName }}
                 <i class="fas fa-chevron-down q-ml-sm" style="font-size: 0.7rem;"></i>
               </q-btn>
             </div>
-            <div class="col-auto">
-              <select v-model="filters.grade" class="filter-select">
+            <div class="col-6 col-sm-auto">
+              <select v-model="filters.grade" class="filter-select full-width">
                 <option v-for="gl in gradeLevels" :key="gl.id" :value="gl.label">{{ gl.label }}</option>
               </select>
             </div>
-            <div class="col-auto">
-              <select v-model="filters.room" class="filter-select">
+            <div class="col-6 col-sm-auto">
+              <select v-model="filters.room" class="filter-select full-width">
                 <option v-for="r in rooms" :key="r" :value="r">ห้อง {{ r }}</option>
               </select>
             </div>
             
-            <div class="col-auto">
-              <div class="student-count-chip">
+            <div class="col-12 col-sm-auto">
+              <div class="student-count-chip full-width justify-center">
                 <i class="fas fa-users"></i>
                 <span>{{ filteredStudents.length }} คน</span>
               </div>
@@ -688,10 +688,24 @@ onMounted(async () => {
   min-height: 100vh;
 }
 
+.page-container {
+  max-width: 1200px;
+  width: 100%;
+  margin: 0 auto;
+}
+
 .tabs-container {
   display: flex;
-  gap: 2rem;
+  gap: 1.5rem;
   border-bottom: 1px solid #e2e8f0;
+  overflow-x: auto;
+  white-space: nowrap;
+  -webkit-overflow-scrolling: touch;
+  margin-bottom: 1rem;
+  
+  &::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 .tab-item {
@@ -700,7 +714,7 @@ onMounted(async () => {
   color: #64748b;
   cursor: pointer;
   position: relative;
-  transition: all 0.2s cubic-bezier(0.25, 1, 0.5, 1);
+  transition: all 0.2s;
   
   &:hover {
     color: #3b82f6;
@@ -757,19 +771,22 @@ onMounted(async () => {
 }
 
 .filter-select-btn {
-  border-radius: 12px;
-  padding: 0 16px;
+  border-radius: 99px; /* full rounded */
+  padding: 0 20px;
   height: 40px;
   min-height: 40px;
   font-weight: 700;
   text-transform: none;
   background: white;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+  border: 1.5px solid #dbeafe; /* soft border */
+  color: #1e40af;
+  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.05);
   transition: all 0.2s cubic-bezier(0.25, 1, 0.5, 1);
   
   &:hover {
     background: linear-gradient(135deg, #eff6ff, #dbeafe);
     transform: translateY(-1px);
+    border-color: #3b82f6;
   }
   
   &:active {
@@ -786,28 +803,30 @@ onMounted(async () => {
 }
 
 .filter-select {
-  padding: 0 16px;
+  padding: 0 36px 0 16px; /* space for custom arrow */
   height: 40px;
-  border-radius: 12px;
-  border: 1px solid #e2e8f0;
-  background: white;
+  border-radius: 99px; /* full rounded */
+  border: 1.5px solid #dbeafe;
+  background: white url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 448 512'%3E%3Cpath fill='%231e40af' d='M207.02 381.476L12.686 187.132c-9.373-9.373-9.373-24.569 0-33.941l22.667-22.667c9.353-9.353 24.522-9.378 33.901-.057L224 284.505l154.745-154.021c9.379-9.321 24.548-9.295 33.901.057l22.667 22.667c9.373 9.373 9.373 24.569 0 33.941L240.971 381.476c-9.373 9.372-24.569 9.372-33.951 0z'/%3E%3C/svg%3E") no-repeat calc(100% - 14px) center;
+  background-size: 11px;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
   outline: none;
   font-size: 0.95rem;
   font-weight: 700;
   color: #1e40af;
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.25, 1, 0.5, 1);
+  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.05);
 
   &:hover {
     border-color: #3b82f6;
+    background-color: #f8fbff;
     box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
   }
-  
-  &:focus {
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
-  }
 }
+
 
 .date-picker-container {
   display: flex;
@@ -1167,8 +1186,13 @@ onMounted(async () => {
 
 .sticky-header {
   position: sticky;
-  top: 0;
+  top: 1rem;
   z-index: 100;
+  background: white;
+  padding: 1.5rem;
+  border-radius: 20px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.04);
+  margin-bottom: 2rem;
 }
 
 .student-count-chip {

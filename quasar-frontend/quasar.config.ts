@@ -83,14 +83,15 @@ export default defineConfig((/* ctx */) => {
       host: '0.0.0.0',
       port: 9001,
       // https: true,
-      open: true, // opens browser window automatically
+      open: false, // disabled for docker
       proxy: {
         '/api': {
-          target: 'http://localhost:3000',
+          // @ts-ignore
+          target: process.env.BACKEND_URL || 'http://backend:3000',
           changeOrigin: true,
         },
         '/uploads': {
-          target: 'http://localhost:3000',
+          target: process.env.BACKEND_URL || 'http://backend:3000',
           changeOrigin: true,
         },
       },

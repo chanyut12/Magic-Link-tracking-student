@@ -14,5 +14,38 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
+  backend:
+    build:
+      context: ./nest-backend
+      dockerfile: Dockerfile
+    container_name: sts-backend
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+    volumes:
+      - ./nest-backend:/app
+      - /app/node_modules
+    command: npm run start:dev
+    depends_on:
+      - db
+
+  frontend:
+    build:
+      context: ./quasar-frontend
+      dockerfile: Dockerfile
+    container_name: sts-frontend
+    restart: always
+    ports:
+      - "9001:9001"
+    environment:
+      - BACKEND_URL=http://backend:3000
+    volumes:
+      - ./quasar-frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+
 volumes:
   postgres_data:
