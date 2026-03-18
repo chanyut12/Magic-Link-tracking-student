@@ -87,11 +87,11 @@ export default defineConfig((/* ctx */) => {
       proxy: {
         '/api': {
           // @ts-ignore
-          target: process.env.BACKEND_URL || 'http://backend:3000',
+          target: process.env.BACKEND_URL || 'http://localhost:3000',
           changeOrigin: true,
         },
         '/uploads': {
-          target: process.env.BACKEND_URL || 'http://backend:3000',
+          target: process.env.BACKEND_URL || 'http://localhost:3000',
           changeOrigin: true,
         },
       },
