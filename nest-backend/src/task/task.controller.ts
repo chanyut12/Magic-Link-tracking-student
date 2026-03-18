@@ -47,8 +47,9 @@ export class TaskController {
   }
 
   @Get(':token')
-  async getTask(@Param('token') token: string) {
-    const task = await this.taskService.getTaskByToken(token);
+  async getTask(@Param('token') token: string, @Req() req: Request) {
+    const sessionToken = req.headers['x-magic-session'] as string;
+    const task = await this.taskService.getTaskByToken(token, sessionToken);
     if (!task) {
       throw new HttpException('Task not found', HttpStatus.NOT_FOUND);
     }

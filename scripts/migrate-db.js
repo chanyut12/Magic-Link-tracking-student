@@ -26,6 +26,10 @@ function migrate() {
       db.exec("ALTER TABLE tasks ADD COLUMN target_room TEXT");
       console.log('Added target_room to tasks table.');
     }
+    if (!columnExists('tasks', 'target_school_id')) {
+      db.exec("ALTER TABLE tasks ADD COLUMN target_school_id INTEGER");
+      console.log('Added target_school_id to tasks table.');
+    }
 
     // Add columns to students table
     if (!columnExists('students', 'grade')) {

@@ -23,6 +23,7 @@ db.exec(`
     task_type TEXT DEFAULT 'VISIT', -- VISIT, ATTENDANCE
     target_grade TEXT,
     target_room TEXT,
+    target_school_id INTEGER,
     status TEXT DEFAULT 'PENDING',
     max_delegation_depth INTEGER DEFAULT 3,
     created_at TEXT DEFAULT (datetime('now','localtime'))

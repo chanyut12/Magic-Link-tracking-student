@@ -166,7 +166,7 @@ export class TaskService {
     }
   }
 
-  async getTaskByToken(token: string) {
+  async getTaskByToken(token: string, sessionToken?: string) {
     const tokenHash = hashToken(token);
 
     const resultLink = await this.db.query(
@@ -232,7 +232,23 @@ export class TaskService {
       typeof link.assigned_to_email === 'string' &&
       link.assigned_to_email.trim().length > 0;
 
-    result.auth_required = !!(hasEmailForOtp && !link.otp_verified);
+    // Check device-specific session token to determine if OTP was verified on this device
+    let sessionVerified = false;
+    if (sessionToken && !link.otp_verified) {
+      try {
+        const [base64Payload, signature] = sessionToken.split('.');
+        const payload = Buffer.from(base64Payload, 'base64').toString('utf-8');
+        const expectedSign = crypto.createHmac('sha256', 'SECRET_STS_KEY').update(payload).digest('hex');
+        if (expectedSign === signature) {
+          const data = JSON.parse(payload);
+          if (data.link_id === link.id && data.verified === true) {
+            sessionVerified = true;
+          }
+        }
+      } catch (e) {}
+    }
+
+    result.auth_required = !!(hasEmailForOtp && !link.otp_verified && !sessionVerified);
 
     if (link.task_type === 'VISIT') {
       const caseResult = await this.db.query(
@@ -287,7 +303,7 @@ export class TaskService {
           const expectedSign = crypto.createHmac('sha256', 'SECRET_STS_KEY').update(payload).digest('hex');
           if (expectedSign === signature) {
             const data = JSON.parse(payload);
-            if (data.link_id === link.id && data.verified === true) {
+            if (data.link_id === link.link_id && data.verified === true) {
               sessionVerified = true;
             }
           }

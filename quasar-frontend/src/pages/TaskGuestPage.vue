@@ -335,6 +335,7 @@ const authRequired = ref(false);
 const otpSent = ref(false);
 const otpInput = ref('');
 const otpLoading = ref(false);
+const sessionToken = ref(sessionStorage.getItem(`magic_session_${token}`) || '');
 const students = ref<Student[]>([]);
 const attendanceSelections = reactive<Record<string, string>>({});
 const touchedSelections = reactive<Record<string, boolean>>({});
@@ -401,7 +402,9 @@ let polling: ReturnType<typeof setInterval> | null = null;
 
 const fetchData = async () => {
   try {
-    const res = await api.get(`/api/tasks/${token}`);
+    const res = await api.get(`/api/tasks/${token}`, {
+      headers: sessionToken.value ? { 'x-magic-session': sessionToken.value } : {},
+    });
 
     if (res.data.status === 'EXPIRED') {
       void router.push(`/task/${token}/expired`);
@@ -525,8 +528,15 @@ const verifyOTP = async () => {
   try {
     const res = await api.post(`/api/tasks/${token}/verify`, { otp: otpInput.value });
     if (res.data.success) {
+      // Save device-specific session token (persist for ReportPage access)
+      if (res.data.session_token) {
+        sessionToken.value = res.data.session_token;
+        sessionStorage.setItem(`magic_session_${token}`, res.data.session_token);
+      }
       // Re-fetch task to get unmasked student data
-      const taskRes = await api.get(`/api/tasks/${token}`);
+      const taskRes = await api.get(`/api/tasks/${token}`, {
+        headers: sessionToken.value ? { 'x-magic-session': sessionToken.value } : {},
+      });
       task.value = taskRes.data;
       authRequired.value = false;
       visitMode.value = false;

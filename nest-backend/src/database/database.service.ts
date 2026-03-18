@@ -74,7 +74,8 @@ export class DatabaseService implements OnModuleInit {
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           task_type TEXT DEFAULT 'VISIT',
           target_grade TEXT,
-          target_room TEXT
+          target_room TEXT,
+          target_school_id INTEGER
         );
 
         CREATE TABLE IF NOT EXISTS task_links (
@@ -272,6 +273,7 @@ export class DatabaseService implements OnModuleInit {
         
         -- Add missing columns
         ALTER TABLE cases ADD COLUMN IF NOT EXISTS result_summary TEXT;
+        ALTER TABLE tasks ADD COLUMN IF NOT EXISTS target_school_id INTEGER;
         ALTER TABLE task_submissions ADD COLUMN IF NOT EXISTS address_changed BOOLEAN DEFAULT FALSE;
         ALTER TABLE task_submissions ADD COLUMN IF NOT EXISTS updated_student_address TEXT;
         ALTER TABLE task_submissions ADD COLUMN IF NOT EXISTS updated_lat REAL;

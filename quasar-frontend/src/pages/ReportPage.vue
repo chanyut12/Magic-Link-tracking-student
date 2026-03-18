@@ -221,9 +221,15 @@ const fetchGPS = () => {
   );
 };
 
+const magicSession = sessionStorage.getItem(`magic_session_${token}`) || '';
+
 const loadTaskContext = async () => {
   try {
-    const response = await fetch(`/api/tasks/${token}`);
+    const headers: Record<string, string> = {};
+    if (magicSession) {
+      headers['x-magic-session'] = magicSession;
+    }
+    const response = await fetch(`/api/tasks/${token}`, { headers });
     if (!response.ok) return;
 
     const data = (await response.json()) as { student_address?: string };

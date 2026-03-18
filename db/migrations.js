@@ -25,6 +25,10 @@ function ensureBaseSchema() {
     CREATE TABLE IF NOT EXISTS tasks (
       id TEXT PRIMARY KEY,
       case_id INTEGER REFERENCES cases(id) ON DELETE CASCADE,
+      task_type TEXT DEFAULT 'VISIT',
+      target_grade TEXT,
+      target_room TEXT,
+      target_school_id INTEGER,
       status TEXT DEFAULT 'PENDING',
       max_delegation_depth INTEGER DEFAULT 3,
       created_at TEXT DEFAULT (datetime('now','localtime'))
@@ -130,6 +134,9 @@ function ensureAttendanceColumns() {
   }
   if (!taskNames.has('target_room')) {
     db.exec(`ALTER TABLE tasks ADD COLUMN target_room TEXT`);
+  }
+  if (!taskNames.has('target_school_id')) {
+    db.exec(`ALTER TABLE tasks ADD COLUMN target_school_id INTEGER`);
   }
 
   // task_links table: assigned_to_email, otp_code, otp_expires_at, otp_verified, subject

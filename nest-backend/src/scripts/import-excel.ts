@@ -51,7 +51,8 @@ async function importExcel() {
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           task_type TEXT DEFAULT 'VISIT',
           target_grade TEXT,
-          target_room TEXT
+          target_room TEXT,
+          target_school_id INTEGER
         );
 
         CREATE TABLE IF NOT EXISTS task_links (
