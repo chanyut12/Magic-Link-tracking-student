@@ -10,6 +10,7 @@ import { hashToken, generateToken, clean } from '../common/utils/helpers';
 import * as QRCode from 'qrcode';
 import { EmailService } from './email.service';
 import { AutomationService } from '../automation/automation.service';
+import * as crypto from 'crypto';
 
 function maskName(name: string | null | undefined): string {
   if (!name) return '-';
@@ -195,7 +196,7 @@ export class TaskService {
       };
     }
 
-    if (link.status === 'COMPLETED' && link.task_type !== 'ATTENDANCE') {
+    if (link.status === 'COMPLETED' && link.task_type !== 'ATTENDANCE' && link.task_type !== 'LOGIN') {
       return { error: 'Task already completed', status: 'COMPLETED' };
     }
 
@@ -213,6 +214,8 @@ export class TaskService {
       link_id: link.id,
       type: link.task_type,
       task_type: link.task_type,
+      otp_verified: link.otp_verified,
+      assigned_to_email: link.assigned_to_email,
       target_grade: link.target_grade,
       target_room: link.target_room,
       target_school_id: link.target_school_id,
@@ -260,6 +263,95 @@ export class TaskService {
     }
 
     return result;
+  }
+
+  async verifyMagicLogin(token: string, sessionToken?: string) {
+    try {
+      const link = await this.getTaskByToken(token);
+      if (!link) {
+        throw new Error('ไม่พบข้อมูลลิงก์หรือลิงก์ไม่ถูกต้อง');
+      }
+      if ('error' in link && link.error) {
+        throw new Error(String(link.error));
+      }
+      if (link.task_type !== 'LOGIN') {
+        throw new Error('ลิงก์นี้ไม่ใช่ลิงก์เข้าสู่ระบบ');
+      }
+
+      // Check device session token
+      let sessionVerified = false;
+      if (sessionToken) {
+        try {
+          const [base64Payload, signature] = sessionToken.split('.');
+          const payload = Buffer.from(base64Payload, 'base64').toString('utf-8');
+          const expectedSign = crypto.createHmac('sha256', 'SECRET_STS_KEY').update(payload).digest('hex');
+          if (expectedSign === signature) {
+            const data = JSON.parse(payload);
+            if (data.link_id === link.id && data.verified === true) {
+              sessionVerified = true;
+            }
+          }
+        } catch (e) {}
+      }
+
+      // Check if OTP verification is required
+      if (link.otp_verified === 0 && !sessionVerified) {
+        return { 
+          otp_required: true, 
+          email: link.assigned_to_email,
+          expires_at: link.expires_at,
+          assigned_to_name: link.assigned_to_name
+        };
+      }
+
+      const email = link.assigned_to_email;
+      if (!email) {
+        throw new Error('ลิงก์นี้ไม่มีข้อมูลอีเมลผู้ใช้งานที่เชื่อมโยง');
+      }
+
+      // Return Virtual User Profile based on Link payload (Acts as Login bypass)
+      return {
+        id: Math.floor(100000 + Math.random() * 900000), // Random virtual ID
+        username: email,
+        FirstName: link.assigned_to_name || 'ผู้ใช้ผ่านลิงก์',
+        LastName: ' (ลิงก์ชั่วคราว)',
+        email: email,
+        affiliation: 'External Link',
+        status: 'ACTIVE',
+        permissions: ['ALL'], // Temp full access until separation is implemented
+        roles: ['ADMIN_SCHOOL'],
+        labels: ['เข้าใช้งานผ่านลิงก์']
+      };
+    } catch (err) {
+      this.logger.error(`verifyMagicLogin error: ${err.message}`);
+      throw err;
+    }
+  }
+
+  async getLoginLinks() {
+    try {
+      const res = await this.db.query(
+        `SELECT tl.id, tl.task_id, tl.assigned_to_name, tl.assigned_to_email, tl.expires_at, tl.status, tl.magic_link, t.created_at
+         FROM task_links tl
+         JOIN tasks t ON t.id = tl.task_id
+         WHERE t.task_type = 'LOGIN'
+         ORDER BY t.created_at DESC`
+      );
+      return res.rows;
+    } catch (err) {
+      this.logger.error(`getLoginLinks error: ${err.message}`);
+      throw err;
+    }
+  }
+
+  async deleteTask(taskId: string) {
+    try {
+      const res = await this.db.query('DELETE FROM tasks WHERE id = $1', [taskId]);
+      return { success: true, rowCount: res.rowCount };
+    } catch (err) {
+      this.logger.error(`deleteTask error: ${err.message}`);
+      throw err;
+    }
   }
 
   async getTaskStudents(token: string) {
@@ -668,10 +760,15 @@ export class TaskService {
       throw new Error('OTP expired');
     }
 
-    await this.db.query(
-      `UPDATE task_links SET otp_verified = 1 WHERE id = $1`,
-      [link.id],
-    );
+    // UPDATE task_links SET otp_verified = 1 WHERE id = $1
+    // (We do not update global otp_verified to enforce device-specific restriction)
+    
+    // Generate Signed Session Token
+    const payload = JSON.stringify({ link_id: link.id, verified: true, ts: Date.now() });
+    const sign = crypto.createHmac('sha256', 'SECRET_STS_KEY').update(payload).digest('hex');
+    const sessionToken = `${Buffer.from(payload).toString('base64')}.${sign}`;
+
+    return { success: true, session_token: sessionToken };
 
     return { success: true, message: 'OTP verified successfully' };
   }

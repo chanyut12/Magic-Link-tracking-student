@@ -34,7 +34,7 @@ export default defineRouter(function (/* { store, ssrContext } */) {
   });
 
   Router.beforeEach((to) => {
-    const isAdmin = localStorage.getItem('admin_access') === 'true';
+    const isAdmin = (sessionStorage.getItem('admin_access') === 'true') || (localStorage.getItem('admin_access') === 'true');
     if (to.matched.some(record => record.meta.requiresAuth)) {
       if (!isAdmin) {
         return {

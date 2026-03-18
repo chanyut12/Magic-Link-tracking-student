@@ -470,7 +470,7 @@ const columns: QTableColumn<AttendanceTask>[] = [
   { name: 'index', label: '#', field: (row: AttendanceTask) => row.id, align: 'left' },
   { name: 'class', label: 'ชั้น/ห้อง', field: (row: AttendanceTask) => `${row.target_grade}/${row.target_room}`, align: 'left' },
   { name: 'assigned_to', label: 'ผู้รับผิดชอบ', field: 'link_assigned_to', align: 'left' },
-  { name: 'status', label: 'สถานะลิงก์', field: (row: AttendanceTask) => getLinkStatus(row), align: 'center' },
+  { name: 'status', label: 'สถานะ', field: (row: AttendanceTask) => getLinkStatus(row), align: 'center' },
   { name: 'actions', label: 'การจัดการ', field: 'id', align: 'left' },
   { name: 'created_at', label: 'วันที่สร้าง', field: 'created_at', align: 'right' },
 ];

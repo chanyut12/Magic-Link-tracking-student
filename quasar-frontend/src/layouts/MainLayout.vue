@@ -127,12 +127,32 @@
               </q-item>
             </q-expansion-item>
 
-            <q-item clickable v-ripple to="/manage-users" class="nav-item">
-              <q-item-section avatar min-width="44px">
-                <i class="fas fa-users-cog"></i>
-              </q-item-section>
-              <q-item-section>จัดการสิทธิ์ผู้ใช้งาน</q-item-section>
-            </q-item>
+            <q-expansion-item
+              clickable
+              class="nav-item"
+              :default-opened="isManageUsersRoute"
+            >
+              <template #header>
+                <q-item-section avatar min-width="44px">
+                  <i class="fas fa-users-cog"></i>
+                </q-item-section>
+                <q-item-section>จัดการสิทธิ์ผู้ใช้งาน</q-item-section>
+              </template>
+
+              <q-item clickable v-ripple to="/manage-users" class="nav-sub-item">
+                <q-item-section avatar min-width="44px">
+                  <i class="fas fa-users"></i>
+                </q-item-section>
+                <q-item-section>จัดการรายชื่อผู้ใช้งาน</q-item-section>
+              </q-item>
+
+              <q-item clickable v-ripple to="/login-links" class="nav-sub-item">
+                <q-item-section avatar min-width="44px">
+                  <i class="fas fa-link"></i>
+                </q-item-section>
+                <q-item-section>ลิงก์เข้าสู่ระบบ</q-item-section>
+              </q-item>
+            </q-expansion-item>
 
             <q-item clickable v-ripple to="/settings" class="nav-item">
               <q-item-section avatar min-width="44px">
@@ -162,7 +182,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { api } from 'boot/axios';
 import { useQuasar } from 'quasar';
@@ -179,6 +199,10 @@ interface User {
   LastName: string | null;
   roles: string[];
   labels?: string[];
+  assigned_to_name?: string;
+  name?: string;
+  selected_role?: string;
+  role?: string;
 }
 
 interface CaseNotification {
@@ -193,11 +217,25 @@ interface CaseNotification {
 }
 
 const currentUser = ref<User | null>(null);
+
+// Watch for route changes to refresh user data instantly on router navigation
+watch(() => route.path, () => {
+  const userStr = sessionStorage.getItem('sts_user') || localStorage.getItem('sts_user');
+  if (userStr) {
+    try {
+      currentUser.value = JSON.parse(userStr) as User;
+    } catch (e) {
+      console.error('Failed to parse sts_user', e);
+    }
+  } else {
+    currentUser.value = null;
+  }
+}, { immediate: true });
 const notifications = ref<CaseNotification[]>([]);
 let notifInterval: number | null = null;
 
 onMounted(() => {
-  const userStr = localStorage.getItem('sts_user');
+  const userStr = sessionStorage.getItem('sts_user') || localStorage.getItem('sts_user');
   if (userStr) {
     try {
       currentUser.value = JSON.parse(userStr) as User;
@@ -267,6 +305,11 @@ const userDisplayName = computed(() => {
   if (!currentUser.value) return 'ผู้ดูแลระบบ';
   const { FirstName, LastName, username } = currentUser.value;
   if (FirstName && LastName) return `${FirstName} ${LastName}`;
+  
+  // Magic link support
+  const nameFromMagic = currentUser.value.assigned_to_name || currentUser.value.name;
+  if (nameFromMagic) return nameFromMagic;
+
   return FirstName || username || 'ผู้ใช้งาน';
 });
 
@@ -277,6 +320,13 @@ const userRoleLabel = computed(() => {
   if (labels.length > 0) {
     return labels.join(', ');
   }
+
+  // Magic link support
+  const singleRole = currentUser.value.selected_role || currentUser.value.role;
+  if (singleRole === 'ADMIN') return 'ผู้ดูแลระบบ';
+  if (singleRole === 'TEACHER') return 'คุณครู';
+  if (singleRole === 'ADMIN_SCHOOL') return 'ผู้ดูแลระบบโรงเรียน';
+  if (singleRole === 'DIRECTOR') return 'ผู้อำนวยการ';
 
   const roles = currentUser.value.roles || [];
   if (roles.includes('ADMIN')) return 'ผู้ดูแลระบบ';
@@ -291,6 +341,10 @@ const userRoleLabel = computed(() => {
 const userInitials = computed(() => {
   if (currentUser.value?.FirstName) return currentUser.value.FirstName.charAt(0).toUpperCase();
   if (currentUser.value?.username) return currentUser.value.username.charAt(0).toUpperCase();
+  
+  const nameFromMagic = currentUser.value?.assigned_to_name || currentUser.value?.name;
+  if (nameFromMagic) return nameFromMagic.charAt(0).toUpperCase();
+
   return 'A';
 });
 
@@ -298,6 +352,10 @@ const hideNavigation = computed(() => !!route.meta.hideNav);
 
 const isAttendanceRoute = computed(() => 
   route.path === '/attendance' || route.path === '/attendance-dashboard'
+);
+
+const isManageUsersRoute = computed(() => 
+  route.path === '/manage-users' || route.path === '/login-links'
 );
 
 const pageTitle = computed(() => {
@@ -318,6 +376,8 @@ function toggleLeftDrawer () {
 }
 
 async function logout() {
+  sessionStorage.removeItem('admin_access');
+  sessionStorage.removeItem('sts_user');
   localStorage.removeItem('admin_access');
   localStorage.removeItem('sts_user');
   $q.notify({

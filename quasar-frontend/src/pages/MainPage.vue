@@ -221,7 +221,7 @@ const fetchOverview = async () => {
 
 onMounted(() => {
   void fetchOverview();
-  const userStr = localStorage.getItem('sts_user');
+  const userStr = sessionStorage.getItem('sts_user') || localStorage.getItem('sts_user');
   if (userStr) {
     try {
       currentUser.value = JSON.parse(userStr) as User;

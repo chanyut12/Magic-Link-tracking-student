@@ -2,6 +2,7 @@ import {
   Controller,
   Post,
   Get,
+  Delete,
   Body,
   Param,
   Query,
@@ -40,6 +41,11 @@ export class TaskController {
     }
   }
 
+  @Get('login-links')
+  async getLoginLinks() {
+    return await this.taskService.getLoginLinks();
+  }
+
   @Get(':token')
   async getTask(@Param('token') token: string) {
     const task = await this.taskService.getTaskByToken(token);
@@ -58,6 +64,16 @@ export class TaskController {
   @Get(':token/students')
   async getTaskStudents(@Param('token') token: string) {
     return await this.taskService.getTaskStudents(token);
+  }
+
+  @Get(':token/login-verify')
+  async verifyMagicLogin(@Param('token') token: string, @Req() req: Request) {
+    try {
+      const sessionToken = req.headers['x-magic-session'] as string;
+      return await this.taskService.verifyMagicLogin(token, sessionToken);
+    } catch (err) {
+      throw new HttpException(err.message, HttpStatus.UNAUTHORIZED);
+    }
   }
 
   @Get(':token/history')
@@ -96,5 +112,12 @@ export class TaskController {
   @Post(':token/verify')
   async verifyOtp(@Param('token') token: string, @Body('otp') otp: string) {
     return await this.taskService.verifyOtp(token, otp);
+  }
+
+  @Post(':taskId/delete') // Wait, using @Delete is better standard
+  @Post('delete/:taskId') // Wait, let's just do standard @Delete
+  @Delete(':taskId')
+  async deleteTask(@Param('taskId') taskId: string) {
+    return await this.taskService.deleteTask(taskId);
   }
 }

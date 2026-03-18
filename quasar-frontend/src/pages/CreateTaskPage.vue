@@ -36,6 +36,11 @@
           <div class="type-title">ภารกิจเช็คชื่อ</div>
           <div class="type-desc">สำหรับการมอบหมายงานเช็คชื่อนักเรียนรายห้องให้กับครูประจำชั้นหรือตัวแทน</div>
         </div>
+        <div class="type-card" @click="selectType('LOGIN')">
+          <span class="type-icon">🔑</span>
+          <div class="type-title">ลิงก์เข้าสู่ระบบ</div>
+          <div class="type-desc">สำหรับให้ผู้ใช้งานเข้าสู่ระบบอัตโนมัติผ่านลิงก์โดยไม่ต้องใช้รหัสผ่าน</div>
+        </div>
       </div>
 
       <!-- Step 2: Forms -->
@@ -231,8 +236,82 @@
           </div>
         </div>
 
+        <!-- Login Form -->
+        <div v-if="formData.type === 'LOGIN'" class="card q-mb-md">
+          <div class="card-title">ตั้งค่าสิทธิ์การเข้าใช้งานผ่านลิงก์</div>
+          <div class="form-group">
+            <label>ชื่อ-นามสกุล ผู้ใช้งานลิงก์ *</label>
+            <input type="text" v-model="formData.assigned_to_name" placeholder="เช่น อาจารย์สมเกียรติติตรงนี้">
+          </div>
+          <div class="form-group">
+            <label>อีเมล/Username (สวมสิทธิ์) *</label>
+            <input type="email" v-model="formData.assigned_to_email" placeholder="เช่น teacher_temp@school.ac.th">
+          </div>
+
+          <div class="form-group">
+            <label>บทบาท (Role) *</label>
+            <select v-model="formData.selected_role" style="width: 100% !important; height: 48px;">
+              <option value="ADMIN_SCHOOL">ผู้บริหารโรงเรียน</option>
+              <option value="TEACHER">ครูประจำชั้น</option>
+              <option value="STAFF">เจ้าหน้าที่ทั่วไป</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>สิทธิ์การใช้งาน (Permissions) - ฟังก์ชันอนาคต</label>
+            <q-btn-dropdown
+              color="white"
+              text-color="grey-8"
+              flat
+              no-caps
+              class="full-width dropdown-btn-select"
+              label="-- เลือกสิทธิ์การใช้งาน --"
+              style="border: 1px solid #e2e8f0; border-radius: 8px; height: 48px; text-align: left !important; justify-content: space-between !important;"
+              align="left"
+            >
+              <q-list class="q-pa-sm" style="min-width: 250px;">
+                <q-item v-for="opt in permissionOptions" :key="opt.value" dense class="q-py-xs">
+                  <q-item-section side>
+                    <q-checkbox v-model="formData.mock_permissions" :val="opt.value" color="primary" />
+                  </q-item-section>
+                  <q-item-section>
+                    <q-item-label>{{ opt.label }}</q-item-label>
+                  </q-item-section>
+                </q-item>
+              </q-list>
+            </q-btn-dropdown>
+
+            <!-- Display Selected Permissions as Chips -->
+            <div class="q-mt-sm q-gutter-xs">
+              <q-chip 
+                v-for="val in formData.mock_permissions" 
+                :key="val" 
+                dense 
+                color="blue-1" 
+                text-color="primary"
+                removable
+                @remove="formData.mock_permissions = formData.mock_permissions.filter(p => p !== val)"
+              >
+                {{ permissionOptions.find(o => o.value === val)?.label }}
+              </q-chip>
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label>อายุลิงก์</label>
+            <div class="expiry-row">
+              <input type="number" v-model="formData.expires_value" min="1" max="90">
+              <select v-model="formData.expires_unit">
+                <option value="hours">ชั่วโมง</option>
+                <option value="days">วัน</option>
+                <option value="weeks">สัปดาห์</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
         <!-- Assignee Info -->
-        <div class="card q-mb-lg">
+        <div v-if="formData.type !== 'LOGIN'" class="card q-mb-lg">
           <div class="card-title">ผู้รับภารกิจ</div>
           <div class="form-group">
             <label>ชื่อผู้รับงาน *</label>
@@ -313,6 +392,13 @@ const resultLink = ref('');
 const qrCodeUrl = ref('');
 const mapPickerInput = ref('');
 
+const permissionOptions = [
+  { label: 'ดูแดชบอร์ดรายงาน', value: 'VIEW_DASHBOARD' },
+  { label: 'จัดการรายชื่อนักเรียน', value: 'MANAGE_STUDENTS' },
+  { label: 'เช็คชื่อขาด/มา', value: 'CHECK_ATTENDANCE' },
+  { label: 'สร้างลิงก์/มอบหมายงาน', value: 'MANAGE_TASKS' }
+];
+
 const formData = reactive({
   type: '',
   student_name: '',
@@ -339,6 +425,9 @@ const formData = reactive({
   expires_value: 1,
   expires_unit: 'days',
   target_school_id: '', // Added for attendance scoping
+  selected_user_id: '', // For magic login lookup
+  selected_role: 'TEACHER', // For UI placeholder roles
+  mock_permissions: ['VIEW_DASHBOARD'], // For UI placeholder checklist
 });
 
 interface GradeLevel { id: number; label: string; }
@@ -436,7 +525,9 @@ onMounted(async () => {
 
 const pageTitle = computed(() => {
   if (currentStep.value === 1) return 'สร้างภารกิจ';
-  return formData.type === 'VISIT' ? 'สร้างภารกิจลงพื้นที่' : 'สร้างภารกิจเช็คชื่อ';
+  if (formData.type === 'VISIT') return 'สร้างภารกิจลงพื้นที่';
+  if (formData.type === 'LOGIN') return 'สร้างลิงก์เข้าสู่ระบบ';
+  return 'สร้างภารกิจเช็คชื่อ';
 });
 
 const hasValidCoordinates = computed(() => {
@@ -533,12 +624,16 @@ const submitForm = async () => {
     const payload = {
       ...formData,
       student_address: formData.type === 'VISIT' ? buildDetailedAddress(formData) : formData.student_address,
-      task_type: formData.type, // Backend expects task_type
+      task_type: formData.type, 
       subject: formData.target_subject || null,
       target_school_id: formData.type === 'ATTENDANCE' && formData.target_school_id ? parseInt(formData.target_school_id, 10) : null,
     };
     const res = await api.post('/api/tasks', payload);
-    resultLink.value = normalizePublicLink(res.data.magic_link);
+    let link = normalizePublicLink(res.data.magic_link);
+    if (formData.type === 'LOGIN') {
+      link = link.replace('/task/', '/login/magic/');
+    }
+    resultLink.value = link;
     // We don't have a QR code generator in this mock yet, so just leave it empty or use dummy
     qrCodeUrl.value = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(resultLink.value)}`;
     showResult.value = true;
@@ -707,7 +802,7 @@ const normalizePublicLink = (rawLink: string) => {
 /* Type Selection */
 .type-selection {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 1.5rem;
 }
 

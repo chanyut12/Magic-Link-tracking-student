@@ -1,7 +1,6 @@
 <template>
   <q-page class="manage-users-page q-pa-lg">
     <div class="page-container">
-      
       <!-- Top Action Bar (Fixed at top of page) -->
       <div class="top-bar-sticky">
         <div class="row items-center justify-between q-mb-md sticky-content q-col-gutter-sm">
@@ -54,15 +53,14 @@
       </div>
 
       <div v-else class="user-list">
-
-        <!-- Desktop Row Layout -->
-        <template v-if="!$q.screen.lt.sm">
-          <div
-            v-for="(user, index) in filteredUsers"
-            :key="user.id ?? index"
-            class="user-card row items-center q-px-lg q-mb-md"
-          >
-            <div class="col-1 text-center user-index">{{ index + 1 }}</div>
+          <!-- Desktop Row Layout -->
+          <template v-if="!$q.screen.lt.sm">
+            <div
+              v-for="(user, index) in filteredUsers"
+              :key="user.id ?? index"
+              class="user-card row items-center q-px-lg q-mb-md"
+            >
+              <div class="col-1 text-center user-index">{{ index + 1 }}</div>
             <div class="col-1 text-weight-medium text-grey-8">{{ user.username }}</div>
             <div class="col-2 text-grey-8 px-2">{{ user.PersonID_Onec || '-' }}</div>
             <div class="col-2 text-weight-bold text-grey-9 text-truncate">
@@ -123,7 +121,8 @@
         <div v-if="filteredUsers.length === 0" class="text-center q-pa-xl text-grey-6">
           ไม่พบข้อมูลผู้ใช้งาน
         </div>
-      </div>
+
+      </div> <!-- End user-list -->
 
       <!-- Pagination -->
       <div class="row justify-center q-mt-xl">
@@ -465,7 +464,6 @@ const isEdit = ref(false);
 const activeTab = ref('menu');
 const selectedRoles = ref<string[]>([]);
 const userFormRef = ref<QForm | null>(null);
-
 const userForm = ref<User>({
   id: null,
   username: '',
@@ -503,7 +501,15 @@ const menuList = ref([
   { id: 'manage_users', label: 'จัดการสิทธิ์ผู้ใช้งาน' },
   { id: 'history', label: 'ประวัติการใช้งาน' },
   { id: 'visit', label: 'เยี่ยมบ้าน' },
-  { id: 'attendance', label: 'เช็คชื่อ' },
+  { 
+    id: 'attendance_system', 
+    label: 'ระบบเช็คชื่อ', 
+    expanded: false,
+    children: [
+      { id: 'attendance_dashboard', label: 'Dashboard เช็คชื่อ' },
+      { id: 'attendance', label: 'เช็คชื่อ' }
+    ]
+  },
   { id: 'profile', label: 'ข้อมูลส่วนตัว' },
   { id: 'edu_history', label: 'ประวัติการศึกษา' },
   { id: 'health', label: 'ข้อมูลสุขภาพ' },
@@ -538,6 +544,7 @@ const fetchUsers = async () => {
     loading.value = false;
   }
 };
+
 
 const fetchRoles = async () => {
   try {
