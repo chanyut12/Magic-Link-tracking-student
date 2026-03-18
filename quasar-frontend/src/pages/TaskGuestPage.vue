@@ -337,6 +337,7 @@ const otpInput = ref('');
 const otpLoading = ref(false);
 const students = ref<Student[]>([]);
 const attendanceSelections = reactive<Record<string, string>>({});
+const touchedSelections = reactive<Record<string, boolean>>({});
 const searchQuery = ref('');
 
 const avatarColors = [
@@ -474,7 +475,9 @@ const loadHistory = async () => {
         // Feed into selections for today
         hRes.data.data.forEach((r: { student_id: string, status: number }) => {
           if (Object.prototype.hasOwnProperty.call(attendanceSelections, r.student_id)) {
+            if (!touchedSelections[r.student_id]) {
               attendanceSelections[r.student_id] = statusMap[r.status] || 'P_PRESENT';
+            }
           }
         });
       }
@@ -538,6 +541,7 @@ const verifyOTP = async () => {
 
 const setStatus = (id: string, status: string) => {
   attendanceSelections[id] = status;
+  touchedSelections[id] = true; // Mark as locally edited
 };
 
 const submitVisit = async (status: string) => {
@@ -619,6 +623,10 @@ const saveAttendance = async () => {
     const res = await api.post(`/api/tasks/${token}/attendance`, { records });
     if (res.data.success) {
       $q.notify({ message: 'บันทึกข้อมูลสำเร็จ', color: 'positive' });
+      // Clear touched state
+      for (const key in touchedSelections) {
+         delete touchedSelections[key];
+      }
       await fetchData();
     }
   } catch {

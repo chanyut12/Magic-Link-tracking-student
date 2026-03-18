@@ -378,7 +378,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
 import { api } from 'boot/axios';
 import { useQuasar } from 'quasar';
 import type { QTableColumn } from 'quasar';
@@ -475,24 +475,26 @@ const columns: QTableColumn<AttendanceTask>[] = [
   { name: 'created_at', label: 'วันที่สร้าง', field: 'created_at', align: 'right' },
 ];
 
-const fetchData = async () => {
-  loading.value = true;
+const fetchData = async (silent = false) => {
+  if (!silent) loading.value = true;
   try {
     const res = await api.get('/api/attendance/tasks');
     tasks.value = res.data;
     loadError.value = '';
-    lastUpdated.value = new Date().toLocaleString('th-TH', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    if (!silent) {
+      lastUpdated.value = new Date().toLocaleString('th-TH', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
   } catch (err) {
     console.error(err);
     loadError.value = 'ตรวจสอบการเชื่อมต่อหรือสิทธิ์การเข้าถึง แล้วกดรีเฟรชอีกครั้ง';
   } finally {
-    loading.value = false;
+    if (!silent) loading.value = false;
   }
 };
 
@@ -656,9 +658,19 @@ const resetFilters = () => {
   filters.status = 'ALL';
 };
 
+let refreshInterval: ReturnType<typeof setInterval> | null = null;
+
 onMounted(async () => {
   await fetchGradeLevels();
   await fetchData();
+  // Poll every 10 seconds silently
+  refreshInterval = setInterval(() => { void fetchData(true); }, 10000);
+});
+
+onUnmounted(() => {
+  if (refreshInterval) {
+    clearInterval(refreshInterval);
+  }
 });
 </script>
 

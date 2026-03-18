@@ -276,6 +276,46 @@ export class DatabaseService implements OnModuleInit {
         ALTER TABLE task_submissions ADD COLUMN IF NOT EXISTS updated_student_address TEXT;
         ALTER TABLE task_submissions ADD COLUMN IF NOT EXISTS updated_lat REAL;
         ALTER TABLE task_submissions ADD COLUMN IF NOT EXISTS updated_lng REAL;
+        -- Phase 2: System Settings
+        CREATE TABLE IF NOT EXISTS system_settings (
+          setting_key TEXT PRIMARY KEY,
+          setting_value TEXT NOT NULL,
+          description TEXT,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        INSERT INTO system_settings (setting_key, setting_value, description) 
+        VALUES ('ABSENT_THRESHOLD_DAYS', '3', 'จำนวนวันขาดเรียนติดต่อกันก่อนที่จะแจ้งเตือนหรือเปิดเคสอัตโนมัติ')
+        ON CONFLICT (setting_key) DO NOTHING;
+
+        INSERT INTO system_settings (setting_key, setting_value, description) 
+        VALUES ('ALERT_TRIGGER_TYPE', 'SCHEDULED', 'รูปแบบการทำงาน (SCHEDULED = ตามตารางกะเวลา, IMMEDIATE = แจ้งเตือนทันที)')
+        ON CONFLICT (setting_key) DO NOTHING;
+
+        INSERT INTO system_settings (setting_key, setting_value, description) 
+        VALUES ('ALERT_SCHEDULE_TIME', '18:00', 'เวลาที่จะรันบอทตรวจสอบข้อมูล (HH:MM) เมื่อเลือกรูปแบบ SCHEDULED')
+        ON CONFLICT (setting_key) DO NOTHING;
+
+        -- Phase 2: Master Data
+        CREATE TABLE IF NOT EXISTS risk_factors (
+          id SERIAL PRIMARY KEY,
+          label TEXT NOT NULL UNIQUE
+        );
+        CREATE TABLE IF NOT EXISTS dropout_reasons (
+          id SERIAL PRIMARY KEY,
+          label TEXT NOT NULL UNIQUE
+        );
+        CREATE TABLE IF NOT EXISTS assistance_measures (
+          id SERIAL PRIMARY KEY,
+          label TEXT NOT NULL UNIQUE
+        );
+        CREATE TABLE IF NOT EXISTS related_agencies (
+          id SERIAL PRIMARY KEY,
+          name TEXT NOT NULL UNIQUE
+        );
+        CREATE TABLE IF NOT EXISTS educational_areas (
+          id SERIAL PRIMARY KEY,
+          name TEXT NOT NULL UNIQUE
+        );
       `);
       await client.query('COMMIT');
       this.logger.log('Migrations complete.');

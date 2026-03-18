@@ -9,6 +9,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { hashToken, generateToken, clean } from '../common/utils/helpers';
 import * as QRCode from 'qrcode';
 import { EmailService } from './email.service';
+import { AutomationService } from '../automation/automation.service';
 
 function maskName(name: string | null | undefined): string {
   if (!name) return '-';
@@ -28,6 +29,7 @@ export class TaskService {
   constructor(
     private readonly db: DatabaseService,
     private readonly emailService: EmailService,
+    private readonly automationService: AutomationService,
   ) {}
 
   async createTask(data: any, baseUrl: string) {
@@ -465,6 +467,19 @@ export class TaskService {
           }
         }
       });
+
+      // Post-transaction: Check if we need to run Immediate Automation
+      const triggerRes = await this.db.query("SELECT setting_value FROM system_settings WHERE setting_key = 'ALERT_TRIGGER_TYPE'");
+      const triggerType = triggerRes.rowCount > 0 ? triggerRes.rows[0].setting_value : 'SCHEDULED';
+      
+      if (triggerType === 'IMMEDIATE') {
+        this.logger.log('Attendance saved via Task link. Trigger Type is IMMEDIATE. Executing absence check...');
+        // Fire and forget
+        this.automationService.checkConsecutiveAbsences().catch(err => {
+           this.logger.error('Error executing immediate absence check from task', err);
+        });
+      }
+
       return { success: true };
     } catch (err) {
       this.logger.error(`saveTaskAttendance error: ${err.message}`);

@@ -9,8 +9,10 @@ import { SubmissionController } from './submission.controller';
 import { EmailService } from './email.service';
 import { CaseController } from './case.controller';
 import { CaseService } from './case.service';
+import { AutomationModule } from '../automation/automation.module';
 
 @Module({
+  imports: [AutomationModule],
   controllers: [
     TaskController,
     AdminController,

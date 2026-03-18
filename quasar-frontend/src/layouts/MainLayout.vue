@@ -18,8 +18,44 @@
         </q-toolbar-title>
 
         <div class="header-actions">
-          <q-btn flat round dense color="grey-8" icon="far fa-bell" class="header-icon-btn" />
-          <q-btn flat round dense color="grey-8" icon="fas fa-cog" class="header-icon-btn" />
+          <q-btn flat round dense color="grey-8" icon="far fa-bell" class="header-icon-btn">
+            <q-badge color="negative" floating v-if="unreadCount > 0">{{ unreadCount }}</q-badge>
+            <q-menu>
+              <q-list style="min-width: 300px; max-width: 350px;">
+                <q-item-label header class="text-weight-bold text-dark row items-center justify-between">
+                  <span>รายการแจ้งเตือน (เคสใหม่)</span>
+                  <q-btn flat dense color="primary" label="อ่านทั้งหมด" size="sm" @click="markAsRead" v-if="unreadCount > 0" />
+                </q-item-label>
+                <q-item
+                  v-for="notif in notifications" 
+                  :key="notif.id" 
+                  clickable 
+                  v-close-popup 
+                  @click="goToCase(notif.id)"
+                  :class="['q-py-md', { 'bg-blue-1': !readCaseIds.includes(notif.id) }]"
+                >
+                  <q-item-section avatar>
+                    <q-avatar color="red-1" text-color="negative" icon="warning" size="sm" />
+                  </q-item-section>
+                  <q-item-section>
+                    <q-item-label class="text-weight-medium row items-center">
+                      <span>แจ้งเตือนขาดเรียน</span>
+                      <q-badge color="red" v-if="!readCaseIds.includes(notif.id)" label="ใหม่" class="q-ml-xs" size="xs" />
+                    </q-item-label>
+                    <q-item-label caption lines="2">{{ notif.reason || 'เด็กนักเรียนขาดเรียนติดต่อกัน' }} - {{ notif.student_name }}</q-item-label>
+                    <q-item-label caption class="text-primary q-mt-xs">{{ formatDate(notif.created_at) }}</q-item-label>
+                  </q-item-section>
+                </q-item>
+                
+                <q-item v-if="notifications.length === 0">
+                  <q-item-section class="text-grey text-center q-py-md">
+                    ไม่มีการแจ้งเตือนเคสใหม่
+                  </q-item-section>
+                </q-item>
+              </q-list>
+            </q-menu>
+          </q-btn>
+          <q-btn flat round dense color="grey-8" icon="fas fa-cog" class="header-icon-btn" to="/settings" />
         </div>
       </q-toolbar>
     </q-header>
@@ -97,6 +133,13 @@
               </q-item-section>
               <q-item-section>จัดการสิทธิ์ผู้ใช้งาน</q-item-section>
             </q-item>
+
+            <q-item clickable v-ripple to="/settings" class="nav-item">
+              <q-item-section avatar min-width="44px">
+                <i class="fas fa-cogs"></i>
+              </q-item-section>
+              <q-item-section>ตั้งค่าระบบ (Master Data)</q-item-section>
+            </q-item>
           </q-list>
         </div>
 
@@ -119,8 +162,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { api } from 'boot/axios';
 import { useQuasar } from 'quasar';
 
 const route = useRoute();
@@ -137,7 +181,20 @@ interface User {
   labels?: string[];
 }
 
+interface CaseNotification {
+  id: number;
+  case_id?: number;
+  title?: string;
+  message?: string;
+  student_name?: string;
+  reason?: string;
+  created_at: string;
+  status: string;
+}
+
 const currentUser = ref<User | null>(null);
+const notifications = ref<CaseNotification[]>([]);
+let notifInterval: number | null = null;
 
 onMounted(() => {
   const userStr = localStorage.getItem('sts_user');
@@ -148,7 +205,63 @@ onMounted(() => {
       console.error('Failed to parse sts_user', e);
     }
   }
+
+  // Load initial notifications for OPEN cases
+  void fetchNotifications();
+  // Poll every 10s
+  notifInterval = window.setInterval(() => {
+    void fetchNotifications();
+  }, 10000);
 });
+
+onUnmounted(() => {
+  if (notifInterval) {
+    clearInterval(notifInterval);
+  }
+});
+
+async function fetchNotifications() {
+  try {
+    const res = await api.get('/api/cases');
+    // Filter only OPEN cases that need attention
+    notifications.value = res.data.filter((c: CaseNotification) => c.status === 'OPEN');
+  } catch (err) {
+    console.warn('Failed to fetch notifications', err);
+  }
+}
+
+const readCaseIds = ref<number[]>(JSON.parse(localStorage.getItem('read_case_ids') || '[]'));
+
+const unreadCount = computed(() => {
+  return notifications.value.filter(n => !readCaseIds.value.includes(n.id)).length;
+});
+
+function markAsRead() {
+  if (notifications.value.length > 0) {
+    const ids = notifications.value.map(n => n.id);
+    const uniqueIds = Array.from(new Set([...readCaseIds.value, ...ids]));
+    readCaseIds.value = uniqueIds;
+    localStorage.setItem('read_case_ids', JSON.stringify(uniqueIds));
+  }
+}
+
+function formatDate(dateStr: string) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  return d.toLocaleString('th-TH', { 
+    year: 'numeric', month: 'short', day: 'numeric', 
+    hour: '2-digit', minute: '2-digit' 
+  });
+}
+
+function goToCase(caseId: number) {
+  // Mark as read individually on click
+  if (!readCaseIds.value.includes(caseId)) {
+    readCaseIds.value.push(caseId);
+    localStorage.setItem('read_case_ids', JSON.stringify(readCaseIds.value));
+  }
+  void router.push(`/task-detail/${caseId}`);
+}
 
 const userDisplayName = computed(() => {
   if (!currentUser.value) return 'ผู้ดูแลระบบ';
@@ -195,6 +308,7 @@ const pageTitle = computed(() => {
   if (route.path === '/attendance-dashboard') return 'Dashboard เช็คชื่อ';
   if (route.path === '/admin-access') return 'Admin Access';
   if (route.path === '/manage-users') return 'จัดการผู้ใช้งาน';
+  if (route.path === '/settings') return 'ตั้งค่าระบบและข้อมูลพื้นฐาน';
   if (route.path.startsWith('/task-detail/')) return 'รายละเอียดเคส';
   return 'Student Tracking System';
 });

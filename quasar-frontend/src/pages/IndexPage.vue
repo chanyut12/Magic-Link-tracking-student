@@ -460,7 +460,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
 import { api } from 'boot/axios';
 import { useQuasar } from 'quasar';
 import type { QTableColumn } from 'quasar';
@@ -562,8 +562,8 @@ const columns: QTableColumn<Case>[] = [
   { name: 'created_at', label: 'วันที่สร้าง', field: 'created_at', align: 'right', sortable: true },
 ];
 
-const fetchData = async () => {
-  loading.value = true;
+const fetchData = async (silent = false) => {
+  if (!silent) loading.value = true;
   try {
     const res = await api.get('/api/cases');
     rawCases.value = res.data;
@@ -571,18 +571,20 @@ const fetchData = async () => {
     const statsRes = await api.get('/api/stats');
     Object.assign(stats, statsRes.data);
     loadError.value = '';
-    lastUpdated.value = new Date().toLocaleString('th-TH', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    if (!silent) {
+      lastUpdated.value = new Date().toLocaleString('th-TH', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
   } catch (err) {
     console.error(err);
     loadError.value = 'ตรวจสอบการเชื่อมต่อหรือสิทธิ์การเข้าถึง แล้วกดรีเฟรชอีกครั้ง';
   } finally {
-    loading.value = false;
+    if (!silent) loading.value = false;
   }
 };
 
@@ -736,7 +738,19 @@ const resetFilters = () => {
   filters.school = 'ALL';
 };
 
-onMounted(fetchData);
+let refreshInterval: ReturnType<typeof setInterval> | null = null;
+
+onMounted(() => {
+  void fetchData();
+  // Poll every 10 seconds for real-time feel silently
+  refreshInterval = setInterval(() => { void fetchData(true); }, 10000);
+});
+
+onUnmounted(() => {
+  if (refreshInterval) {
+    clearInterval(refreshInterval);
+  }
+});
 </script>
 
 <style lang="scss" scoped>
