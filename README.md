@@ -38,6 +38,23 @@ export ADMIN_ACCESS_KEY="your-strong-key"
 npm start
 ```
 
+## Docker (PostgreSQL + Auto Restore)
+
+ระบบจะ restore จากไฟล์ `sts_backup.sql` อัตโนมัติเมื่อเริ่ม `db` ครั้งแรก (ตอนที่ volume ยังว่าง):
+
+```bash
+docker compose up -d db
+```
+
+ครั้งถัดไปให้ใช้แค่ `docker compose down` และ `docker compose up -d db` ได้เลย (จะไม่ restore ซ้ำเพราะใช้ volume เดิม)
+
+ถ้าต้องการให้ restore ใหม่อีกครั้ง ให้ลบ volume เก่าก่อน:
+
+```bash
+docker compose down -v
+docker compose up -d db
+```
+
 เปิดเว็บที่:
 
 - บนเครื่องที่รันเซิร์ฟเวอร์: `http://localhost:3000`
