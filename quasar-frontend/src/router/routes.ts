@@ -10,6 +10,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'create', component: () => import('pages/CreateTaskPage.vue'), meta: { requiresAuth: true } },
       { path: 'attendance', component: () => import('pages/AttendancePage.vue'), meta: { requiresAuth: true } },
       { path: 'attendance-dashboard', component: () => import('pages/AttendanceDashboardPage.vue'), meta: { requiresAuth: true } },
+      { path: 'import-data', component: () => import('pages/ImportDataPage.vue'), meta: { requiresAuth: true } },
       { path: 'manage-users', component: () => import('pages/ManageUserPage.vue'), meta: { requiresAuth: true } },
       { path: 'login-links', component: () => import('pages/LoginLinksPage.vue'), meta: { requiresAuth: true } },
       { path: 'settings', component: () => import('pages/SystemSettingsPage.vue'), meta: { requiresAuth: true } },
