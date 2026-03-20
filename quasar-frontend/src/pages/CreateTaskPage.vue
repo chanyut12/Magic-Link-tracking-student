@@ -48,6 +48,10 @@
         
         <!-- Visit Form -->
         <div v-if="formData.type === 'VISIT'" class="card q-mb-md">
+          <div v-if="formData.existing_case_id" class="linked-case-banner q-mb-md">
+            <i class="fa-solid fa-link q-mr-xs"></i>
+            เชื่อมกับเคส #{{ formData.existing_case_id }} — สถานะจะเปลี่ยนเป็น <strong>กำลังติดตาม</strong> หลังสร้างลิงค์
+          </div>
           <div class="card-title">ข้อมูลนักเรียน (ลงพื้นที่)</div>
           <div class="form-group">
             <label>ชื่อ-สกุล นักเรียน *</label>
@@ -380,11 +384,13 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue';
+import { useRoute } from 'vue-router';
 import { api } from 'boot/axios';
 import type { AxiosError } from 'axios';
 import { useQuasar } from 'quasar';
 
 const $q = useQuasar();
+const route = useRoute();
 const currentStep = ref(1);
 const loading = ref(false);
 const showResult = ref(false);
@@ -428,6 +434,7 @@ const formData = reactive({
   selected_user_id: '', // For magic login lookup
   selected_role: 'TEACHER', // For UI placeholder roles
   mock_permissions: ['VIEW_DASHBOARD'], // For UI placeholder checklist
+  existing_case_id: '', // Pre-linked case when coming from dashboard
 });
 
 interface GradeLevel { id: number; label: string; }
@@ -521,6 +528,17 @@ const fetchGradeLevels = async () => {
 onMounted(async () => {
   await fetchGradeLevels();
   void fetchLocations();
+
+  // Pre-fill from query params when coming from dashboard OPEN case
+  const { case_id, student_name, student_school, reason } = route.query;
+  if (case_id) {
+    formData.existing_case_id = String(case_id);
+    formData.student_name = student_name ? String(student_name) : '';
+    formData.student_school = student_school ? String(student_school) : '';
+    formData.reason_flagged = reason ? String(reason) : '';
+    formData.type = 'VISIT';
+    currentStep.value = 2;
+  }
 });
 
 const pageTitle = computed(() => {
@@ -621,13 +639,16 @@ const submitForm = async () => {
 
   loading.value = true;
   try {
-    const payload = {
+    const payload: Record<string, unknown> = {
       ...formData,
       student_address: formData.type === 'VISIT' ? buildDetailedAddress(formData) : formData.student_address,
-      task_type: formData.type, 
+      task_type: formData.type,
       subject: formData.target_subject || null,
       target_school_id: formData.type === 'ATTENDANCE' && formData.target_school_id ? parseInt(formData.target_school_id, 10) : null,
     };
+    if (formData.existing_case_id) {
+      payload.existing_case_id = formData.existing_case_id;
+    }
     const res = await api.post('/api/tasks', payload);
     let link = normalizePublicLink(res.data.magic_link);
     if (formData.type === 'LOGIN') {
@@ -909,6 +930,16 @@ const normalizePublicLink = (rawLink: string) => {
   color: #1e3a8a;
   padding: 10px 12px;
   font-size: 0.9rem;
+}
+
+.linked-case-banner {
+  background: #f0fdfa;
+  border: 1.5px solid #99f6e4;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 0.9rem;
+  color: #0f766e;
+  font-weight: 600;
 }
 
 .magic-link-box {

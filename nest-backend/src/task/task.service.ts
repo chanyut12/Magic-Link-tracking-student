@@ -875,6 +875,9 @@ export class TaskService {
   async getStats() {
     try {
       const totalRes = await this.db.query(`SELECT count(*) FROM cases`);
+      const openRes = await this.db.query(
+        `SELECT count(*) FROM cases WHERE status = 'OPEN'`,
+      );
       const inProgressRes = await this.db.query(
         `SELECT count(*) FROM cases WHERE status = 'IN_PROGRESS'`,
       );
@@ -896,6 +899,7 @@ export class TaskService {
 
       return {
         total: parseInt(totalRes.rows[0].count, 10),
+        open: parseInt(openRes.rows[0].count, 10),
         inProgress: parseInt(inProgressRes.rows[0].count, 10),
         resolved: parseInt(resolvedRes.rows[0].count, 10),
         today: parseInt(todayRes.rows[0].count, 10),

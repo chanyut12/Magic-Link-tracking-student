@@ -260,6 +260,32 @@
       </q-card>
     </q-dialog>
 
+    <!-- Auto-Case Alert Dialog -->
+    <q-dialog v-model="newCasesDialog.show">
+      <q-card style="min-width: 360px; max-width: 92vw;">
+        <q-card-section class="row items-center q-pb-none">
+          <i class="fa-solid fa-triangle-exclamation text-amber-8 q-mr-sm" style="font-size:1.4rem;"></i>
+          <div class="text-h6 text-amber-9">แจ้งเตือน: สร้างเคสอัตโนมัติ</div>
+        </q-card-section>
+        <q-card-section>
+          <p class="text-body2 q-mb-sm">ระบบสร้างเคสใหม่อัตโนมัติสำหรับนักเรียนต่อไปนี้:</p>
+          <q-list bordered separator>
+            <q-item v-for="c in newCasesDialog.cases" :key="c.case_id">
+              <q-item-section>
+                <q-item-label class="text-weight-bold">{{ c.student_name }}</q-item-label>
+                <q-item-label caption>{{ c.student_school }}</q-item-label>
+                <q-item-label caption class="text-amber-8">{{ c.reason_flagged }}</q-item-label>
+              </q-item-section>
+            </q-item>
+          </q-list>
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat label="ปิด" v-close-popup />
+          <q-btn color="primary" label="ดูรายการเคส" to="/" v-close-popup />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
     <!-- Confetti Celebration -->
     <div v-if="showConfetti" class="confetti-container">
       <div 
@@ -302,6 +328,13 @@ interface AttendanceRecord {
   school_id?: string | number;
 }
 
+interface NewCase {
+  case_id: number;
+  student_name: string;
+  student_school: string;
+  reason_flagged: string;
+}
+
 interface GradeLevel {
   id: number;
   label: string;
@@ -330,6 +363,11 @@ const searchQuery = ref('');
 const historyDate = ref(new Date().toISOString().split('T')[0]);
 const saving = ref(false);
 const showConfetti = ref(false);
+
+const newCasesDialog = reactive<{ show: boolean; cases: NewCase[] }>({
+  show: false,
+  cases: [],
+});
 
 const avatarColors = [
   ['#6366f1', '#8b5cf6'],
@@ -586,14 +624,18 @@ const saveAttendance = async () => {
     const res = await api.post('/api/attendance', { records });
     if (res.data.success) {
       triggerConfetti();
-      $q.notify({ 
-        message: 'บันทึกสำเร็จ! 🎉', 
-        color: 'positive', 
+      $q.notify({
+        message: 'บันทึกสำเร็จ! 🎉',
+        color: 'positive',
         position: 'top',
         icon: 'check_circle',
         timeout: 2000
       });
       await fetchStudents();
+      if (res.data.newCases && res.data.newCases.length > 0) {
+        newCasesDialog.cases = res.data.newCases;
+        newCasesDialog.show = true;
+      }
     }
   } catch {
     $q.notify({ message: 'เกิดข้อผิดพลาด', color: 'negative' });

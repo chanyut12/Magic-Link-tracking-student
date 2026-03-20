@@ -84,6 +84,10 @@
 
       <div class="stats-row-secondary q-mb-lg">
         <div class="stat-pill border-1">
+          <span class="stat-pill-label">รอสร้างลิงค์</span>
+          <span class="stat-pill-value badge badge-open">{{ stats.open }}</span>
+        </div>
+        <div class="stat-pill border-1">
           <span class="stat-pill-label">รอผอ.ประเมิน</span>
           <span class="stat-pill-value badge badge-pending">{{ stats.pendingReview }}</span>
         </div>
@@ -218,6 +222,16 @@
                 class="action-btn action-btn--detail"
                 :to="`/task-detail/${row.task_id}`"
               />
+              <q-btn
+                v-else-if="row.status === 'OPEN'"
+                flat
+                dense
+                color="teal"
+                label="สร้างลิงค์"
+                icon="fa-solid fa-link"
+                class="action-btn action-btn--create"
+                :to="{ path: '/create', query: { case_id: row.id, student_name: row.student_name, student_school: row.student_school, reason: row.reason_flagged } }"
+              />
               <span v-else class="status-text status-text--muted">ยังไม่มีลิงก์ที่ใช้งานได้</span>
             </div>
 
@@ -348,6 +362,16 @@
                   label="ดูรายละเอียด"
                   class="action-btn action-btn--detail"
                   :to="`/task-detail/${props.row.task_id}`"
+                />
+                <q-btn
+                  v-else-if="props.row.status === 'OPEN'"
+                  flat
+                  dense
+                  color="teal"
+                  label="สร้างลิงค์"
+                  icon="fa-solid fa-link"
+                  class="action-btn action-btn--create"
+                  :to="{ path: '/create', query: { case_id: props.row.id, student_name: props.row.student_name, student_school: props.row.student_school, reason: props.row.reason_flagged } }"
                 />
                 <span v-else class="status-text status-text--muted">ยังไม่มีลิงก์ที่ใช้งานได้</span>
 
@@ -485,6 +509,7 @@ interface Case {
 
 interface Stats {
   total: number;
+  open: number;
   inProgress: number;
   resolved: number;
   today: number;
@@ -514,8 +539,10 @@ const adminActionDialog = reactive<{
   loading: false
 });
 
+
 const stats = reactive<Stats>({
   total: 0,
+  open: 0,
   inProgress: 0,
   resolved: 0,
   today: 0,
@@ -532,8 +559,9 @@ const filters = reactive({
 
 const statusOptions = [
   { label: 'ทุกสถานะ', value: 'ALL' },
+  { label: 'รอสร้างลิงค์', value: 'OPEN' },
   { label: 'รอผอ.ประเมิน', value: 'PENDING_REVIEW' },
-  { label: 'กำลังดำเนินการ', value: 'IN_PROGRESS' },
+  { label: 'กำลังติดตาม', value: 'IN_PROGRESS' },
   { label: 'ปิดเคสแล้ว', value: 'RESOLVED' },
 ];
 
@@ -624,6 +652,7 @@ const completionRate = computed(() => {
 
 const getBadgeClass = (status: string) => {
   switch (status) {
+    case 'OPEN': return 'badge-open';
     case 'PENDING_REVIEW': return 'badge-pending';
     case 'IN_PROGRESS': return 'badge-progress';
     case 'RESOLVED': return 'badge-completed';
@@ -633,8 +662,9 @@ const getBadgeClass = (status: string) => {
 
 const getStatusLabel = (status: string) => {
   switch (status) {
+    case 'OPEN': return 'รอสร้างลิงค์';
     case 'PENDING_REVIEW': return 'รอผอ.ประเมิน';
-    case 'IN_PROGRESS': return 'กำลังดำเนินการ';
+    case 'IN_PROGRESS': return 'กำลังติดตาม';
     case 'RESOLVED': return 'ปิดเคสสำเร็จ';
     default: return status;
   }
@@ -731,6 +761,7 @@ const confirmAdminAction = async () => {
     adminActionDialog.loading = false;
   }
 };
+
 
 const resetFilters = () => {
   filters.status = 'ALL';

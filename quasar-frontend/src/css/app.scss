@@ -181,6 +181,7 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.03em;
   
+  &-open { background: #f0fdfa; color: #0f766e; }
   &-pending { background: #fef3c7; color: #92400e; }
   &-active { background: #dbeafe; color: #1e40af; }
   &-progress { background: #e0e7ff; color: #3730a3; }
@@ -537,6 +538,17 @@ body {
   .action-btn--detail:hover {
     background: #e0e7ff;
     border-color: #a5b4fc;
+  }
+
+  .action-btn--create {
+    background: #f0fdfa;
+    border-color: #99f6e4;
+    color: #0f766e;
+  }
+
+  .action-btn--create:hover {
+    background: #ccfbf1;
+    border-color: #5eead4;
   }
 
   .action-menu-btn {

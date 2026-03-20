@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
-import { AutomationService } from '../automation/automation.service';
+import { AutomationService, NewCase } from '../automation/automation.service';
 
 @Injectable()
 export class AttendanceService {
@@ -225,16 +225,14 @@ export class AttendanceService {
       // Post-transaction: Check if we need to run Immediate Automation
       const triggerRes = await this.db.query("SELECT setting_value FROM system_settings WHERE setting_key = 'ALERT_TRIGGER_TYPE'");
       const triggerType = triggerRes.rowCount > 0 ? triggerRes.rows[0].setting_value : 'SCHEDULED';
-      
+
+      let newCases: NewCase[] = [];
       if (triggerType === 'IMMEDIATE') {
         this.logger.log('Attendance saved. Trigger Type is IMMEDIATE. Executing absence check...');
-        // Fire and forget (don't await so we don't block the API response unnecessarily)
-        this.automationService.checkConsecutiveAbsences().catch(err => {
-           this.logger.error('Error executing immediate absence check', err);
-        });
+        newCases = await this.automationService.checkConsecutiveAbsences();
       }
 
-      return { success: true };
+      return { success: true, newCases };
     } catch (err) {
       this.logger.error(`saveAttendance error: ${err.message}`);
       throw err;

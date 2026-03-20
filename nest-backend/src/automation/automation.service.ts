@@ -3,6 +3,13 @@ import { SchedulerRegistry } from '@nestjs/schedule';
 import { CronJob } from 'cron';
 import { DatabaseService } from '../database/database.service';
 
+export interface NewCase {
+  case_id: number;
+  student_name: string;
+  student_school: string;
+  reason_flagged: string;
+}
+
 @Injectable()
 export class AutomationService implements OnModuleInit {
   private readonly logger = new Logger(AutomationService.name);
@@ -62,7 +69,7 @@ export class AutomationService implements OnModuleInit {
   }
 
   // Core logic routine (callable by CRON or Manually via IMMEDIATE triggers)
-  async checkConsecutiveAbsences() {
+  async checkConsecutiveAbsences(): Promise<NewCase[]> {
     this.logger.log('Starting CRON Job: Checking consecutive absences...');
     
     // 1. Get Settings for ABSENT_THRESHOLD_DAYS
@@ -73,8 +80,10 @@ export class AutomationService implements OnModuleInit {
 
     if (isNaN(thresholdDays) || thresholdDays <= 0) {
       this.logger.warn('ABSENT_THRESHOLD_DAYS is invalid. Skipping job.');
-      return;
+      return [];
     }
+
+    const newCases: NewCase[] = [];
 
     try {
       await this.db.transaction(async (client) => {
@@ -157,14 +166,17 @@ export class AutomationService implements OnModuleInit {
                 reason
               ]);
 
-             this.logger.log(`Generated Case ${newCaseRes.rows[0].id} for ${studentName}`);
+             const caseId = newCaseRes.rows[0].id;
+             this.logger.log(`Generated Case ${caseId} for ${studentName}`);
+             newCases.push({ case_id: caseId, student_name: studentName, student_school: schoolName, reason_flagged: reason });
           }
         }
       });
     } catch (error) {
        this.logger.error('Error in checking consecutive absences', error);
     }
-    
+
     this.logger.log('Finished CRON Job: Checking consecutive absences.');
+    return newCases;
   }
 }
