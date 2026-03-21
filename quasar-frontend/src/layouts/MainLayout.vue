@@ -100,6 +100,13 @@
               <q-item-section>สร้างลิงค์</q-item-section>
             </q-item>
 
+            <q-item clickable v-ripple to="/import-data" class="nav-item">
+              <q-item-section avatar min-width="44px">
+                <i class="fas fa-file-import"></i>
+              </q-item-section>
+              <q-item-section>นำเข้าข้อมูล</q-item-section>
+            </q-item>
+
             <q-expansion-item
               clickable
               class="nav-item"
@@ -362,6 +369,7 @@ const pageTitle = computed(() => {
   if (route.path === '/') return 'หน้าหลัก';
   if (route.path === '/dashboard') return 'รายงานนักเรียน';
   if (route.path === '/create') return 'สร้างภารกิจใหม่';
+  if (route.path === '/import-data') return 'นำเข้าข้อมูล';
   if (route.path === '/attendance') return 'เช็คชื่อ';
   if (route.path === '/attendance-dashboard') return 'Dashboard เช็คชื่อ';
   if (route.path === '/admin-access') return 'Admin Access';
