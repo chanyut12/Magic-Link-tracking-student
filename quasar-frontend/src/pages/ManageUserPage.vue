@@ -1,140 +1,224 @@
 <template>
   <q-page class="manage-users-page q-pa-lg">
     <div class="page-container">
-      <!-- Top Action Bar (Fixed at top of page) -->
-      <div class="top-bar-sticky">
-        <div class="row items-center justify-between q-mb-md sticky-content q-col-gutter-sm">
-          <div class="col-12 col-sm-auto search-bar">
-            <q-input
-              outlined
-              dense
-              v-model="searchText"
-              placeholder="ค้นหาผู้ใช้งาน"
-              class="search-input"
-              bg-color="white"
-            >
-              <template v-slot:append>
-                <q-icon name="fas fa-search" size="xs" color="grey-6" />
-              </template>
-            </q-input>
-          </div>
-
-          <div class="col-12 col-sm-auto">
-            <q-btn
-              color="blue-2"
-              text-color="primary"
-              unelevated
-              no-caps
-              class="add-user-btn full-width"
-              @click="openAddDialog"
-            >
-              <div class="row items-center">
-                <q-icon name="fas fa-user-plus" size="xs" class="q-mr-sm" />
-                <span class="text-weight-bold">เพิ่มผู้ใช้งาน</span>
-              </div>
-            </q-btn>
+      <div class="sticky-header">
+        <div class="tabs-container q-mb-lg">
+          <div class="page-tab-item active">
+            ผู้ใช้งานทั้งหมด
           </div>
         </div>
 
-        <div v-if="!$q.screen.lt.sm" class="user-table-header row items-center q-px-lg q-mb-sm sticky-content">
-          <div class="col-1 text-center text-weight-bold">ลำดับ</div>
-          <div class="col-1 text-weight-bold">บัญชีผู้ใช้งาน</div>
-          <div class="col-2 text-weight-bold">เลขบัตรประชาชน</div>
-          <div class="col-2 text-weight-bold">ชื่อ-นามสกุล</div>
-          <div class="col-2 text-weight-bold">ตำแหน่ง</div>
-          <div class="col-1 text-weight-bold">สังกัด</div>
-          <div class="col-3 text-right"></div>
-        </div>
-      </div>
-
-      <!-- User List -->
-      <div v-if="loading" class="row justify-center q-pa-xl">
-        <q-spinner-dots color="primary" size="40px" />
-      </div>
-
-      <div v-else class="user-list">
-          <!-- Desktop Row Layout -->
-          <template v-if="!$q.screen.lt.sm">
-            <div
-              v-for="(user, index) in filteredUsers"
-              :key="user.id ?? index"
-              class="user-card row items-center q-px-lg q-mb-md"
-            >
-              <div class="col-1 text-center user-index">{{ index + 1 }}</div>
-            <div class="col-1 text-weight-medium text-grey-8">{{ user.username }}</div>
-            <div class="col-2 text-grey-8 px-2">{{ user.PersonID_Onec || '-' }}</div>
-            <div class="col-2 text-weight-bold text-grey-9 text-truncate">
-              {{ (user.FirstName || '') + ' ' + (user.LastName || '') || user.fullname || '-' }}
+        <div class="header-toolbar">
+          <div class="search-and-count">
+            <div class="search-container header-search">
+              <i class="fas fa-search"></i>
+              <input
+                v-model="searchText"
+                type="text"
+                class="search-input"
+                placeholder="ค้นหาชื่อผู้ใช้งาน ชื่อ-นามสกุล หรือเลขบัตร..."
+              >
             </div>
-            <div class="col-2 text-grey-8">{{ user.labels && user.labels.length > 0 ? user.labels.join(', ') : 'ไม่มีตำแหน่ง' }}</div>
-            <div class="col-1 text-grey-8">{{ user.affiliation || '-' }}</div>
-            <div class="col-3 text-right action-btns">
-              <q-btn unelevated color="primary" icon="fas fa-pencil" size="sm" class="q-mr-sm primary-action-btn" label="แก้ไข" no-caps @click="editUser(user)" />
-              <q-btn unelevated color="red" icon="fas fa-trash" size="sm" class="delete-action-btn" label="ลบ" no-caps @click="confirmDelete(user)" />
+
+            <div class="student-count-chip user-count-chip">
+              <i class="fas fa-users"></i>
+              <span>{{ filteredUsers.length }} คน</span>
             </div>
           </div>
-        </template>
 
-        <!-- Mobile Card Layout -->
-        <template v-else>
-          <div
-            v-for="(user, index) in filteredUsers"
-            :key="user.id ?? index"
-            class="user-mobile-card q-mb-md q-pa-md"
+          <q-btn
+            unelevated
+            color="primary"
+            no-caps
+            class="action-btn-top add-user-btn"
+            @click="openAddDialog"
           >
-            <div class="row items-center q-mb-sm">
-              <div class="user-mobile-index q-mr-sm">{{ index + 1 }}</div>
-              <div class="col">
-                <div class="text-weight-bold text-grey-9">
-                  {{ (user.FirstName || '') + ' ' + (user.LastName || '') || user.fullname || '-' }}
+            <i class="fas fa-user-plus q-mr-sm"></i>
+            เพิ่มผู้ใช้งาน
+          </q-btn>
+        </div>
+      </div>
+
+      <div class="user-list">
+        <div v-if="loading" class="text-center q-py-xl">
+          <q-spinner color="primary" size="3em" />
+        </div>
+
+        <div v-else-if="filteredUsers.length === 0" class="empty-state-box">
+          <div class="empty-icon-wrapper">
+            <i class="fas fa-user-shield"></i>
+          </div>
+          <h2>ไม่พบข้อมูลผู้ใช้งาน</h2>
+          <p>ลองค้นหาด้วยชื่อ ชื่อผู้ใช้ หรือเลขบัตรประชาชนอีกครั้ง</p>
+        </div>
+
+        <template v-else>
+          <div class="table-wrap">
+            <q-table
+              class="student-table user-table"
+              :rows="filteredUsers"
+              :columns="columns"
+              row-key="id"
+              flat
+              v-model:pagination="pagination"
+              :rows-per-page-options="rowsPerPageOptions"
+            >
+              <template v-slot:body-cell-index="props">
+                <q-td :props="props" class="text-grey-5">
+                  {{ (pagination.page - 1) * pagination.rowsPerPage + props.pageIndex + 1 }}
+                </q-td>
+              </template>
+
+              <template v-slot:body-cell-name="props">
+                <q-td :props="props">
+                  <div class="student-info">
+                    <div class="student-avatar" :style="getAvatarGradient(getUserDisplayName(props.row))">
+                      {{ getUserInitial(props.row) }}
+                    </div>
+                    <div class="student-details">
+                      <h3>{{ getUserDisplayName(props.row) }}</h3>
+                      <div class="student-id">บัญชี: {{ props.row.username || '-' }}</div>
+                    </div>
+                  </div>
+                </q-td>
+              </template>
+
+              <template v-slot:body-cell-person_id="props">
+                <q-td :props="props" class="table-value-muted">
+                  {{ props.row.PersonID_Onec || '-' }}
+                </q-td>
+              </template>
+
+              <template v-slot:body-cell-role="props">
+                <q-td :props="props">
+                  <span class="role-pill">{{ getRoleText(props.row) }}</span>
+                </q-td>
+              </template>
+
+              <template v-slot:body-cell-affiliation="props">
+                <q-td :props="props" class="table-value-muted">
+                  {{ props.row.affiliation || '-' }}
+                </q-td>
+              </template>
+
+              <template v-slot:body-cell-actions="props">
+                <q-td :props="props" auto-width>
+                  <div class="table-action-group">
+                    <q-btn
+                      unelevated
+                      color="primary"
+                      icon="fas fa-pencil"
+                      size="sm"
+                      class="primary-action-btn"
+                      label="แก้ไข"
+                      no-caps
+                      @click.stop="editUser(props.row)"
+                    />
+                    <q-btn
+                      unelevated
+                      color="red"
+                      icon="fas fa-trash"
+                      size="sm"
+                      class="delete-action-btn"
+                      label="ลบ"
+                      no-caps
+                      @click.stop="confirmDelete(props.row)"
+                    />
+                  </div>
+                </q-td>
+              </template>
+            </q-table>
+          </div>
+
+          <div class="mobile-user-list">
+            <div
+              v-for="(user, index) in paginatedUsers"
+              :key="user.id ?? index"
+              class="user-mobile-card"
+              :style="{ animationDelay: `${(index % pagination.rowsPerPage) * 30}ms` }"
+            >
+              <div class="mobile-card-header">
+                <div class="student-info">
+                  <div class="student-avatar" :style="getAvatarGradient(getUserDisplayName(user))">
+                    {{ getUserInitial(user) }}
+                  </div>
+                  <div class="student-details">
+                    <h3>{{ getUserDisplayName(user) }}</h3>
+                    <div class="student-id">บัญชี: {{ user.username || '-' }}</div>
+                  </div>
                 </div>
-                <div class="text-caption text-grey-6">{{ user.username }}</div>
+
+                <div class="user-mobile-index">
+                  {{ paginationStart + index }}
+                </div>
+              </div>
+
+              <div class="mobile-user-meta">
+                <div class="meta-item">
+                  <span class="meta-label">เลขบัตรประชาชน</span>
+                  <span class="meta-value">{{ user.PersonID_Onec || '-' }}</span>
+                </div>
+                <div class="meta-item">
+                  <span class="meta-label">ตำแหน่ง</span>
+                  <span class="meta-value">{{ getRoleText(user) }}</span>
+                </div>
+                <div class="meta-item">
+                  <span class="meta-label">สังกัด</span>
+                  <span class="meta-value">{{ user.affiliation || '-' }}</span>
+                </div>
+              </div>
+
+              <div class="mobile-user-actions">
+                <q-btn
+                  unelevated
+                  color="primary"
+                  icon="fas fa-pencil"
+                  size="sm"
+                  class="full-width primary-action-btn"
+                  label="แก้ไข"
+                  no-caps
+                  @click="editUser(user)"
+                />
+                <q-btn
+                  unelevated
+                  color="red"
+                  icon="fas fa-trash"
+                  size="sm"
+                  class="full-width delete-action-btn"
+                  label="ลบ"
+                  no-caps
+                  @click="confirmDelete(user)"
+                />
               </div>
             </div>
-            <div class="user-mobile-info q-mb-sm">
-              <div class="row q-col-gutter-xs">
-                <div class="col-12">
-                  <span class="text-caption text-grey-5">บัตรประชาชน: </span>
-                  <span class="text-caption text-grey-8">{{ user.PersonID_Onec || '-' }}</span>
-                </div>
-                <div class="col-12">
-                  <span class="text-caption text-grey-5">ตำแหน่ง: </span>
-                  <span class="text-caption text-grey-8">{{ user.labels && user.labels.length > 0 ? user.labels.join(', ') : 'ไม่มีตำแหน่ง' }}</span>
-                </div>
-                <div class="col-12">
-                  <span class="text-caption text-grey-5">สังกัด: </span>
-                  <span class="text-caption text-grey-8">{{ user.affiliation || '-' }}</span>
-                </div>
+
+            <div class="pagination-panel">
+              <div class="pagination-summary">
+                แสดง {{ paginationStart }}-{{ paginationEnd }} จาก {{ filteredUsers.length }} คน
               </div>
-            </div>
-            <div class="row q-col-gutter-sm">
-              <div class="col-6">
-                <q-btn unelevated color="primary" icon="fas fa-pencil" size="sm" class="full-width primary-action-btn" label="แก้ไข" no-caps @click="editUser(user)" />
-              </div>
-              <div class="col-6">
-                <q-btn unelevated color="red" icon="fas fa-trash" size="sm" class="full-width delete-action-btn" label="ลบ" no-caps @click="confirmDelete(user)" />
+
+              <div class="pagination-controls">
+                <label class="rows-per-page-control">
+                  <span>ต่อหน้า</span>
+                  <select v-model.number="pagination.rowsPerPage" class="filter-select rows-per-page-select">
+                    <option v-for="size in rowsPerPageOptions" :key="size" :value="size">{{ size }}</option>
+                  </select>
+                </label>
+
+                <q-pagination
+                  v-model="pagination.page"
+                  :max="totalPages"
+                  :max-pages="6"
+                  direction-links
+                  boundary-links
+                  color="primary"
+                  active-design="unelevated"
+                  active-color="primary"
+                />
               </div>
             </div>
           </div>
         </template>
-
-        <div v-if="filteredUsers.length === 0" class="text-center q-pa-xl text-grey-6">
-          ไม่พบข้อมูลผู้ใช้งาน
-        </div>
-
-      </div> <!-- End user-list -->
-
-      <!-- Pagination -->
-      <div class="row justify-center q-mt-xl">
-        <q-pagination
-          v-model="currentPage"
-          :max="1"
-          direction-links
-          flat
-          color="grey"
-          active-color="primary"
-          class="custom-pagination"
-        />
       </div>
 
       <!-- Advanced Add/Edit User Dialog -->
@@ -424,7 +508,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue';
 import { api } from 'boot/axios';
-import { useQuasar, QForm } from 'quasar';
+import { useQuasar, QForm, type QTableColumn } from 'quasar';
 import { AxiosError } from 'axios';
 
 interface User {
@@ -452,10 +536,14 @@ interface Role {
 
 const $q = useQuasar();
 const searchText = ref('');
-const currentPage = ref(1);
 const users = ref<User[]>([]);
 const roles = ref<Role[]>([]);
 const loading = ref(false);
+const rowsPerPageOptions = [10, 20, 50];
+const pagination = ref({
+  page: 1,
+  rowsPerPage: 20,
+});
 
 const showAddDialog = ref(false);
 const showDeleteConfirm = ref(false);
@@ -520,11 +608,56 @@ const roleOptions = computed(() => {
   return roles.value.map(r => ({ label: r.label, value: r.name }));
 });
 
+const getUserDisplayName = (user: User) => {
+  const firstName = user.FirstName?.trim() || '';
+  const lastName = user.LastName?.trim() || '';
+  const fullName = `${firstName} ${lastName}`.trim();
+  return fullName || user.fullname?.trim() || user.username || '-';
+};
+
+const getUserInitial = (user: User) => {
+  const displayName = getUserDisplayName(user);
+  return displayName.charAt(0).toUpperCase() || '?';
+};
+
+const getRoleText = (user: User) => {
+  return user.labels && user.labels.length > 0 ? user.labels.join(', ') : 'ไม่มีตำแหน่ง';
+};
+
 const deleteTargetName = computed(() => {
   const u = deleteTargetUser.value;
   if (!u) return '';
-  return (u.FirstName || '') + ' ' + (u.LastName || '') || u.fullname || u.username;
+  return getUserDisplayName(u);
 });
+
+const avatarColors = [
+  ['#6366f1', '#8b5cf6'],
+  ['#ec4899', '#f43f5e'],
+  ['#14b8a6', '#06b6d4'],
+  ['#f59e0b', '#f97316'],
+  ['#10b981', '#22c55e'],
+  ['#3b82f6', '#0ea5e9'],
+  ['#8b5cf6', '#a855f7'],
+  ['#ef4444', '#f97316'],
+] as const;
+
+const getAvatarGradient = (name: string) => {
+  if (!name) return { background: '#ccc', color: '#fff' };
+
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+
+  const index = Math.abs(hash) % avatarColors.length;
+  const [c1, c2] = avatarColors[index] ?? ['#6366f1', '#8b5cf6'];
+
+  return {
+    background: `linear-gradient(135deg, ${c1}, ${c2})`,
+    color: 'white',
+    textShadow: '0 1px 2px rgba(0,0,0,0.2)',
+  };
+};
 
 watch(selectedRoles, (val) => {
   userForm.value.roles = val || [];
@@ -556,12 +689,65 @@ const fetchRoles = async () => {
 };
 
 const filteredUsers = computed(() => {
-  if (!searchText.value) return users.value;
-  const lowerSearch = searchText.value.toLowerCase();
-  return users.value.filter(u => 
-    u.username.toLowerCase().includes(lowerSearch) || 
-    (u.fullname || '').toLowerCase().includes(lowerSearch)
+  const sortedUsers = [...users.value].sort((a, b) =>
+    getUserDisplayName(a).localeCompare(getUserDisplayName(b), 'th')
   );
+
+  if (!searchText.value) return sortedUsers;
+
+  const lowerSearch = searchText.value.toLowerCase();
+  return sortedUsers.filter(u =>
+    [
+      getUserDisplayName(u),
+      u.username,
+      u.PersonID_Onec,
+      getRoleText(u),
+      u.affiliation,
+    ].some(value => String(value || '').toLowerCase().includes(lowerSearch))
+  );
+});
+
+const totalPages = computed(() => {
+  return Math.max(1, Math.ceil(filteredUsers.value.length / pagination.value.rowsPerPage));
+});
+
+const paginatedUsers = computed(() => {
+  const start = (pagination.value.page - 1) * pagination.value.rowsPerPage;
+  const end = start + pagination.value.rowsPerPage;
+  return filteredUsers.value.slice(start, end);
+});
+
+const paginationStart = computed(() => {
+  if (filteredUsers.value.length === 0) return 0;
+  return (pagination.value.page - 1) * pagination.value.rowsPerPage + 1;
+});
+
+const paginationEnd = computed(() => {
+  if (filteredUsers.value.length === 0) return 0;
+  return Math.min(pagination.value.page * pagination.value.rowsPerPage, filteredUsers.value.length);
+});
+
+const columns: QTableColumn<User>[] = [
+  { name: 'index', label: '#', field: 'id', align: 'left' },
+  { name: 'name', label: 'ผู้ใช้งาน', field: row => getUserDisplayName(row), align: 'left' },
+  { name: 'person_id', label: 'เลขบัตรประชาชน', field: row => row.PersonID_Onec || '-', align: 'left' },
+  { name: 'role', label: 'ตำแหน่ง', field: row => getRoleText(row), align: 'left' },
+  { name: 'affiliation', label: 'สังกัด', field: row => row.affiliation || '-', align: 'left' },
+  { name: 'actions', label: 'จัดการ', field: 'id', align: 'right' },
+];
+
+watch(searchText, () => {
+  pagination.value.page = 1;
+});
+
+watch(() => pagination.value.rowsPerPage, () => {
+  pagination.value.page = 1;
+});
+
+watch(() => filteredUsers.value.length, () => {
+  if (pagination.value.page > totalPages.value) {
+    pagination.value.page = totalPages.value;
+  }
 });
 
 const openAddDialog = () => {
@@ -637,7 +823,6 @@ const saveUser = async () => {
 };
 
 const confirmDelete = (user: User) => {
-  console.log('Opening delete confirm for:', user);
   deleteTargetUser.value = user;
   showDeleteConfirm.value = true;
 };
@@ -650,7 +835,6 @@ const performDelete = async () => {
   showDeleteConfirm.value = false;
   
   try {
-    console.log(`Executing delete for ID: ${userId}`);
     await api.delete(`/api/users/${userId}`);
     
     // Remove from local array immediately for smooth UX
@@ -719,106 +903,534 @@ onMounted(() => {
 
 <style lang="scss" scoped>
 .manage-users-page {
-  background: #f1f5f9;
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
   min-height: 100vh;
+  overflow-y: auto;
   font-family: 'Prompt', 'Inter', sans-serif;
 }
 
 .page-container {
-  max-width: 1400px;
+  max-width: 1200px;
+  width: 100%;
   margin: 0 auto;
 }
 
-.search-input {
-  width: 400px;
-  :deep(.q-field__control) {
-    border-radius: 15px;
-    background: white;
+.full-width {
+  width: 100%;
+}
+
+.tabs-container {
+  display: flex;
+  gap: 1.5rem;
+  border-bottom: 1px solid #e2e8f0;
+  overflow-x: auto;
+  white-space: nowrap;
+  -webkit-overflow-scrolling: touch;
+  margin-bottom: 1rem;
+
+  &::-webkit-scrollbar {
+    display: none;
   }
 }
 
-@media (max-width: 599px) {
-  .search-input {
-    width: 100%;
+.page-tab-item {
+  padding: 0.75rem 0;
+  font-weight: 700;
+  color: #64748b;
+  position: relative;
+  transition: color 0.2s ease;
+
+  &.active {
+    color: #2563eb;
+
+    &::after {
+      content: '';
+      position: absolute;
+      bottom: -1px;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, #3b82f6, #2563eb);
+      border-radius: 3px 3px 0 0;
+    }
   }
-  .add-user-btn {
-    width: 100%;
+}
+
+.search-container {
+  position: relative;
+  width: 100%;
+
+  i {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #94a3b8;
+    transition: color 0.2s;
   }
-  .user-dialog-card {
-    border-radius: 24px !important;
+
+  &:focus-within i {
+    color: #3b82f6;
   }
-  .save-all-btn {
-    width: 100%;
+}
+
+.header-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.search-and-count {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.header-search {
+  flex: 0 1 460px;
+  max-width: 460px;
+}
+
+.search-input {
+  width: 100%;
+  padding: 10px 12px 10px 36px;
+  border-radius: 99px;
+  border: 1px solid #e2e8f0;
+  background: white;
+  outline: none;
+  font-size: 0.95rem;
+  transition: all 0.2s cubic-bezier(0.25, 1, 0.5, 1);
+
+  &:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  }
+}
+
+.filter-select {
+  padding: 0 36px 0 16px;
+  height: 40px;
+  border-radius: 99px;
+  border: 1.5px solid #dbeafe;
+  background: white url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 448 512'%3E%3Cpath fill='%231e40af' d='M207.02 381.476L12.686 187.132c-9.373-9.373-9.373-24.569 0-33.941l22.667-22.667c9.353-9.353 24.522-9.378 33.901-.057L224 284.505l154.745-154.021c9.379-9.321 24.548-9.295 33.901.057l22.667 22.667c9.373 9.373 9.373 24.569 0 33.941L240.971 381.476c-9.373 9.372-24.569 9.372-33.951 0z'/%3E%3C/svg%3E") no-repeat calc(100% - 14px) center;
+  background-size: 11px;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  outline: none;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #1e40af;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.25, 1, 0.5, 1);
+  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.05);
+
+  &:hover {
+    border-color: #3b82f6;
+    background-color: #f8fbff;
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
+  }
+}
+
+.sticky-header {
+  position: sticky;
+  top: 1rem;
+  z-index: 100;
+  background: white;
+  padding: 1.5rem;
+  border-radius: 20px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.04);
+  margin-bottom: 2rem;
+}
+
+.student-count-chip {
+  padding: 0 18px;
+  height: 40px;
+  border-radius: 99px;
+  background: linear-gradient(135deg, #eff6ff, #dbeafe);
+  border: 1.5px solid #93c5fd;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #1e40af;
+  box-sizing: border-box;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
+
+  i {
+    color: #3b82f6;
+    font-size: 0.95rem;
+  }
+}
+
+.user-count-chip {
+  justify-content: center;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.action-btn-top {
+  border-radius: 99px;
+  min-height: 40px;
+  padding: 0 20px;
+  font-weight: 800;
+  font-size: 0.95rem;
+  box-shadow: 0 4px 16px rgba(37, 99, 235, 0.3);
+  transition: all 0.2s cubic-bezier(0.25, 1, 0.5, 1);
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
   }
 }
 
 .add-user-btn {
-  border-radius: 15px;
-  height: 48px;
-  padding: 0 24px;
-  background: white !important;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-}
-
-.user-table-header {
-  color: #64748b;
-  font-size: 0.9rem;
-  letter-spacing: 0.5px;
+  margin-left: auto;
+  flex-shrink: 0;
 }
 
 .user-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
   padding-bottom: 100px;
 }
 
-.top-bar-sticky {
-  position: sticky;
-  top: -24px;
-  background: transparent;
-  z-index: 20;
-  padding-top: 10px;
-  margin-top: -10px;
-  pointer-events: none; /* Let clicks pass through empty areas */
-  
-  .sticky-content {
-    background: #f1f5f9;
-    pointer-events: auto; /* Buttons and inputs still work */
-  }
-}
-
-.user-card {
+.table-wrap {
+  display: block;
   background: white;
-  height: 80px;
-  border-radius: 40px;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.04);
-  margin-bottom: 12px;
-  border: 1px solid rgba(0,0,0,0.01);
-  transition: all 0.2s;
-  
-  &:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 30px rgba(0,0,0,0.08);
+  border-radius: 24px;
+  border: 1px solid #dbeafe;
+  box-shadow: 0 14px 30px rgba(37, 99, 235, 0.08);
+  overflow: hidden;
+}
+
+:deep(.student-table .q-table__middle) {
+  overflow: auto;
+}
+
+:deep(.student-table table) {
+  min-width: 980px;
+}
+
+:deep(.student-table thead tr) {
+  background: #f8fbff;
+}
+
+:deep(.student-table thead th) {
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+:deep(.student-table tbody td) {
+  padding-top: 1rem;
+  padding-bottom: 1rem;
+  vertical-align: middle;
+}
+
+:deep(.student-table .q-table__bottom) {
+  border-top: 1px solid #dbeafe;
+  background: white;
+}
+
+.student-info {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.student-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 1.1rem;
+  color: white;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  flex-shrink: 0;
+}
+
+.student-details {
+  h3 {
+    font-size: 1.05rem;
+    font-weight: 800;
+    margin: 0;
+    color: #1e293b;
+    letter-spacing: -0.01em;
+  }
+
+  .student-id {
+    font-size: 0.75rem;
+    color: #94a3b8;
+    font-weight: 600;
+    margin-top: 2px;
   }
 }
 
-.user-index {
-  color: #94a3b8;
-  font-weight: 500;
+.table-value-muted {
+  color: #64748b;
+  font-weight: 600;
 }
 
-/* Advanced Dialog Styling */
+.role-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.45rem 0.8rem;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #eff6ff, #dbeafe);
+  border: 1px solid #bfdbfe;
+  color: #1d4ed8;
+  font-size: 0.85rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.table-action-group {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+  gap: 0.5rem;
+}
+
+.primary-action-btn,
+.delete-action-btn {
+  border-radius: 12px;
+  font-weight: 700;
+  min-height: 36px;
+
+  :deep(.q-btn__content) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    line-height: 1;
+  }
+
+  :deep(.q-btn__icon),
+  :deep(.q-icon) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    margin: 0;
+  }
+
+  :deep(.block) {
+    display: inline-flex;
+    align-items: center;
+    line-height: 1;
+  }
+}
+
+.mobile-user-list {
+  display: none;
+}
+
+.user-mobile-card {
+  background: white;
+  border-radius: 20px;
+  padding: 1.25rem 1.5rem;
+  border: 1px solid #f1f5f9;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+  opacity: 0;
+  animation: fade-in-up 0.4s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+}
+
+.mobile-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.user-mobile-index {
+  min-width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1d4ed8;
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.mobile-user-meta {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+  border-radius: 16px;
+  background: #f8fbff;
+  border: 1px solid #e0ecff;
+}
+
+.meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.meta-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #64748b;
+}
+
+.meta-value {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.mobile-user-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.pagination-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 0.5rem;
+  padding: 1rem 1.25rem;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(147, 197, 253, 0.35);
+  border-radius: 20px;
+  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.08);
+  backdrop-filter: blur(10px);
+}
+
+.pagination-summary {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #1e3a8a;
+}
+
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.rows-per-page-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #475569;
+}
+
+.rows-per-page-select {
+  min-width: 92px;
+  padding-right: 2.4rem;
+}
+
+:deep(.q-pagination) {
+  gap: 0.25rem;
+}
+
+:deep(.q-pagination .q-btn) {
+  border-radius: 12px;
+  min-width: 38px;
+  min-height: 38px;
+  font-weight: 700;
+}
+
+.empty-icon-wrapper {
+  margin-bottom: 1rem;
+}
+
+.empty-state-box {
+  text-align: center;
+  padding: 5rem 2rem;
+  color: #64748b;
+  background: white;
+  border-radius: 24px;
+  border: 2.5px dashed #cbd5e1;
+  margin-top: 1rem;
+
+  i {
+    font-size: 5rem;
+    margin-bottom: 1.5rem;
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: float 3s ease-in-out infinite;
+  }
+
+  h2 {
+    color: #1e3a8a;
+    margin-bottom: 0.75rem;
+    font-weight: 900;
+    font-size: 2rem;
+    letter-spacing: -0.02em;
+  }
+
+  p {
+    font-size: 1.05rem;
+    color: #64748b;
+    max-width: 360px;
+    margin: 0 auto;
+    line-height: 1.6;
+  }
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0) rotate(-2deg);
+  }
+
+  50% {
+    transform: translateY(-12px) rotate(2deg);
+  }
+}
+
 .user-dialog-card {
   border-radius: 60px !important;
-  box-shadow: 0 30px 60px rgba(0,0,0,0.12);
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.12);
   background: #fff;
 }
 
 .photo-upload-section {
   background: #f1f5f9;
   border-radius: 40px;
-  height: 450px; /* Even taller for a prominent profile look */
+  height: 450px;
   width: 100%;
-  max-width: 380px; /* Wider to match the balance of the form fields */
+  max-width: 380px;
   margin: 0 auto;
 }
 
@@ -834,8 +1446,14 @@ onMounted(() => {
   &:hover {
     border-color: var(--q-primary);
     background: #eef2ff;
-    .q-icon { color: var(--q-primary); }
-    .text-blue-grey-3 { color: var(--q-primary); }
+
+    .q-icon {
+      color: var(--q-primary);
+    }
+
+    .text-blue-grey-3 {
+      color: var(--q-primary);
+    }
   }
 }
 
@@ -848,8 +1466,11 @@ onMounted(() => {
     height: 48px;
     transition: all 0.2s ease;
     
-    &:before, &:after { display: none; }
-    
+    &:before,
+    &:after {
+      display: none;
+    }
+
     &.q-field__control--focused {
       border-color: var(--q-primary);
       background: white;
@@ -872,22 +1493,25 @@ onMounted(() => {
   border-radius: 25px;
   padding: 6px;
   margin-bottom: 24px;
-  
+
   .tab-item {
     border-radius: 20px;
     margin-right: 8px;
     min-height: 44px;
     transition: all 0.3s ease;
-    
+
     &.q-tab--active {
       background: white;
       color: #0f4dc2;
       box-shadow: 0 4px 12px rgba(0,0,0,0.08);
     }
-    
+
     &:not(.q-tab--active) {
       background: transparent;
-      &:hover { background: rgba(0,0,0,0.02); }
+
+      &:hover {
+        background: rgba(0, 0, 0, 0.02);
+      }
     }
   }
 }
@@ -901,7 +1525,7 @@ onMounted(() => {
   background: #f1f5f9 !important;
   border: 1px solid transparent;
   transition: all 0.2s ease;
-  
+
   &:hover {
     background: #eef2ff !important;
     border-color: rgba(15, 77, 194, 0.2);
@@ -917,51 +1541,94 @@ onMounted(() => {
   font-weight: 700;
   box-shadow: 0 15px 35px rgba(15, 77, 194, 0.4);
   transition: all 0.3s ease;
-  
+
   &:hover {
     transform: translateY(-4px);
     box-shadow: 0 20px 45px rgba(15, 77, 194, 0.5);
   }
-  
+
   &:active {
     transform: translateY(-1px);
   }
 }
 
-.primary-action-btn { border-radius: 10px; }
-.delete-action-btn { border-radius: 10px; }
+@media (max-width: 768px) {
+  .header-toolbar {
+    flex-wrap: wrap;
+    align-items: stretch;
+  }
 
-.user-mobile-card {
-  background: white;
-  border-radius: 20px;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.04);
-  border: 1px solid rgba(0,0,0,0.04);
+  .search-and-count {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+  }
+
+  .header-search {
+    flex: 1 1 100%;
+    max-width: none;
+  }
+
+  .add-user-btn {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .table-wrap {
+    display: none;
+  }
+
+  .mobile-user-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .pagination-panel {
+    padding: 1rem;
+  }
+
+  .pagination-controls {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .rows-per-page-control {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .mobile-card-header {
+    flex-direction: column;
+  }
+
+  .user-mobile-index {
+    align-self: flex-end;
+  }
+
+  .empty-state-box {
+    padding: 3rem 1.5rem;
+
+    i {
+      font-size: 4rem;
+    }
+
+    h2 {
+      font-size: 1.5rem;
+    }
+
+    p {
+      font-size: 0.95rem;
+    }
+  }
 }
 
-.user-mobile-index {
-  background: #f1f5f9;
-  color: #94a3b8;
-  font-weight: 600;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.85rem;
-  flex-shrink: 0;
-}
+@media (max-width: 599px) {
+  .user-dialog-card {
+    border-radius: 24px !important;
+  }
 
-.user-mobile-info {
-  padding: 8px 12px;
-  background: #f8fafc;
-  border-radius: 12px;
-}
-
-.custom-pagination {
-  :deep(.q-btn) {
-    border-radius: 12px;
-    background: white;
+  .save-all-btn {
+    width: 100%;
   }
 }
 </style>
