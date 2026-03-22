@@ -39,7 +39,8 @@ export class StudentsService {
       if (err instanceof NotFoundException) {
         throw err;
       }
-      this.logger.error(`findOne error: ${err.message}`);
+      const error = err as Error;
+      this.logger.error(`findOne error: ${error.message}`);
       throw err;
     }
   }
@@ -53,9 +54,30 @@ export class StudentsService {
       `;
       const result = await this.db.query(query, [name]);
 
-      return result.rows;
+      return result.rows as Record<string, any>[];
     } catch (err) {
-      this.logger.error(`findCasesByName error: ${err.message}`);
+      const error = err as Error;
+      this.logger.error(`findCasesByName error: ${error.message}`);
+      throw err;
+    }
+  }
+
+  async findAttendanceByStudentId(id: string) {
+    try {
+      const query = `
+        SELECT 
+          "AttendanceDate" as date,
+          "AttendanceStatus" as status,
+          "Period" as period
+        FROM attendance
+        WHERE "PersonID_Onec" = $1
+        ORDER BY "AttendanceDate" DESC
+      `;
+      const result = (await this.db.query(query, [id])) as { rows: any[] };
+      return result.rows as Record<string, any>[];
+    } catch (err) {
+      const error = err as Error;
+      this.logger.error(`findAttendanceByStudentId error: ${error.message}`);
       throw err;
     }
   }

@@ -35,6 +35,11 @@ export class StudentsController {
     return this.studentsService.findOne(id);
   }
 
+  @Get('attendance/:id')
+  findAttendanceByStudentId(@Param('id') id: string) {
+    return this.studentsService.findAttendanceByStudentId(id);
+  }
+
   @Patch(':id')
   update(@Param('id') id: string, @Body() updateStudentDto: UpdateStudentDto) {
     return this.studentsService.update(+id, updateStudentDto);
