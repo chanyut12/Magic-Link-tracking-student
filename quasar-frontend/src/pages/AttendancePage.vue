@@ -562,7 +562,10 @@ const fetchTodayRecords = async () => {
     const res = await api.get(`/api/attendance/history?date=${today}`);
     const data = res.data.data;
     data.forEach((r: AttendanceRecord) => {
-      if (r.status) attendanceSelections[r.PersonID_Onec || r.id] = r.status;
+      const studentId = r.PersonID_Onec || r.id;
+      if (r.status && (!modifiedIds.value.has(studentId) || !attendanceSelections[studentId])) {
+         attendanceSelections[studentId] = r.status;
+      }
     });
   } catch (err) {
     console.error('Fetch today records error:', err);
@@ -609,8 +612,11 @@ const fetchHistory = async () => {
   }
 };
 
+const modifiedIds = ref(new Set<string>());
+
 const setStatus = (id: string, status: string) => {
   attendanceSelections[id] = status;
+  modifiedIds.value.add(id);
 };
 
 const saveAttendance = async () => {
@@ -631,11 +637,8 @@ const saveAttendance = async () => {
         icon: 'check_circle',
         timeout: 2000
       });
+      modifiedIds.value.clear();
       await fetchStudents();
-      if (res.data.newCases && res.data.newCases.length > 0) {
-        newCasesDialog.cases = res.data.newCases;
-        newCasesDialog.show = true;
-      }
     }
   } catch {
     $q.notify({ message: 'เกิดข้อผิดพลาด', color: 'negative' });

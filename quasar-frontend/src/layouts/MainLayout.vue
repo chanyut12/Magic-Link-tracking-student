@@ -273,10 +273,10 @@ onMounted(() => {
 
   // Load initial notifications for OPEN cases
   void fetchNotifications();
-  // Poll every 10s
+  // Poll every 5s for faster updates
   notifInterval = window.setInterval(() => {
     void fetchNotifications();
-  }, 10000);
+  }, 5000);
 });
 
 onUnmounted(() => {
