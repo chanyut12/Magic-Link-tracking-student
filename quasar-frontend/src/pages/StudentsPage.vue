@@ -87,7 +87,7 @@
             :key="s.id" 
             class="student-card q-mb-sm"
             style="cursor: pointer;"
-            @click="$router.push(`/student-information/${s.id}`)"
+            @click="$router.push(`/students/${s.id}`)"
             :style="{ animationDelay: `${(index % 20) * 30}ms` }"
           >
             <div class="student-info">
