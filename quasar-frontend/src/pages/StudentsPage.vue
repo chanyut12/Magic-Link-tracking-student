@@ -86,6 +86,8 @@
             v-for="(s, index) in visibleStudents" 
             :key="s.id" 
             class="student-card q-mb-sm"
+            style="cursor: pointer;"
+            @click="$router.push(`/student-information/${s.id}`)"
             :style="{ animationDelay: `${(index % 20) * 30}ms` }"
           >
             <div class="student-info">
@@ -187,6 +189,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch } from 'vue';
 import { api } from 'boot/axios';
+import { useRouter } from 'vue-router';
 
 // --- Interfaces ---
 interface Student {
@@ -227,6 +230,7 @@ const schools = ref<School[]>([]);
 const rooms = ref<string[]>([]);
 const searchQuery = ref('');
 const loading = ref(false);
+const $router = useRouter();
 
 const filters = reactive({
   schoolId: '',
