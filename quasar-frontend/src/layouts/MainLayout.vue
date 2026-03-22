@@ -103,7 +103,7 @@
             <q-item
               clickable
               v-ripple
-              :to="`/student-information/${currentUser?.PersonID_Onec || 'unknown'}`"
+              :to="`/students/${currentUser?.PersonID_Onec || 'unknown'}`"
               class="nav-item"
             >
               <q-item-section avatar min-width="44px">
