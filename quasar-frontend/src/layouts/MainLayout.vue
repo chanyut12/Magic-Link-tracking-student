@@ -27,10 +27,10 @@
                   <q-btn flat dense color="primary" label="อ่านทั้งหมด" size="sm" @click="markAsRead" v-if="unreadCount > 0" />
                 </q-item-label>
                 <q-item
-                  v-for="notif in notifications" 
-                  :key="notif.id" 
-                  clickable 
-                  v-close-popup 
+                  v-for="notif in notifications"
+                  :key="notif.id"
+                  clickable
+                  v-close-popup
                   @click="goToCase(notif.id)"
                   :class="['q-py-md', { 'bg-blue-1': !readCaseIds.includes(notif.id) }]"
                 >
@@ -46,7 +46,7 @@
                     <q-item-label caption class="text-primary q-mt-xs">{{ formatDate(notif.created_at) }}</q-item-label>
                   </q-item-section>
                 </q-item>
-                
+
                 <q-item v-if="notifications.length === 0">
                   <q-item-section class="text-grey text-center q-py-md">
                     ไม่มีการแจ้งเตือนเคสใหม่
@@ -98,6 +98,18 @@
                 <i class="fas fa-user-graduate"></i>
               </q-item-section>
               <q-item-section>รายชื่อนักเรียน</q-item-section>
+            </q-item>
+
+            <q-item
+              clickable
+              v-ripple
+              :to="`/student-information/${currentUser?.PersonID_Onec || 'unknown'}`"
+              class="nav-item"
+            >
+              <q-item-section avatar min-width="44px">
+                <i class="fas fa-user-circle"></i>
+              </q-item-section>
+              <q-item-section>ข้อมูลตัวเอง(สำหรับนักเรียน)</q-item-section>
             </q-item>
 
             <q-item clickable v-ripple to="/create" class="nav-item">
@@ -217,6 +229,7 @@ interface User {
   name?: string;
   selected_role?: string;
   role?: string;
+  PersonID_Onec?: string;
 }
 
 interface CaseNotification {
@@ -300,9 +313,9 @@ function markAsRead() {
 function formatDate(dateStr: string) {
   if (!dateStr) return '';
   const d = new Date(dateStr);
-  return d.toLocaleString('th-TH', { 
-    year: 'numeric', month: 'short', day: 'numeric', 
-    hour: '2-digit', minute: '2-digit' 
+  return d.toLocaleString('th-TH', {
+    year: 'numeric', month: 'short', day: 'numeric',
+    hour: '2-digit', minute: '2-digit'
   });
 }
 
@@ -319,7 +332,7 @@ const userDisplayName = computed(() => {
   if (!currentUser.value) return 'ผู้ดูแลระบบ';
   const { FirstName, LastName, username } = currentUser.value;
   if (FirstName && LastName) return `${FirstName} ${LastName}`;
-  
+
   // Magic link support
   const nameFromMagic = currentUser.value.assigned_to_name || currentUser.value.name;
   if (nameFromMagic) return nameFromMagic;
@@ -329,7 +342,7 @@ const userDisplayName = computed(() => {
 
 const userRoleLabel = computed(() => {
   if (!currentUser.value) return 'ผู้ดูแลระบบ';
-  
+
   const labels = currentUser.value.labels || [];
   if (labels.length > 0) {
     return labels.join(', ');
@@ -348,14 +361,14 @@ const userRoleLabel = computed(() => {
   if (roles.includes('TEACHER')) return 'คุณครู';
   if (roles.includes('EXECUTIVE')) return 'ผู้บริหาร';
   if (roles.includes('STAFF')) return 'เจ้าหน้าที่';
-  
+
   return roles[0] || 'ผู้ใช้งาน';
 });
 
 const userInitials = computed(() => {
   if (currentUser.value?.FirstName) return currentUser.value.FirstName.charAt(0).toUpperCase();
   if (currentUser.value?.username) return currentUser.value.username.charAt(0).toUpperCase();
-  
+
   const nameFromMagic = currentUser.value?.assigned_to_name || currentUser.value?.name;
   if (nameFromMagic) return nameFromMagic.charAt(0).toUpperCase();
 
@@ -364,11 +377,11 @@ const userInitials = computed(() => {
 
 const hideNavigation = computed(() => !!route.meta.hideNav);
 
-const isAttendanceRoute = computed(() => 
+const isAttendanceRoute = computed(() =>
   route.path === '/attendance' || route.path === '/attendance-dashboard'
 );
 
-const isManageUsersRoute = computed(() => 
+const isManageUsersRoute = computed(() =>
   route.path === '/manage-users' || route.path === '/login-links'
 );
 
@@ -401,10 +414,10 @@ async function logout() {
     color: 'positive',
     position: 'top'
   });
-  
+
   // Use direct window navigation for reliable redirection
   window.location.href = '#/admin-access';
-  
+
   // router push as fallback
   await router.push('/admin-access');
 }
@@ -422,12 +435,12 @@ async function logout() {
 .nav-sub-item {
   padding-left: 24px !important;
   background: #f8fafc;
-  
+
   .q-item__section--avatar {
     min-width: 32px !important;
     padding-right: 0 !important;
   }
-  
+
   &.q-router-link--active {
     background: #eff6ff;
     border-left: 3px solid var(--q-primary);
@@ -444,7 +457,7 @@ async function logout() {
   display: flex !important;
   align-items: center;
   justify-content: center;
-  
+
   &:hover {
     color: var(--q-primary) !important;
     background: #f1f5f9;
