@@ -29,17 +29,33 @@ export class StudentsService {
         WHERE s."PersonID_Onec" = $1
       `;
       const result = await this.db.query(query, [id]);
-      
+
       if (result.rows.length === 0) {
         throw new NotFoundException(`Student with ID ${id} not found`);
       }
-      
+
       return result.rows[0];
     } catch (err) {
       if (err instanceof NotFoundException) {
         throw err;
       }
       this.logger.error(`findOne error: ${err.message}`);
+      throw err;
+    }
+  }
+
+  async findCasesByName(name: string) {
+    try {
+      const query = `
+        SELECT *
+        FROM cases
+        WHERE student_name = $1
+      `;
+      const result = await this.db.query(query, [name]);
+
+      return result.rows;
+    } catch (err) {
+      this.logger.error(`findCasesByName error: ${err.message}`);
       throw err;
     }
   }
