@@ -12,6 +12,7 @@ import { ImportsModule } from './imports/imports.module';
 
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
+import { StudentsModule } from './students/students.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     SettingsModule,
     MasterDataModule,
     AutomationModule,
+    StudentsModule,
     ImportsModule,
   ],
   controllers: [AppController],

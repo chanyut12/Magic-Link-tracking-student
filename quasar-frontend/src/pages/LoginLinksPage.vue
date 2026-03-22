@@ -203,9 +203,23 @@
                         <q-item-section>แชร์ผ่าน LINE</q-item-section>
                       </q-item>
                       <q-separator />
-                      <q-item clickable class="action-menu-item action-menu-item--lock text-red" @click="deleteLink(props.row)">
-                        <q-item-section avatar><i class="fa-solid fa-trash"></i></q-item-section>
-                        <q-item-section>ลบลิงก์</q-item-section>
+                      <q-item
+                        v-if="props.row.admin_locked"
+                        clickable
+                        class="action-menu-item action-menu-item--unlock"
+                        @click="openAdminActionDialog(props.row.id, 'unlock')"
+                      >
+                        <q-item-section avatar><i class="fa-solid fa-lock-open"></i></q-item-section>
+                        <q-item-section>เปิดลิงก์อีกครั้ง</q-item-section>
+                      </q-item>
+                      <q-item
+                        v-if="!props.row.admin_locked"
+                        clickable
+                        class="action-menu-item action-menu-item--lock"
+                        @click="openAdminActionDialog(props.row.id, 'lock')"
+                      >
+                        <q-item-section avatar><i class="fa-solid fa-lock"></i></q-item-section>
+                        <q-item-section>ปิดลิงก์</q-item-section>
                       </q-item>
                     </q-list>
                   </q-menu>
@@ -322,6 +336,36 @@
         </q-card>
       </q-dialog>
 
+      <!-- Admin Action Dialog -->
+      <q-dialog v-model="adminActionDialog.show">
+        <q-card style="min-width: 360px; max-width: 92vw;">
+          <q-card-section>
+            <div class="text-h6">{{ adminDialogTitle }}</div>
+            <div class="text-caption text-grey-7 q-mt-xs">{{ adminDialogHint }}</div>
+          </q-card-section>
+          <q-card-section>
+            <q-input
+              v-model="adminActionDialog.reason"
+              :label="adminReasonLabel"
+              outlined
+              dense
+              autogrow
+              type="textarea"
+              :rules="[val => !!val || 'กรุณาระบุเหตุผล']"
+            />
+          </q-card-section>
+          <q-card-actions align="right">
+            <q-btn flat label="ยกเลิก" v-close-popup />
+            <q-btn
+              :color="adminActionDialog.action === 'lock' ? 'negative' : 'primary'"
+              :label="adminConfirmLabel"
+              @click="confirmAdminAction"
+              :loading="adminActionDialog.loading"
+            />
+          </q-card-actions>
+        </q-card>
+      </q-dialog>
+
     </div>
   </q-page>
 </template>
@@ -353,6 +397,22 @@ const addDialog = ref(false);
 const showResult = ref(false);
 const submitLoading = ref(false);
 const resultLink = ref('');
+
+type AdminAction = 'lock' | 'unlock';
+
+const adminActionDialog = reactive<{
+  show: boolean;
+  action: AdminAction;
+  linkId: string;
+  reason: string;
+  loading: boolean;
+}>({
+  show: false,
+  action: 'lock',
+  linkId: '',
+  reason: '',
+  loading: false
+});
 
 // Filters State (Added)
 const filters = reactive({
@@ -522,20 +582,56 @@ const fetchLoginLinks = async () => {
   } finally { loading.value = false; }
 };
 
-const deleteLink = (link: LoginLink) => {
-  $q.dialog({
-    title: 'ยืนยันการลบลิงก์',
-    message: `คุณต้องการลบลิงก์ของ "${link.assigned_to_name || 'ไม่ระบุ'}" ใช่หรือไม่?`,
-    cancel: true, persistent: true
-  }).onOk(() => {
-    void (async () => {
-      try {
-        await api.delete(`/api/tasks/${link.task_id}`);
-        loginLinks.value = loginLinks.value.filter(l => l.id !== link.id);
-        $q.notify({ color: 'positive', message: 'ลบลิงก์สำเร็จ', position: 'top' });
-      } catch (err) { console.error('Error deleting link:', err); }
-    })();
-  });
+const openAdminActionDialog = (linkId: string, action: AdminAction) => {
+  adminActionDialog.linkId = linkId;
+  adminActionDialog.action = action;
+  adminActionDialog.reason = action === 'lock'
+    ? 'ปิดลิงก์โดยผู้ดูแลระบบ'
+    : 'เปิดลิงก์อีกครั้งโดยผู้ดูแลระบบ';
+  adminActionDialog.show = true;
+};
+
+const adminDialogTitle = computed(() =>
+  adminActionDialog.action === 'lock' ? 'ยืนยันปิดลิงก์เข้าสู่ระบบ' : 'ยืนยันเปิดลิงก์เข้าสู่ระบบ'
+);
+
+const adminDialogHint = computed(() =>
+  adminActionDialog.action === 'lock'
+    ? 'ระบบจะปิดการใช้งานลิงก์นี้ทันที และบันทึกเหตุผลไว้'
+    : 'ระบบจะเปิดใช้งานลิงก์นี้อีกครั้ง และบันทึกเหตุผลไว้'
+);
+
+const adminReasonLabel = computed(() =>
+  adminActionDialog.action === 'lock' ? 'เหตุผลที่ปิดลิงก์' : 'เหตุผลที่เปิดลิงก์'
+);
+
+const adminConfirmLabel = computed(() =>
+  adminActionDialog.action === 'lock' ? 'ยืนยันปิดลิงก์' : 'ยืนยันเปิดลิงก์'
+);
+
+const confirmAdminAction = async () => {
+  if (!adminActionDialog.reason.trim()) {
+    $q.notify({ message: 'กรุณาระบุเหตุผล', color: 'warning' });
+    return;
+  }
+
+  adminActionDialog.loading = true;
+  try {
+    await api.post(`/api/task-links/${adminActionDialog.linkId}/admin-lock`, {
+      action: adminActionDialog.action,
+      reason: adminActionDialog.reason.trim()
+    });
+    $q.notify({
+      message: adminActionDialog.action === 'lock' ? 'ปิดลิงก์สำเร็จ' : 'เปิดลิงก์สำเร็จ',
+      color: 'positive'
+    });
+    adminActionDialog.show = false;
+    await fetchLoginLinks();
+  } catch {
+    $q.notify({ message: 'ไม่สามารถอัปเดตสถานะลิงก์ได้', color: 'negative' });
+  } finally {
+    adminActionDialog.loading = false;
+  }
 };
 
 const copyLink = (link: LoginLink) => {

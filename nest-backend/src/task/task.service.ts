@@ -347,7 +347,7 @@ export class TaskService {
   async getLoginLinks() {
     try {
       const res = await this.db.query(
-        `SELECT tl.id, tl.task_id, tl.assigned_to_name, tl.assigned_to_email, tl.expires_at, tl.status, tl.magic_link, t.created_at
+        `SELECT tl.id, tl.task_id, tl.assigned_to_name, tl.assigned_to_email, tl.expires_at, tl.status, tl.magic_link, tl.admin_locked, t.created_at
          FROM task_links tl
          JOIN tasks t ON t.id = tl.task_id
          WHERE t.task_type = 'LOGIN'

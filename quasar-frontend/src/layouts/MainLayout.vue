@@ -93,6 +93,13 @@
               <q-item-section>รายงานนักเรียน</q-item-section>
             </q-item>
 
+            <q-item clickable v-ripple to="/students" class="nav-item">
+              <q-item-section avatar min-width="44px">
+                <i class="fas fa-user-graduate"></i>
+              </q-item-section>
+              <q-item-section>รายชื่อนักเรียน</q-item-section>
+            </q-item>
+
             <q-item clickable v-ripple to="/create" class="nav-item">
               <q-item-section avatar min-width="44px">
                 <i class="fas fa-link"></i>
@@ -368,6 +375,7 @@ const isManageUsersRoute = computed(() =>
 const pageTitle = computed(() => {
   if (route.path === '/') return 'หน้าหลัก';
   if (route.path === '/dashboard') return 'รายงานนักเรียน';
+  if (route.path === '/students') return 'รายชื่อนักเรียน';
   if (route.path === '/create') return 'สร้างภารกิจใหม่';
   if (route.path === '/import-data') return 'นำเข้าข้อมูล';
   if (route.path === '/attendance') return 'เช็คชื่อ';

@@ -7,6 +7,7 @@ const routes: RouteRecordRaw[] = [
     children: [
       { path: '', component: () => import('pages/MainPage.vue'), meta: { requiresAuth: true } },
       { path: 'dashboard', component: () => import('pages/IndexPage.vue'), meta: { requiresAuth: true } },
+      { path: 'students', component: () => import('pages/StudentsPage.vue'), meta: { requiresAuth: true } },
       { path: 'create', component: () => import('pages/CreateTaskPage.vue'), meta: { requiresAuth: true } },
       { path: 'attendance', component: () => import('pages/AttendancePage.vue'), meta: { requiresAuth: true } },
       { path: 'attendance-dashboard', component: () => import('pages/AttendanceDashboardPage.vue'), meta: { requiresAuth: true } },
@@ -14,6 +15,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'manage-users', component: () => import('pages/ManageUserPage.vue'), meta: { requiresAuth: true } },
       { path: 'login-links', component: () => import('pages/LoginLinksPage.vue'), meta: { requiresAuth: true } },
       { path: 'settings', component: () => import('pages/SystemSettingsPage.vue'), meta: { requiresAuth: true } },
+      { path: 'student-information/:id', component: () => import('pages/StudentInformationPage.vue'), meta: { requiresAuth: true } },
       { path: 'task-detail/:taskId', component: () => import('pages/TaskDetailPage.vue'), meta: { requiresAuth: true } },
       { path: 'task/:token', component: () => import('pages/TaskGuestPage.vue'), meta: { hideNav: true } },
       { path: 'task/:token/delegate', component: () => import('pages/DelegatePage.vue'), meta: { hideNav: true } },

@@ -9,7 +9,7 @@ export class AttendanceService {
   constructor(
     private readonly db: DatabaseService,
     private readonly automationService: AutomationService
-  ) {}
+  ) { }
 
   async getGradeLevels() {
     try {
@@ -90,10 +90,13 @@ export class AttendanceService {
           (s."FirstName_Onec" || ' ' || s."LastName_Onec") as name,
           COALESCE(gl.label, 'ไม่ทราบ') as grade,
           s."RoomID_Onec"::text as room,
+          s."SchoolID_Onec" as school_id,
+          sc.name as school_name,
           (SELECT COUNT(*) FROM attendance a WHERE a."PersonID_Onec" = s."PersonID_Onec" AND a."AttendanceStatus" = 3) as total_late,
           (SELECT COUNT(*) FROM attendance a WHERE a."PersonID_Onec" = s."PersonID_Onec" AND a."AttendanceStatus" = 2) as total_absent
         FROM student_term s
         LEFT JOIN grade_levels gl ON s."GradeLevelID_Onec" = gl.id
+        LEFT JOIN schools sc ON s."SchoolID_Onec" = sc.id
         WHERE 1=1
       `;
       const params: any[] = [];
