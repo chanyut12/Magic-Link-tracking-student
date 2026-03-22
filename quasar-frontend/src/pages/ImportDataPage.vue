@@ -107,7 +107,7 @@
               type="file"
               ref="fileInput"
               class="hidden"
-              accept=".csv,.xlsx"
+              accept=".csv"
               @change="handleFileUpload"
               style="display: none"
             />
@@ -278,8 +278,8 @@
 
         <q-card flat bordered class="bg-white q-mt-lg q-pa-md shadow-2" style="border-radius: 12px">
           <div class="row justify-end items-center">
-            <div class="text-grey-6 q-mr-md" v-if="autoMatchCount < columns.length">
-              Please map all columns to continue
+            <div class="text-grey-6 q-mr-md" v-if="autoMatchCount <= columns.length / 2">
+              Please map more than 50% of the columns to continue
             </div>
             <q-btn
               color="primary"
@@ -287,7 +287,7 @@
               icon="save"
               unelevated
               :loading="importStore.isImporting"
-              :disable="importStore.isImporting || autoMatchCount < columns.length"
+              :disable="importStore.isImporting || autoMatchCount <= columns.length / 2"
               label="Confirm and Start Import"
               @click="handleStartImport"
               style="border-radius: 8px"
@@ -306,7 +306,9 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, reactive } from 'vue';
+import { useQuasar } from 'quasar';
 
+const $q = useQuasar();
 const importMode = ref('student_term');
 
 const importStore = reactive({
@@ -380,11 +382,24 @@ const importStore = reactive({
 
     this.isImporting = true;
     try {
-      // Simulating API call for POC
-      console.log(`Submitting file to ${mode}:`, this.uploadedFile.name);
-      console.log('With mapping:', mapping);
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      return true;
+      const formData = new FormData();
+      formData.append('file', this.uploadedFile);
+      formData.append('target', mode);
+      formData.append('mapping', JSON.stringify(mapping));
+
+      const response = await fetch('http://localhost:3000/api/imports/bulk', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Import failed');
+      }
+
+      const data = await response.json();
+      console.log(`Successfully imported ${this.uploadedFile.name} to ${mode}`);
+      return data;
     } catch (e) {
       console.error('Error importing data:', e);
       return false;
@@ -411,13 +426,14 @@ const handleDrop = async (event: DragEvent) => {
   isDragging.value = false;
   if (event.dataTransfer?.files && event.dataTransfer.files.length > 0) {
     const file = event.dataTransfer.files[0];
-    if (
-      file &&
-      (file.name.toLowerCase().endsWith('.csv') || file.name.toLowerCase().endsWith('.xlsx'))
-    ) {
+    if (file && file.name.toLowerCase().endsWith('.csv')) {
       await importStore.setFile(file);
     } else {
-      alert('โปรดอัปโหลดไฟล์นามสกุล .csv หรือ .xlsx เท่านั้น');
+      $q.notify({
+        type: 'negative',
+        message: 'โปรดอัปโหลดไฟล์นามสกุล .csv เท่านั้น',
+        position: 'top',
+      });
     }
   }
 };
@@ -440,19 +456,38 @@ const cancelUpload = () => {
 };
 
 const handleStartImport = async () => {
-  if (autoMatchCount.value === 0) {
-    alert('Please map at least one column before importing.');
+  if (autoMatchCount.value <= columns.value.length / 2) {
+    $q.notify({
+      type: 'warning',
+      message: 'โปรด Map ข้อมูลให้ตรงกันเกิน 50% ก่อนทำการนำเข้าข้อมูล',
+      position: 'top',
+    });
     return;
   }
 
-  const success = await importStore.submitImport(mappedFields.value, importMode.value);
-  if (success) {
-    alert(
-      `Import to ${importMode.value === 'student_term' ? 'Student Term DB' : 'Student Dropouts DB'} initiated successfully!`,
-    );
-    cancelUpload();
+  const response = await importStore.submitImport(mappedFields.value, importMode.value);
+  if (response && response.success) {
+    if (response.rowsInserted === 0) {
+      $q.notify({
+        type: 'warning',
+        message: `ไม่มีข้อมูลเข้าสู่ระบบเลย (สำเร็จ 0 แถว ข้าม ${response.rowsSkipped} แถว). ตรวจสอบว่าได้ Map ข้อมูลคอลัมน์ชื่อ 'PersonID_Onec' (รหัสประชาชน) หรือไม่`,
+        position: 'top',
+        timeout: 5000,
+      });
+    } else {
+      $q.notify({
+        type: 'positive',
+        message: `นำเข้าข้อมูลลงฐาน ${importMode.value === 'student_term' ? 'Student Term' : 'Student Dropouts'} สำเร็จแล้ว (${response.rowsInserted} แถว)!`,
+        position: 'top',
+      });
+      cancelUpload();
+    }
   } else {
-    alert('Import failed. Please try again.');
+    $q.notify({
+      type: 'negative',
+      message: 'เกิดข้อผิดพลาดในการนำเข้าข้อมูล โปรดลองอีกครั้ง',
+      position: 'top',
+    });
   }
 };
 
