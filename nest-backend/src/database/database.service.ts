@@ -278,6 +278,30 @@ export class DatabaseService implements OnModuleInit {
         ALTER TABLE task_submissions ADD COLUMN IF NOT EXISTS updated_student_address TEXT;
         ALTER TABLE task_submissions ADD COLUMN IF NOT EXISTS updated_lat REAL;
         ALTER TABLE task_submissions ADD COLUMN IF NOT EXISTS updated_lng REAL;
+        
+        -- Enforce Foreign Keys for visual schema mapping (e.g., DBeaver)
+        DO $$
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_student_term_school') THEN
+                UPDATE student_term SET "SchoolID_Onec" = NULL 
+                WHERE "SchoolID_Onec" IS NOT NULL AND "SchoolID_Onec" NOT IN (SELECT id FROM schools);
+
+                ALTER TABLE student_term
+                ADD CONSTRAINT fk_student_term_school
+                FOREIGN KEY ("SchoolID_Onec") REFERENCES schools(id) ON DELETE SET NULL;
+            END IF;
+            
+            IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_student_dropouts_school') THEN
+                UPDATE student_dropouts SET "SchoolID_Onec" = NULL 
+                WHERE "SchoolID_Onec" IS NOT NULL AND "SchoolID_Onec" NOT IN (SELECT id FROM schools);
+
+                ALTER TABLE student_dropouts
+                ADD CONSTRAINT fk_student_dropouts_school
+                FOREIGN KEY ("SchoolID_Onec") REFERENCES schools(id) ON DELETE SET NULL;
+            END IF;
+        END
+        $$;
+        
         -- Phase 2: System Settings
         CREATE TABLE IF NOT EXISTS system_settings (
           setting_key TEXT PRIMARY KEY,

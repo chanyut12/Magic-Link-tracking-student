@@ -7,6 +7,7 @@ const routes: RouteRecordRaw[] = [
     children: [
       { path: '', component: () => import('pages/MainPage.vue'), meta: { requiresAuth: true } },
       { path: 'dashboard', component: () => import('pages/IndexPage.vue'), meta: { requiresAuth: true } },
+      { path: 'students', component: () => import('pages/StudentsPage.vue'), meta: { requiresAuth: true } },
       { path: 'create', component: () => import('pages/CreateTaskPage.vue'), meta: { requiresAuth: true } },
       { path: 'attendance', component: () => import('pages/AttendancePage.vue'), meta: { requiresAuth: true } },
       { path: 'attendance-dashboard', component: () => import('pages/AttendanceDashboardPage.vue'), meta: { requiresAuth: true } },
