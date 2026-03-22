@@ -247,12 +247,12 @@
           flat
           :loading="loading"
           :no-data-label="tableEmptyLabel"
-          :pagination="{ rowsPerPage: 0 }"
-          hide-pagination
+          v-model:pagination="pagination"
+          :rows-per-page-options="[10, 15, 20, 50]"
         >
           <template v-slot:body-cell-index="props">
             <q-td :props="props" class="text-gray-400">
-              {{ props.pageIndex + 1 }}
+              {{ (pagination.page - 1) * pagination.rowsPerPage + props.pageIndex + 1 }}
             </q-td>
           </template>
 
@@ -378,7 +378,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
+import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue';
 import { api } from 'boot/axios';
 import { useQuasar } from 'quasar';
 import type { QTableColumn } from 'quasar';
@@ -411,6 +411,7 @@ const loading = ref(false);
 const tasks = ref<AttendanceTask[]>([]);
 const lastUpdated = ref('');
 const loadError = ref('');
+const pagination = ref({ page: 1, rowsPerPage: 20 });
 
 type AdminAction = 'lock' | 'unlock';
 
@@ -657,6 +658,8 @@ const resetFilters = () => {
   filters.room = 'ALL';
   filters.status = 'ALL';
 };
+
+watch(filters, () => { pagination.value.page = 1; });
 
 let refreshInterval: ReturnType<typeof setInterval> | null = null;
 

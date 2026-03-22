@@ -60,14 +60,6 @@
         </div>
       </div>
 
-      <!-- Table Header (Desktop) -->
-      <div class="table-header d-none-mobile" v-if="filteredStudents.length > 0">
-        <div>ชื่อ - นามสกุล</div>
-        <div>โรงเรียน</div>
-        <div class="text-center">ระดับชั้น</div>
-        <div class="text-center">ห้อง</div>
-      </div>
-
       <!-- Student List -->
       <div class="student-list">
         <div v-if="loading" class="text-center q-py-xl">
@@ -81,42 +73,116 @@
           <p>ลองปรับตัวกรอง หรือค้นหาด้วยชื่อนักเรียนอีกครั้ง</p>
         </div>
 
-        <q-infinite-scroll v-else @load="onLoadMore" :offset="250" :disable="visibleCount >= filteredStudents.length">
-          <div 
-            v-for="(s, index) in visibleStudents" 
-            :key="s.id" 
-            class="student-card q-mb-sm"
-            style="cursor: pointer;"
-            @click="$router.push(`/students/${s.id}`)"
-            :style="{ animationDelay: `${(index % 20) * 30}ms` }"
-          >
-            <div class="student-info">
-              <div 
-                class="student-avatar" 
-                :style="getAvatarGradient(s.name)"
-              >{{ s.name[0] }}</div>
-              <div class="student-details">
-                <h3>{{ s.name }}</h3>
-                <div class="student-id">รหัส: {{ s.id }}</div>
+        <template v-else>
+          <div class="table-wrap">
+            <q-table
+              class="student-table"
+              :rows="filteredStudents"
+              :columns="columns"
+              row-key="id"
+              flat
+              v-model:pagination="pagination"
+              :rows-per-page-options="rowsPerPageOptions"
+              @row-click="onStudentRowClick"
+            >
+              <template v-slot:body-cell-index="props">
+                <q-td :props="props" class="text-grey-5">
+                  {{ (pagination.page - 1) * pagination.rowsPerPage + props.pageIndex + 1 }}
+                </q-td>
+              </template>
+
+              <template v-slot:body-cell-name="props">
+                <q-td :props="props">
+                  <div class="student-info">
+                    <div class="student-avatar" :style="getAvatarGradient(props.row.name)">
+                      {{ props.row.name[0] }}
+                    </div>
+                    <div class="student-details">
+                      <h3>{{ props.row.name }}</h3>
+                      <div class="student-id">รหัส: {{ props.row.id }}</div>
+                    </div>
+                  </div>
+                </q-td>
+              </template>
+
+              <template v-slot:body-cell-school_name="props">
+                <q-td :props="props" class="table-value-muted">
+                  {{ props.row.school_name || '-' }}
+                </q-td>
+              </template>
+
+              <template v-slot:body-cell-grade="props">
+                <q-td :props="props" class="text-center">
+                  <span class="count-badge">{{ props.row.grade || '-' }}</span>
+                </q-td>
+              </template>
+
+              <template v-slot:body-cell-room="props">
+                <q-td :props="props" class="text-center">
+                  <span class="count-badge">{{ props.row.room === '0' || !props.row.room ? '-' : `ห้อง ${props.row.room}` }}</span>
+                </q-td>
+              </template>
+            </q-table>
+          </div>
+
+          <div class="mobile-student-list">
+            <div
+              v-for="(s, index) in paginatedStudents"
+              :key="s.id"
+              class="student-card q-mb-sm"
+              style="cursor: pointer;"
+              @click="openStudent(s.id)"
+              :style="{ animationDelay: `${(index % pagination.rowsPerPage) * 30}ms` }"
+            >
+              <div class="student-info">
+                <div
+                  class="student-avatar"
+                  :style="getAvatarGradient(s.name)"
+                >{{ s.name[0] }}</div>
+                <div class="student-details">
+                  <h3>{{ s.name }}</h3>
+                  <div class="student-id">รหัส: {{ s.id }}</div>
+                </div>
+              </div>
+
+              <div style="color: #64748b; font-weight: 600;">
+                {{ s.school_name || '-' }}
+              </div>
+              <div class="text-center count-badge">
+                {{ s.grade }}
+              </div>
+              <div class="text-center count-badge">
+                {{ s.room === '0' || !s.room ? '-' : 'ห้อง ' + s.room }}
               </div>
             </div>
 
-            <div class="d-none-mobile" style="color: #64748b; font-weight: 600;">
-              {{ s.school_name || '-' }}
-            </div>
-            <div class="d-none-mobile text-center count-badge">
-              {{ s.grade }}
-            </div>
-            <div class="d-none-mobile text-center count-badge">
-              {{ s.room === '0' || !s.room ? '-' : 'ห้อง ' + s.room }}
+            <div class="pagination-panel">
+              <div class="pagination-summary">
+                แสดง {{ paginationStart }}-{{ paginationEnd }} จาก {{ filteredStudents.length }} คน
+              </div>
+
+              <div class="pagination-controls">
+                <label class="rows-per-page-control">
+                  <span>ต่อหน้า</span>
+                  <select v-model.number="pagination.rowsPerPage" class="filter-select rows-per-page-select">
+                    <option v-for="size in rowsPerPageOptions" :key="size" :value="size">{{ size }}</option>
+                  </select>
+                </label>
+
+                <q-pagination
+                  v-model="pagination.page"
+                  :max="totalPages"
+                  :max-pages="6"
+                  direction-links
+                  boundary-links
+                  color="primary"
+                  active-design="unelevated"
+                  active-color="primary"
+                />
+              </div>
             </div>
           </div>
-          <template v-slot:loading>
-            <div class="row justify-center q-my-md">
-              <q-spinner-dots color="primary" size="40px" />
-            </div>
-          </template>
-        </q-infinite-scroll>
+        </template>
       </div>
     </div>
 
@@ -189,6 +255,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch } from 'vue';
 import { api } from 'boot/axios';
+import type { QTableColumn } from 'quasar';
 import { useRouter } from 'vue-router';
 
 // --- Interfaces ---
@@ -280,7 +347,7 @@ const filteredSubDistricts = computed(() => {
 });
 
 const filteredStudents = computed(() => {
-  let list = students.value;
+  let list = [...students.value];
   if (searchQuery.value) {
     const term = searchQuery.value.toLowerCase();
     list = list.filter(s => 
@@ -291,19 +358,41 @@ const filteredStudents = computed(() => {
   return list.sort((a, b) => a.name.localeCompare(b.name));
 });
 
-const visibleCount = ref(30);
-const visibleStudents = computed(() => {
-  return filteredStudents.value.slice(0, visibleCount.value);
+const rowsPerPageOptions = [10, 20, 50];
+const pagination = ref({
+  page: 1,
+  rowsPerPage: 20,
+  sortBy: 'name',
+  descending: false,
 });
 
-const onLoadMore = (index: number, done: () => void) => {
-  setTimeout(() => {
-    if (visibleCount.value < filteredStudents.value.length) {
-      visibleCount.value += 30;
-    }
-    done();
-  }, 200);
-};
+const totalPages = computed(() => {
+  return Math.max(1, Math.ceil(filteredStudents.value.length / pagination.value.rowsPerPage));
+});
+
+const paginatedStudents = computed(() => {
+  const start = (pagination.value.page - 1) * pagination.value.rowsPerPage;
+  const end = start + pagination.value.rowsPerPage;
+  return filteredStudents.value.slice(start, end);
+});
+
+const paginationStart = computed(() => {
+  if (filteredStudents.value.length === 0) return 0;
+  return (pagination.value.page - 1) * pagination.value.rowsPerPage + 1;
+});
+
+const paginationEnd = computed(() => {
+  if (filteredStudents.value.length === 0) return 0;
+  return Math.min(pagination.value.page * pagination.value.rowsPerPage, filteredStudents.value.length);
+});
+
+const columns: QTableColumn<Student>[] = [
+  { name: 'index', label: '#', field: 'id', align: 'left' },
+  { name: 'name', label: 'ชื่อ - นามสกุล', field: 'name', align: 'left', sortable: true },
+  { name: 'school_name', label: 'โรงเรียน', field: (row: Student) => row.school_name || '-', align: 'left', sortable: true },
+  { name: 'grade', label: 'ระดับชั้น', field: 'grade', align: 'center', sortable: true },
+  { name: 'room', label: 'ห้อง', field: 'room', align: 'center', sortable: true },
+];
 
 // --- UI Helpers ---
 const avatarColors = [
@@ -337,6 +426,14 @@ const getAvatarGradient = (name: string) => {
     color: 'white',
     textShadow: '0 1px 2px rgba(0,0,0,0.2)',
   };
+};
+
+const openStudent = (studentId: string) => {
+  void $router.push(`/students/${studentId}`);
+};
+
+const onStudentRowClick = (_event: Event, row: Student) => {
+  openStudent(row.id);
 };
 
 // --- API Calls & Data Fetching ---
@@ -443,18 +540,31 @@ const onSubDistrictChange = async () => {
 };
 
 const applyFilters = () => {
+  const previousSchoolId = filters.schoolId;
   filters.schoolId = tempFilters.schoolId;
   const chosen = tempSchools.value.find(s => String(s.id) === filters.schoolId);
   if (chosen && !schools.value.find(s => s.id === chosen.id)) {
     schools.value.push(chosen);
   }
   showFilterDialog.value = false;
-  void fetchStudentsList();
+  if (previousSchoolId === filters.schoolId) {
+    void fetchStudentsList();
+  }
 };
 
 // --- Watchers ---
 watch([() => filters.schoolId, () => filters.grade, () => filters.room, searchQuery], () => {
-  visibleCount.value = 30;
+  pagination.value.page = 1;
+});
+
+watch(() => pagination.value.rowsPerPage, () => {
+  pagination.value.page = 1;
+});
+
+watch(() => filteredStudents.value.length, () => {
+  if (pagination.value.page > totalPages.value) {
+    pagination.value.page = totalPages.value;
+  }
 });
 
 watch(() => filters.schoolId, async () => {
@@ -682,22 +792,58 @@ onMounted(async () => {
   }
 }
 
-.table-header {
-  display: grid;
-  grid-template-columns: 2.5fr 1fr 1fr 2fr;
-  padding: 0 1.5rem 0.75rem;
-  font-weight: 700;
-  color: #64748b;
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
 .student-list {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
   padding-bottom: 5rem;
+}
+
+.table-wrap {
+  display: block;
+  background: white;
+  border-radius: 24px;
+  border: 1px solid #dbeafe;
+  box-shadow: 0 14px 30px rgba(37, 99, 235, 0.08);
+  overflow: hidden;
+}
+
+:deep(.student-table .q-table__middle) {
+  overflow: auto;
+}
+
+:deep(.student-table table) {
+  min-width: 860px;
+}
+
+:deep(.student-table thead tr) {
+  background: #f8fbff;
+}
+
+:deep(.student-table thead th) {
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+:deep(.student-table tbody tr) {
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+:deep(.student-table tbody tr:hover) {
+  background: #f8fbff;
+}
+
+:deep(.student-table tbody td) {
+  padding-top: 1rem;
+  padding-bottom: 1rem;
+}
+
+.mobile-student-list {
+  display: none;
 }
 
 .student-card {
@@ -718,6 +864,60 @@ onMounted(async () => {
     transform: translateY(-2px);
     border-color: #e2e8f0;
   }
+}
+
+.pagination-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 0.5rem;
+  padding: 1rem 1.25rem;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(147, 197, 253, 0.35);
+  border-radius: 20px;
+  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.08);
+  backdrop-filter: blur(10px);
+}
+
+.pagination-summary {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #1e3a8a;
+}
+
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.rows-per-page-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #475569;
+}
+
+.rows-per-page-select {
+  min-width: 92px;
+  padding-right: 2.4rem;
+}
+
+:deep(.q-pagination) {
+  gap: 0.25rem;
+}
+
+:deep(.q-pagination .q-btn) {
+  border-radius: 12px;
+  min-width: 38px;
+  min-height: 38px;
+  font-weight: 700;
 }
 
 @keyframes fade-in-up {
@@ -775,6 +975,11 @@ onMounted(async () => {
   color: #475569;
 }
 
+.table-value-muted {
+  color: #64748b;
+  font-weight: 600;
+}
+
 .empty-state-box {
   text-align: center;
   padding: 5rem 2rem;
@@ -829,9 +1034,15 @@ onMounted(async () => {
   .d-none-mobile {
     display: none !important;
   }
-  
-  .table-header {
+
+  .table-wrap {
     display: none;
+  }
+
+  .mobile-student-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
   }
   
   .student-card {
@@ -839,6 +1050,20 @@ onMounted(async () => {
     gap: 1rem;
     border-radius: 20px;
     padding: 1.5rem;
+  }
+
+  .pagination-panel {
+    padding: 1rem;
+  }
+
+  .pagination-controls {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .rows-per-page-control {
+    width: 100%;
+    justify-content: space-between;
   }
   
   .empty-state-box {

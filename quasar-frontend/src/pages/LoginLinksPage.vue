@@ -136,11 +136,11 @@
           row-key="id"
           flat
           :loading="loading"
-          :pagination="{ rowsPerPage: 0 }"
-          hide-pagination
+          v-model:pagination="pagination"
+          :rows-per-page-options="[10, 15, 20, 50]"
         >
           <template v-slot:body-cell-index="props">
-            <q-td :props="props" class="text-grey-5">{{ props.pageIndex + 1 }}</q-td>
+            <q-td :props="props" class="text-grey-5">{{ (pagination.page - 1) * pagination.rowsPerPage + props.pageIndex + 1 }}</q-td>
           </template>
 
           <template v-slot:body-cell-name="props">
@@ -371,7 +371,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue';
+import { ref, reactive, computed, watch, onMounted } from 'vue';
 import { api } from 'boot/axios';
 import { useQuasar } from 'quasar';
 
@@ -392,6 +392,7 @@ interface LoginLink {
 const loginLinks = ref<LoginLink[]>([]);
 const loading = ref(false);
 const lastUpdated = ref('--:--');
+const pagination = ref({ page: 1, rowsPerPage: 20 });
 
 const addDialog = ref(false);
 const showResult = ref(false);
@@ -492,6 +493,8 @@ const resetFilters = () => {
   filters.status = 'ALL';
   filters.search = '';
 };
+
+watch(filters, () => { pagination.value.page = 1; });
 
 const isValidLink = (link: LoginLink) => {
   return !link.admin_locked && new Date(link.expires_at) > new Date();

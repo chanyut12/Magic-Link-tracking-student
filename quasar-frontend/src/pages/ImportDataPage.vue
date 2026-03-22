@@ -301,6 +301,61 @@
         © 2026 Student tracking system. All rights reserved.
       </div>
     </div>
+
+    <!-- Missing Schools Dialog -->
+    <q-dialog v-model="showSchoolDialog" persistent>
+      <q-card style="min-width: 500px; max-width: 700px; border-radius: 16px; width: 90vw">
+        <q-card-section class="bg-primary text-white q-pa-lg">
+          <div class="text-h6 text-weight-bold">กรอกข้อมูลโรงเรียนที่ยังไม่มีในระบบ</div>
+          <div class="text-caption q-mt-xs opacity-80">
+            พบ {{ schoolFormData.length }} โรงเรียนที่ยังไม่มีในระบบ กรุณากรอกข้อมูลก่อนนำเข้า
+          </div>
+        </q-card-section>
+
+        <q-card-section class="q-pa-lg" style="max-height: 60vh; overflow-y: auto">
+          <div v-for="(school, idx) in schoolFormData" :key="school.id">
+            <div class="text-subtitle2 text-weight-bold q-mb-sm text-grey-8">
+              <q-icon name="school" class="q-mr-xs" /> รหัสโรงเรียน: {{ school.id }}
+            </div>
+            <div class="row q-col-gutter-sm">
+              <div class="col-12">
+                <q-input
+                  v-model="school.name"
+                  label="ชื่อโรงเรียน *"
+                  outlined
+                  dense
+                  :rules="[(v) => !!v || 'กรุณากรอกชื่อโรงเรียน']"
+                />
+              </div>
+              <div class="col-12 col-sm-4">
+                <q-input v-model="school.province" label="จังหวัด" outlined dense />
+              </div>
+              <div class="col-12 col-sm-4">
+                <q-input v-model="school.district" label="อำเภอ" outlined dense />
+              </div>
+              <div class="col-12 col-sm-4">
+                <q-input v-model="school.sub_district" label="ตำบล" outlined dense />
+              </div>
+            </div>
+            <q-separator v-if="idx < schoolFormData.length - 1" class="q-my-lg" />
+          </div>
+        </q-card-section>
+
+        <q-card-actions align="right" class="q-pa-md q-gutter-sm">
+          <q-btn flat label="ยกเลิก" @click="showSchoolDialog = false" />
+          <q-btn
+            color="primary"
+            label="ยืนยันและนำเข้าข้อมูล"
+            unelevated
+            icon="save"
+            :loading="importStore.isImporting"
+            :disable="schoolFormData.some((s) => !s.name)"
+            @click="submitWithSchools"
+            style="border-radius: 8px"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
@@ -377,7 +432,11 @@ const importStore = reactive({
       this.isParsing = false;
     }
   },
-  async submitImport(mapping: Record<string, string>, mode: string) {
+  async submitImport(
+    mapping: Record<string, string>,
+    mode: string,
+    schools: Array<{ id: number; name: string; province?: string; district?: string; sub_district?: string }> = [],
+  ) {
     if (!this.uploadedFile) return false;
 
     this.isImporting = true;
@@ -386,6 +445,9 @@ const importStore = reactive({
       formData.append('file', this.uploadedFile);
       formData.append('target', mode);
       formData.append('mapping', JSON.stringify(mapping));
+      if (schools.length > 0) {
+        formData.append('schools', JSON.stringify(schools));
+      }
 
       const response = await fetch('http://localhost:3000/api/imports/bulk', {
         method: 'POST',
@@ -412,6 +474,9 @@ const importStore = reactive({
 const fileInput = ref<HTMLInputElement | null>(null);
 const isDragging = ref(false);
 const mappedFields = ref<Record<string, string>>({});
+const showSchoolDialog = ref(false);
+const isCheckingSchools = ref(false);
+const schoolFormData = ref<Array<{ id: number; name: string; province: string; district: string; sub_district: string }>>([]);
 const autoMatchCount = computed(() => {
   return Object.values(mappedFields.value).filter((val) => val !== '').length;
 });
@@ -465,7 +530,48 @@ const handleStartImport = async () => {
     return;
   }
 
-  const response = await importStore.submitImport(mappedFields.value, importMode.value);
+  // Check for missing schools (student_term only)
+  if (importMode.value === 'student_term') {
+    isCheckingSchools.value = true;
+    try {
+      const checkForm = new FormData();
+      checkForm.append('file', importStore.uploadedFile!);
+      checkForm.append('mapping', JSON.stringify(mappedFields.value));
+      const res = await fetch('http://localhost:3000/api/imports/check-schools', {
+        method: 'POST',
+        body: checkForm,
+      });
+      if (res.ok) {
+        const { missingSchools } = await res.json() as { missingSchools: { id: number }[] };
+        if (missingSchools.length > 0) {
+          schoolFormData.value = missingSchools.map((s) => ({
+            id: s.id,
+            name: '',
+            province: '',
+            district: '',
+            sub_district: '',
+          }));
+          showSchoolDialog.value = true;
+          return;
+        }
+      }
+    } catch (e) {
+      console.error('Error checking schools:', e);
+    } finally {
+      isCheckingSchools.value = false;
+    }
+  }
+
+  await doImport([]);
+};
+
+const submitWithSchools = async () => {
+  showSchoolDialog.value = false;
+  await doImport(schoolFormData.value);
+};
+
+const doImport = async (schools: typeof schoolFormData.value) => {
+  const response = await importStore.submitImport(mappedFields.value, importMode.value, schools);
   if (response && response.success) {
     if (response.rowsInserted === 0) {
       $q.notify({
