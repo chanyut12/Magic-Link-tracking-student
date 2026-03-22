@@ -9,7 +9,7 @@ export class AttendanceService {
   constructor(
     private readonly db: DatabaseService,
     private readonly automationService: AutomationService
-  ) {}
+  ) { }
 
   async getGradeLevels() {
     try {
