@@ -168,7 +168,7 @@ export class UsersService {
 
   async validateUser(username: string, password: string) {
     const sql = `
-      SELECT u.id, u.username, u."FirstName", u."LastName", u.email, u.affiliation, 
+      SELECT u.id, u.username, u."FirstName", u."LastName", u."PersonID_Onec", u.email, u.affiliation, 
              u.status, u.permissions,
              array_agg(r.name) FILTER (WHERE r.name IS NOT NULL) as roles,
              array_agg(r.label) FILTER (WHERE r.label IS NOT NULL) as labels
