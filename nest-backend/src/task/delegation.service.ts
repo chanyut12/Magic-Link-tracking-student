@@ -1,8 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
-import { v4 as uuidv4 } from 'uuid';
 import { hashToken, generateToken, clean } from '../common/utils/helpers';
 import * as QRCode from 'qrcode';
+import * as crypto from 'crypto';
 
 const MAX_EXPIRY_HOURS = 2160;
 const DEFAULT_EXPIRY_HOURS = 24;
@@ -60,7 +60,7 @@ export class DelegationService {
 
     const newToken = generateToken();
     const newTokenHash = hashToken(newToken);
-    const newLinkId = uuidv4();
+    const newLinkId = crypto.randomUUID();
     const otpVerified = newAssigneeEmail ? 0 : 1;
     const expiresAt = new Date(
       Date.now() + delegateHours * 60 * 60 * 1000,

@@ -43,18 +43,19 @@
                 color="primary" 
                 class="filter-select-btn full-width"
                 @click="showFilterDialog = true"
+                :disable="isSchoolLocked"
               >
                 {{ selectedSchoolName }}
                 <i class="fas fa-chevron-down q-ml-sm" style="font-size: 0.7rem;"></i>
               </q-btn>
             </div>
             <div class="col-6 col-sm-auto">
-              <select v-model="filters.grade" class="filter-select full-width">
+              <select v-model="filters.grade" class="filter-select full-width" :disabled="isGradeLocked">
                 <option v-for="gl in gradeLevels" :key="gl.id" :value="gl.label">{{ gl.label }}</option>
               </select>
             </div>
             <div class="col-6 col-sm-auto">
-              <select v-model="filters.room" class="filter-select full-width">
+              <select v-model="filters.room" class="filter-select full-width" :disabled="isRoomLocked">
                 <option v-for="r in rooms" :key="r" :value="r">ห้อง {{ r }}</option>
               </select>
             </div>
@@ -210,7 +211,7 @@
             <!-- Province -->
             <div>
               <label class="q-mb-sm block text-caption text-weight-bold text-grey-7">จังหวัด</label>
-              <select v-model="tempFilters.province" class="filter-select full-width" @change="onProvinceChange">
+              <select v-model="tempFilters.province" class="filter-select full-width" @change="onProvinceChange" :disabled="isProvinceLocked">
                 <option value="">เลือกจังหวัด</option>
                 <option v-for="p in locationData.provinces" :key="p" :value="p">{{ p }}</option>
               </select>
@@ -307,6 +308,8 @@
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue';
 import { api } from 'boot/axios';
 import { useQuasar } from 'quasar';
+import { useUserStore } from '../composables/useUserStore';
+import { useDataScopeLock } from '../composables/useDataScopeLock';
 
 interface Student {
   id: string;
@@ -363,6 +366,18 @@ const searchQuery = ref('');
 const historyDate = ref(new Date().toISOString().split('T')[0]);
 const saving = ref(false);
 const showConfetti = ref(false);
+const { user, loadUser } = useUserStore();
+const userScope = computed(() => user.value?.data_scope);
+const {
+  isProvinceLocked,
+  isSchoolLocked,
+  isGradeLocked,
+  isRoomLocked,
+  lockedProvinceValue,
+  lockedSchoolValue,
+  lockedGradeValue,
+  lockedRoomValue,
+} = useDataScopeLock(userScope);
 
 const newCasesDialog = reactive<{ show: boolean; cases: NewCase[] }>({
   show: false,
@@ -421,6 +436,7 @@ const filters = reactive({
 });
 
 const showFilterDialog = ref(false);
+
 const tempFilters = reactive({
   province: '',
   district: '',
@@ -435,6 +451,36 @@ const locationData = reactive({
 });
 
 const tempSchools = ref<School[]>([]);
+
+const applyActiveScope = () => {
+  if (isProvinceLocked.value && lockedProvinceValue.value) {
+    if (tempFilters.province !== lockedProvinceValue.value) {
+      tempFilters.province = lockedProvinceValue.value;
+      onProvinceChange();
+    }
+  }
+
+  if (isSchoolLocked.value && lockedSchoolValue.value !== null) {
+    const nextSchoolId = String(lockedSchoolValue.value);
+    if (filters.schoolId !== nextSchoolId) {
+      filters.schoolId = nextSchoolId;
+    }
+  }
+
+  if (isGradeLocked.value && lockedGradeValue.value !== null && gradeLevels.value.length > 0) {
+    const lockedGrade = gradeLevels.value.find(g => g.id === lockedGradeValue.value);
+    if (lockedGrade && filters.grade !== lockedGrade.label) {
+      filters.grade = lockedGrade.label;
+    }
+  }
+
+  if (isRoomLocked.value && lockedRoomValue.value !== null) {
+    const nextRoom = String(lockedRoomValue.value);
+    if (filters.room !== nextRoom) {
+      filters.room = nextRoom;
+    }
+  }
+};
 
 const selectedSchoolName = computed(() => {
   const school = schools.value.find(s => String(s.id) === filters.schoolId);
@@ -499,6 +545,7 @@ const onSubDistrictChange = async () => {
 };
 
 const applyFilters = () => {
+  const previousSchoolId = filters.schoolId;
   filters.schoolId = tempFilters.schoolId;
   // If school not in schools list, add it or just rely on fetchStudents
   // We should refresh the 'schools' list so the computed 'selectedSchoolName' works
@@ -507,6 +554,14 @@ const applyFilters = () => {
     schools.value.push(chosen);
   }
   showFilterDialog.value = false;
+  if (previousSchoolId === filters.schoolId) {
+    if (currentTab.value === 'today') {
+      void fetchStudents();
+      void fetchTodayRecords();
+    } else {
+      void fetchHistory();
+    }
+  }
 };
 
 const fetchGradeLevels = async () => {
@@ -534,7 +589,10 @@ const fetchSchools = async () => {
 };
 
 const fetchStudents = async () => {
-  if (!filters.grade || !filters.room || !filters.schoolId) return;
+  if (!filters.grade || !filters.room || !filters.schoolId) {
+    students.value = [];
+    return;
+  }
   try {
     const res = await api.get('/api/attendance/students', {
       params: { 
@@ -573,7 +631,13 @@ const fetchTodayRecords = async () => {
 };
 
 const fetchRooms = async () => {
-  if (!filters.grade || !filters.schoolId) return;
+  if (!filters.grade || !filters.schoolId) {
+    rooms.value = [];
+    if (!isRoomLocked.value) {
+      filters.room = '';
+    }
+    return;
+  }
   try {
     const res = await api.get('/api/attendance/rooms', { 
       params: { 
@@ -582,6 +646,10 @@ const fetchRooms = async () => {
       } 
     });
     rooms.value = res.data.data;
+    if (isRoomLocked.value && lockedRoomValue.value !== null) {
+      filters.room = String(lockedRoomValue.value);
+      return;
+    }
     if (rooms.value.length > 0) {
       // If current room is not in the new rooms list, select the first one
       if (!rooms.value.includes(filters.room)) {
@@ -729,12 +797,32 @@ watch(historyDate, () => {
   void fetchHistory();
 });
 
+watch(showFilterDialog, (isOpen) => {
+  if (isOpen && isProvinceLocked.value && lockedProvinceValue.value) {
+    if (tempFilters.province !== lockedProvinceValue.value) {
+      tempFilters.province = lockedProvinceValue.value;
+      onProvinceChange();
+    }
+  }
+});
+
+watch(
+  [() => user.value?.data_scope, () => gradeLevels.value.length],
+  () => {
+    applyActiveScope();
+  },
+  { immediate: true, deep: true }
+);
+
 let polling: ReturnType<typeof setInterval> | null = null;
 
 onMounted(async () => {
+  loadUser();
   await fetchLocations();
   await fetchSchools(); 
   await fetchGradeLevels();
+  applyActiveScope();
+
   await fetchRooms();
   await fetchStudents();
   await fetchTodayRecords();

@@ -1,16 +1,41 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
-import { v4 as uuidv4 } from 'uuid';
 import { hashToken, generateToken, clean } from '../common/utils/helpers';
 import * as QRCode from 'qrcode';
 import { EmailService } from './email.service';
 import { AutomationService } from '../automation/automation.service';
 import * as crypto from 'crypto';
+import {
+  getRoleScopeValidationError,
+  ROLE_BASELINES,
+  ROLE_LABELS,
+  ROLE_RANKS,
+} from '../auth/permissions.constants';
+
+export interface DataScope {
+  provinces?: string[];
+  districts?: string[];
+  sub_districts?: string[];
+  school_ids?: Array<number | string>;
+  grade_levels?: Array<number | string>;
+  room_ids?: Array<number | string>;
+  own_only?: boolean;
+}
+
+interface ActorContext {
+  id: number;
+  username: string;
+  roles: string[];
+  permissions: string[];
+  data_scope?: DataScope;
+  virtual_login?: boolean;
+}
 
 function maskName(name: string | null | undefined): string {
   if (!name) return '-';
@@ -26,6 +51,7 @@ function maskName(name: string | null | undefined): string {
 @Injectable()
 export class TaskService {
   private readonly logger = new Logger(TaskService.name);
+  private readonly magicSessionSecret = 'SECRET_STS_KEY';
 
   constructor(
     private readonly db: DatabaseService,
@@ -33,32 +59,316 @@ export class TaskService {
     private readonly automationService: AutomationService,
   ) {}
 
-  async createTask(data: any, baseUrl: string) {
-    const taskType = data.task_type || 'VISIT';
+  private normalizePermissionList(permissions: unknown): string[] {
+    if (!Array.isArray(permissions)) {
+      return [];
+    }
+
+    return Array.from(
+      new Set(
+        permissions.filter(
+          (permission): permission is string =>
+            typeof permission === 'string' && permission.trim().length > 0,
+        ),
+      ),
+    );
+  }
+
+  private normalizeScope(scope: unknown): Required<Omit<DataScope, 'own_only'>> &
+    Pick<DataScope, 'own_only'> {
+    const source = scope && typeof scope === 'object' ? (scope as DataScope) : {};
+    const normalizeArray = (value: unknown): string[] => {
+      if (!Array.isArray(value)) {
+        return [];
+      }
+
+      return Array.from(
+        new Set(
+          value
+            .map((item) => String(item).trim())
+            .filter((item) => item.length > 0),
+        ),
+      );
+    };
+
+    return {
+      provinces: normalizeArray(source.provinces),
+      districts: normalizeArray(source.districts),
+      sub_districts: normalizeArray(source.sub_districts),
+      school_ids: normalizeArray(source.school_ids),
+      grade_levels: normalizeArray(source.grade_levels),
+      room_ids: normalizeArray(source.room_ids),
+      own_only: source.own_only === true,
+    };
+  }
+
+  private getPrimaryRole(user?: { role?: string | null; roles?: string[] | null } | null): string | null {
+    if (user?.role && user.role.trim().length > 0) {
+      return user.role.trim();
+    }
+
+    const firstRole = Array.isArray(user?.roles)
+      ? user.roles.find((role): role is string => typeof role === 'string' && role.trim().length > 0)
+      : null;
+
+    return firstRole?.trim() || null;
+  }
+
+  private normalizeRole(data: any, fallbackRole = 'TEACHER'): string {
+    const requestedRole =
+      (typeof data?.role === 'string' && data.role.trim().length > 0
+        ? data.role
+        : typeof data?.selected_role === 'string' && data.selected_role.trim().length > 0
+          ? data.selected_role
+          : Array.isArray(data?.roles)
+            ? data.roles.find((role: unknown): role is string => typeof role === 'string' && role.trim().length > 0)
+            : null) || fallbackRole;
+
+    return requestedRole.trim();
+  }
+
+  private getRoleRank(role?: string | null): number {
+    if (!role) {
+      return 0;
+    }
+
+    return ROLE_RANKS[role] || 0;
+  }
+
+  private canManageRole(actorRole?: string | null, targetRole?: string | null): boolean {
+    const actorRank = this.getRoleRank(actorRole);
+    const targetRank = this.getRoleRank(targetRole);
+
+    if (targetRank > actorRank) {
+      return false;
+    }
+
+    if (targetRank === actorRank && actorRole !== 'ADMIN') {
+      return false;
+    }
+
+    return true;
+  }
+
+  private isScopeGlobal(scope: unknown): boolean {
+    const normalized = this.normalizeScope(scope);
+    return (
+      normalized.provinces.length === 0 &&
+      normalized.districts.length === 0 &&
+      normalized.sub_districts.length === 0 &&
+      normalized.school_ids.length === 0 &&
+      normalized.grade_levels.length === 0 &&
+      normalized.room_ids.length === 0 &&
+      normalized.own_only !== true
+    );
+  }
+
+  private isScopeSubsetOfActor(targetScope: unknown, actorScope: unknown): boolean {
+    if (this.isScopeGlobal(actorScope)) {
+      return true;
+    }
+
+    const actor = this.normalizeScope(actorScope);
+    const target = this.normalizeScope(targetScope);
+    const keys: Array<keyof Omit<DataScope, 'own_only'>> = [
+      'provinces',
+      'districts',
+      'sub_districts',
+      'school_ids',
+      'grade_levels',
+      'room_ids',
+    ];
+
+    for (const key of keys) {
+      const actorValues = actor[key].map(String);
+      const targetValues = target[key].map(String);
+
+      if (actorValues.length === 0) {
+        continue;
+      }
+
+      if (targetValues.length === 0) {
+        return false;
+      }
+
+      if (!targetValues.every((value) => actorValues.includes(value))) {
+        return false;
+      }
+    }
+
+    if (actor.own_only === true && target.own_only !== true) {
+      return false;
+    }
+
+    return true;
+  }
+
+  private canGrantPermissions(actorPermissions: string[], targetPermissions: string[]): boolean {
+    if (actorPermissions.includes('*') || actorPermissions.includes('ALL')) {
+      return true;
+    }
+
+    return targetPermissions.every((permission) => actorPermissions.includes(permission));
+  }
+
+  private hasPermission(actor: ActorContext, permission: string): boolean {
+    return (
+      actor.permissions.includes('*') ||
+      actor.permissions.includes('ALL') ||
+      actor.permissions.includes(permission)
+    );
+  }
+
+  private ensureActor(actor?: ActorContext): ActorContext {
+    if (!actor?.username) {
+      throw new ForbiddenException('ไม่ได้เข้าสู่ระบบ');
+    }
+
+    return actor;
+  }
+
+  private resolveEffectivePermissions(role: string, permissions: unknown): string[] {
+    const storedPermissions = this.normalizePermissionList(permissions);
+    if (storedPermissions.length > 0) {
+      return storedPermissions;
+    }
+
+    return Array.from(new Set(ROLE_BASELINES[role] || []));
+  }
+
+  private assertCanCreateTask(actor: ActorContext, taskType: string): void {
+    const requiredPermission = taskType === 'LOGIN' ? 'login-links' : 'create';
+    if (!this.hasPermission(actor, requiredPermission)) {
+      throw new ForbiddenException('ไม่มีสิทธิ์สร้างรายการนี้');
+    }
+  }
+
+  private assertAssignableLoginPayload(actor: ActorContext, data: any): void {
+    const actorRole = this.getPrimaryRole({ roles: actor.roles });
+    const requestedRole = this.normalizeRole(data);
+    const actorRank = this.getRoleRank(actorRole);
+    const requestedRank = this.getRoleRank(requestedRole);
+
+    if (requestedRank === 0) {
+      throw new ForbiddenException(`ไม่สามารถกำหนดตำแหน่ง ${requestedRole} ได้`);
+    }
+
+    if (requestedRank > actorRank || (requestedRank === actorRank && actorRole !== 'ADMIN')) {
+      throw new ForbiddenException('ไม่สามารถกำหนดตำแหน่งสูงกว่าหรือเทียบเท่าตำแหน่งของตนเองได้');
+    }
+
+    const requestedPermissions = this.normalizePermissionList(
+      data?.permissions ?? data?.mock_permissions,
+    );
+    if (!this.canGrantPermissions(actor.permissions || [], requestedPermissions)) {
+      throw new ForbiddenException('ไม่สามารถกำหนดสิทธิ์ที่ตนเองไม่มีได้');
+    }
+
+    if (!this.isScopeSubsetOfActor(data?.data_scope, actor.data_scope)) {
+      throw new ForbiddenException('ไม่สามารถกำหนดขอบเขตข้อมูลกว้างกว่าสิทธิ์ของตนเองได้');
+    }
+
+    const roleScopeError = getRoleScopeValidationError(requestedRole, data?.data_scope);
+    if (roleScopeError) {
+      throw new ForbiddenException(roleScopeError);
+    }
+  }
+
+  private isMagicSessionVerified(linkId: string, sessionToken?: string): boolean {
+    if (!sessionToken) {
+      return false;
+    }
+
+    try {
+      const [base64Payload, signature] = sessionToken.split('.');
+      const payload = Buffer.from(base64Payload, 'base64').toString('utf-8');
+      const expectedSign = crypto
+        .createHmac('sha256', this.magicSessionSecret)
+        .update(payload)
+        .digest('hex');
+
+      if (expectedSign !== signature) {
+        return false;
+      }
+
+      const data = JSON.parse(payload);
+      return data.link_id === linkId && data.verified === true;
+    } catch {
+      return false;
+    }
+  }
+
+  private buildVirtualUserId(linkId: string): number {
+    const parsed = Number.parseInt(hashToken(linkId).slice(0, 8), 16);
+    return Number.isFinite(parsed) && parsed > 0 ? -parsed : -1;
+  }
+
+  private canManageLoginLink(actor: ActorContext, link: {
+    login_role?: string | null;
+    login_data_scope?: unknown;
+  }): boolean {
+    const actorRole = this.getPrimaryRole({ roles: actor.roles });
+    const targetRole =
+      typeof link.login_role === 'string' && link.login_role.trim().length > 0
+        ? link.login_role.trim()
+        : 'TEACHER';
+
+    if (!this.canManageRole(actorRole, targetRole)) {
+      return false;
+    }
+
+    return this.isScopeSubsetOfActor(link.login_data_scope, actor.data_scope);
+  }
+
+  async createTask(actor: ActorContext | undefined, data: any, baseUrl: string) {
+    const currentActor = this.ensureActor(actor);
+    const taskType = data.task_type || data.type || 'VISIT';
     const assignedName = clean(data.assigned_to_name);
     const assignedEmail = clean(data.assigned_to_email);
 
     if (!assignedName) {
       throw new Error('assigned_to_name is required');
     }
+    if (taskType === 'LOGIN' && !assignedEmail) {
+      throw new Error('assigned_to_email is required for LOGIN');
+    }
 
-    const taskId = uuidv4();
+    this.assertCanCreateTask(currentActor, taskType);
+
+    const loginRole = taskType === 'LOGIN' ? this.normalizeRole(data) : null;
+    const loginPermissions = taskType === 'LOGIN'
+      ? this.normalizePermissionList(data.permissions ?? data.mock_permissions)
+      : [];
+    const loginDataScope = taskType === 'LOGIN'
+      ? this.normalizeScope(data.data_scope)
+      : {};
+
+    if (taskType === 'LOGIN') {
+      this.assertAssignableLoginPayload(currentActor, {
+        ...data,
+        role: loginRole,
+        permissions: loginPermissions,
+        data_scope: loginDataScope,
+      });
+    }
+
+    const taskId = crypto.randomUUID();
     const token = generateToken();
     const tokenHash = hashToken(token);
-    const linkId = uuidv4();
+    const linkId = crypto.randomUUID();
 
-    let expiresHours = parseInt(data.expires_value, 10) || 24;
+    const expiresValue = parseInt(data.expires_value, 10) || 24;
     const expiresUnit = data.expires_unit || 'hours';
+    let expiresMs = expiresValue * 60 * 60 * 1000;
 
-    if (expiresUnit === 'days') expiresHours *= 24;
-    else if (expiresUnit === 'weeks') expiresHours *= 168;
+    if (expiresUnit === 'minutes') expiresMs = expiresValue * 60 * 1000;
+    else if (expiresUnit === 'days') expiresMs = expiresValue * 24 * 60 * 60 * 1000;
+    else if (expiresUnit === 'weeks') expiresMs = expiresValue * 7 * 24 * 60 * 60 * 1000;
 
     if (taskType === 'ATTENDANCE') {
-      expiresHours = Math.max(expiresHours, 1); // Ensure at least 1 hour for attendance
+      expiresMs = Math.max(expiresMs, 60 * 60 * 1000); // Ensure at least 1 hour for attendance
     }
-    const expiresAt = new Date(
-      Date.now() + expiresHours * 60 * 60 * 1000,
-    ).toISOString();
+    const expiresAt = new Date(Date.now() + expiresMs).toISOString();
     const magicLink = `${baseUrl}/#/task/${token}`;
 
     try {
@@ -126,8 +436,25 @@ export class TaskService {
 
         await client.query(
           `
-          INSERT INTO task_links (id, task_id, parent_link_id, token_hash, magic_link, delegation_depth, assigned_to_name, assigned_to_phone, assigned_to_email, expires_at, subject, otp_verified)
-          VALUES ($1, $2, NULL, $3, $4, 0, $5, $6, $7, $8, $9, $10)
+          INSERT INTO task_links (
+            id,
+            task_id,
+            parent_link_id,
+            token_hash,
+            magic_link,
+            delegation_depth,
+            assigned_to_name,
+            assigned_to_phone,
+            assigned_to_email,
+            expires_at,
+            subject,
+            otp_verified,
+            created_by_user_id,
+            login_role,
+            login_permissions,
+            login_data_scope
+          )
+          VALUES ($1, $2, NULL, $3, $4, 0, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
         `,
           [
             linkId,
@@ -140,6 +467,10 @@ export class TaskService {
             expiresAt,
             clean(data.subject),
             assignedEmail ? 0 : 1,
+            currentActor.virtual_login ? null : currentActor.id,
+            loginRole,
+            JSON.stringify(loginPermissions),
+            JSON.stringify(loginDataScope),
           ],
         );
       });
@@ -233,22 +564,14 @@ export class TaskService {
       link.assigned_to_email.trim().length > 0;
 
     // Check device-specific session token to determine if OTP was verified on this device
-    let sessionVerified = false;
-    if (sessionToken && !link.otp_verified) {
-      try {
-        const [base64Payload, signature] = sessionToken.split('.');
-        const payload = Buffer.from(base64Payload, 'base64').toString('utf-8');
-        const expectedSign = crypto.createHmac('sha256', 'SECRET_STS_KEY').update(payload).digest('hex');
-        if (expectedSign === signature) {
-          const data = JSON.parse(payload);
-          if (data.link_id === link.id && data.verified === true) {
-            sessionVerified = true;
-          }
-        }
-      } catch (e) {}
-    }
+    const sessionVerified = !link.otp_verified
+      ? this.isMagicSessionVerified(link.id, sessionToken)
+      : false;
 
     result.auth_required = !!(hasEmailForOtp && !link.otp_verified && !sessionVerified);
+    result.login_role = link.login_role || null;
+    result.login_permissions = link.login_permissions || [];
+    result.login_data_scope = link.login_data_scope || {};
 
     if (link.task_type === 'VISIT') {
       const caseResult = await this.db.query(
@@ -283,7 +606,7 @@ export class TaskService {
 
   async verifyMagicLogin(token: string, sessionToken?: string) {
     try {
-      const link = await this.getTaskByToken(token);
+      const link = await this.getTaskByToken(token, sessionToken);
       if (!link) {
         throw new Error('ไม่พบข้อมูลลิงก์หรือลิงก์ไม่ถูกต้อง');
       }
@@ -294,24 +617,8 @@ export class TaskService {
         throw new Error('ลิงก์นี้ไม่ใช่ลิงก์เข้าสู่ระบบ');
       }
 
-      // Check device session token
-      let sessionVerified = false;
-      if (sessionToken) {
-        try {
-          const [base64Payload, signature] = sessionToken.split('.');
-          const payload = Buffer.from(base64Payload, 'base64').toString('utf-8');
-          const expectedSign = crypto.createHmac('sha256', 'SECRET_STS_KEY').update(payload).digest('hex');
-          if (expectedSign === signature) {
-            const data = JSON.parse(payload);
-            if (data.link_id === link.link_id && data.verified === true) {
-              sessionVerified = true;
-            }
-          }
-        } catch (e) {}
-      }
-
       // Check if OTP verification is required
-      if (link.otp_verified === 0 && !sessionVerified) {
+      if (link.auth_required) {
         return { 
           otp_required: true, 
           email: link.assigned_to_email,
@@ -325,18 +632,30 @@ export class TaskService {
         throw new Error('ลิงก์นี้ไม่มีข้อมูลอีเมลผู้ใช้งานที่เชื่อมโยง');
       }
 
-      // Return Virtual User Profile based on Link payload (Acts as Login bypass)
+      const resolvedRole =
+        typeof link.login_role === 'string' && link.login_role.trim().length > 0
+          ? link.login_role.trim()
+          : 'TEACHER';
+      const resolvedPermissions = this.resolveEffectivePermissions(
+        resolvedRole,
+        link.login_permissions,
+      );
+      const resolvedScope = this.normalizeScope(link.login_data_scope);
+
       return {
-        id: Math.floor(100000 + Math.random() * 900000), // Random virtual ID
+        id: this.buildVirtualUserId(link.link_id),
         username: email,
         FirstName: link.assigned_to_name || 'ผู้ใช้ผ่านลิงก์',
-        LastName: ' (ลิงก์ชั่วคราว)',
+        LastName: null,
         email: email,
         affiliation: 'External Link',
         status: 'ACTIVE',
-        permissions: ['ALL'], // Temp full access until separation is implemented
-        roles: ['ADMIN_SCHOOL'],
-        labels: ['เข้าใช้งานผ่านลิงก์']
+        role: resolvedRole,
+        permissions: resolvedPermissions,
+        roles: [resolvedRole],
+        labels: [ROLE_LABELS[resolvedRole] || resolvedRole],
+        data_scope: resolvedScope,
+        virtual_login: true,
       };
     } catch (err) {
       this.logger.error(`verifyMagicLogin error: ${err.message}`);
@@ -344,16 +663,23 @@ export class TaskService {
     }
   }
 
-  async getLoginLinks() {
+  async getLoginLinks(actor?: ActorContext) {
     try {
       const res = await this.db.query(
-        `SELECT tl.id, tl.task_id, tl.assigned_to_name, tl.assigned_to_email, tl.expires_at, tl.status, tl.magic_link, tl.admin_locked, t.created_at
+        `SELECT tl.id, tl.task_id, tl.assigned_to_name, tl.assigned_to_email, tl.expires_at, tl.status, tl.magic_link,
+                tl.admin_locked, tl.login_role, tl.login_permissions, tl.login_data_scope, tl.created_by_user_id,
+                t.created_at
          FROM task_links tl
          JOIN tasks t ON t.id = tl.task_id
          WHERE t.task_type = 'LOGIN'
          ORDER BY t.created_at DESC`
       );
-      return res.rows;
+
+      if (!actor) {
+        return res.rows;
+      }
+
+      return res.rows.filter((link: any) => this.canManageLoginLink(actor, link));
     } catch (err) {
       this.logger.error(`getLoginLinks error: ${err.message}`);
       throw err;
@@ -781,7 +1107,10 @@ export class TaskService {
     
     // Generate Signed Session Token
     const payload = JSON.stringify({ link_id: link.id, verified: true, ts: Date.now() });
-    const sign = crypto.createHmac('sha256', 'SECRET_STS_KEY').update(payload).digest('hex');
+    const sign = crypto
+      .createHmac('sha256', this.magicSessionSecret)
+      .update(payload)
+      .digest('hex');
     const sessionToken = `${Buffer.from(payload).toString('base64')}.${sign}`;
 
     return { success: true, session_token: sessionToken };
@@ -790,19 +1119,30 @@ export class TaskService {
   }
 
   async adminLockLink(
+    actor: ActorContext | undefined,
     linkId: string,
     action: 'lock' | 'unlock',
     reason?: string,
   ) {
     try {
+      const currentActor = this.ensureActor(actor);
       const res = await this.db.query(
-        `SELECT * FROM task_links WHERE id = $1`,
+        `SELECT tl.*, t.task_type
+         FROM task_links tl
+         JOIN tasks t ON t.id = tl.task_id
+         WHERE tl.id = $1`,
         [linkId],
       );
       const link = res.rows[0];
       if (!link) throw new Error('Link not found');
+      if (link.task_type !== 'LOGIN') {
+        throw new Error('Only LOGIN links can be changed by admin');
+      }
       if (link.status !== 'ACTIVE')
         throw new Error('Only ACTIVE links can be changed by admin');
+      if (!this.canManageLoginLink(currentActor, link)) {
+        throw new ForbiddenException('ไม่มีสิทธิ์จัดการลิงก์นี้');
+      }
 
       if (action === 'lock') {
         if (!reason) throw new Error('reason is required when locking link');

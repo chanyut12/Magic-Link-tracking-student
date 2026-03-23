@@ -8,48 +8,79 @@ import {
   Param,
   HttpException,
   HttpStatus,
+  Req,
+  UseGuards,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import { UsersService } from './users.service';
+import { AuthGuard, PermissionsGuard, RequirePermission } from '../auth';
+
+type RequestWithActor = Request & {
+  user?: {
+    id: number;
+    username: string;
+    roles: string[];
+    permissions: string[];
+    data_scope?: Record<string, unknown>;
+  };
+};
 
 @Controller('api/users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
+  @UseGuards(AuthGuard, PermissionsGuard)
+  @RequirePermission('manage-users-list')
   @Get()
-  async getAllUsers() {
-    return await this.usersService.getAllUsers();
+  async getAllUsers(@Req() req: RequestWithActor) {
+    return await this.usersService.getAllUsers(req.user);
   }
 
-  @Post()
-  async createUser(@Body() data: any) {
-    try {
-      return await this.usersService.createUser(data);
-    } catch (err) {
-      throw new HttpException(err.message, HttpStatus.BAD_REQUEST);
-    }
+  @UseGuards(AuthGuard, PermissionsGuard)
+  @RequirePermission('manage-users-list')
+  @Get('roles')
+  async getRoles(@Req() req: RequestWithActor) {
+    return await this.usersService.getRoles(req.user);
   }
 
-  @Put(':id')
-  async updateUser(@Param('id') id: string, @Body() data: any) {
-    return await this.usersService.updateUser(parseInt(id, 10), data);
-  }
-
-  @Delete(':id')
-  async deleteUser(@Param('id') id: string) {
+  @UseGuards(AuthGuard, PermissionsGuard)
+  @RequirePermission('manage-users-list')
+  @Get(':id')
+  async getUserById(@Param('id') id: string, @Req() req: RequestWithActor) {
     const userId = parseInt(id, 10);
     if (isNaN(userId)) {
       throw new HttpException('ID ผู้ใช้งานไม่ถูกต้อง', HttpStatus.BAD_REQUEST);
     }
-    try {
-      return await this.usersService.deleteUser(userId);
-    } catch (err) {
-      throw new HttpException(err.message, HttpStatus.INTERNAL_SERVER_ERROR);
+    const user = await this.usersService.getUserById(userId, req.user);
+    if (!user) {
+      throw new HttpException('ไม่พบผู้ใช้งาน', HttpStatus.NOT_FOUND);
     }
+    return user;
   }
 
-  @Get('roles')
-  async getRoles() {
-    return await this.usersService.getRoles();
+  @UseGuards(AuthGuard, PermissionsGuard)
+  @RequirePermission('manage-users-list')
+  @Post()
+  async createUser(@Body() data: any, @Req() req: RequestWithActor) {
+    return await this.usersService.createUser(req.user, data);
+  }
+
+  @UseGuards(AuthGuard, PermissionsGuard)
+  @RequirePermission('manage-users-list')
+  @Put(':id')
+  async updateUser(@Param('id') id: string, @Body() data: any, @Req() req: RequestWithActor) {
+    return await this.usersService.updateUser(req.user, parseInt(id, 10), data);
+  }
+
+  @UseGuards(AuthGuard, PermissionsGuard)
+  @RequirePermission('manage-users-list')
+  @Delete(':id')
+  async deleteUser(@Param('id') id: string, @Req() req: RequestWithActor) {
+    const userId = parseInt(id, 10);
+    if (isNaN(userId)) {
+      throw new HttpException('ID ผู้ใช้งานไม่ถูกต้อง', HttpStatus.BAD_REQUEST);
+    }
+    return await this.usersService.deleteUser(req.user, userId);
   }
 
   @Post('login')
@@ -65,5 +96,12 @@ export class UsersController {
       );
     }
     return user;
+  }
+
+  @UseGuards(AuthGuard, PermissionsGuard)
+  @RequirePermission('settings')
+  @Post('migrate-passwords')
+  async migratePasswords() {
+    return await this.usersService.hashExistingPasswords();
   }
 }

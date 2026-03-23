@@ -32,19 +32,20 @@
                 color="primary" 
                 class="filter-select-btn full-width"
                 @click="showFilterDialog = true"
+                :disable="isSchoolLocked"
               >
                 {{ selectedSchoolName }}
                 <i class="fas fa-chevron-down q-ml-sm" style="font-size: 0.7rem;"></i>
               </q-btn>
             </div>
             <div class="col-6 col-sm-auto">
-              <select v-model="filters.grade" class="filter-select full-width">
+              <select v-model="filters.grade" class="filter-select full-width" :disabled="isGradeLocked">
                 <option value="ALL">ทุกระดับชั้น</option>
                 <option v-for="gl in gradeLevels" :key="gl.id" :value="gl.label">{{ gl.label }}</option>
               </select>
             </div>
             <div class="col-6 col-sm-auto">
-              <select v-model="filters.room" class="filter-select full-width">
+              <select v-model="filters.room" class="filter-select full-width" :disabled="isRoomLocked">
                 <option value="ALL">ทุกห้อง</option>
                 <option v-for="r in rooms" :key="r" :value="r">ห้อง {{ r }}</option>
               </select>
@@ -257,6 +258,8 @@ import { ref, reactive, computed, onMounted, watch } from 'vue';
 import { api } from 'boot/axios';
 import type { QTableColumn } from 'quasar';
 import { useRouter } from 'vue-router';
+import { useUserStore } from '../composables/useUserStore';
+import { useDataScopeLock } from '../composables/useDataScopeLock';
 
 // --- Interfaces ---
 interface Student {
@@ -298,6 +301,18 @@ const rooms = ref<string[]>([]);
 const searchQuery = ref('');
 const loading = ref(false);
 const $router = useRouter();
+const { user, loadUser } = useUserStore();
+const userScope = computed(() => user.value?.data_scope);
+const {
+  isProvinceLocked,
+  isSchoolLocked,
+  isGradeLocked,
+  isRoomLocked,
+  lockedProvinceValue,
+  lockedSchoolValue,
+  lockedGradeValue,
+  lockedRoomValue,
+} = useDataScopeLock(userScope);
 
 const filters = reactive({
   schoolId: '',
@@ -320,6 +335,36 @@ const locationData = reactive({
 });
 
 const tempSchools = ref<School[]>([]);
+
+const applyActiveScope = () => {
+  if (isProvinceLocked.value && lockedProvinceValue.value) {
+    if (tempFilters.province !== lockedProvinceValue.value) {
+      tempFilters.province = lockedProvinceValue.value;
+      onProvinceChange();
+    }
+  }
+
+  if (isSchoolLocked.value && lockedSchoolValue.value !== null) {
+    const nextSchoolId = String(lockedSchoolValue.value);
+    if (filters.schoolId !== nextSchoolId) {
+      filters.schoolId = nextSchoolId;
+    }
+  }
+
+  if (isGradeLocked.value && lockedGradeValue.value !== null && gradeLevels.value.length > 0) {
+    const lockedGrade = gradeLevels.value.find(g => g.id === lockedGradeValue.value);
+    if (lockedGrade && filters.grade !== lockedGrade.label) {
+      filters.grade = lockedGrade.label;
+    }
+  }
+
+  if (isRoomLocked.value && lockedRoomValue.value !== null) {
+    const nextRoom = String(lockedRoomValue.value);
+    if (filters.room !== nextRoom) {
+      filters.room = nextRoom;
+    }
+  }
+};
 
 // --- Computed Properties ---
 const selectedSchoolName = computed(() => {
@@ -451,6 +496,13 @@ const fetchSchools = async () => {
     const res = await api.get('/api/attendance/schools');
     schools.value = res.data.data;
     tempSchools.value = res.data.data;
+    if (schools.value.length > 0 && !filters.schoolId) {
+      const fallbackSchoolId =
+        isSchoolLocked.value && lockedSchoolValue.value !== null
+          ? String(lockedSchoolValue.value)
+          : String(schools.value[0]?.id || '');
+      filters.schoolId = fallbackSchoolId;
+    }
   } catch (err) {
     console.error('Fetch schools error:', err);
   }
@@ -468,7 +520,9 @@ const fetchGradeLevels = async () => {
 const fetchRooms = async () => {
   if (filters.grade === 'ALL' || !filters.schoolId) {
     rooms.value = [];
-    filters.room = 'ALL';
+    if (!isRoomLocked.value) {
+      filters.room = 'ALL';
+    }
     return;
   }
   try {
@@ -479,6 +533,10 @@ const fetchRooms = async () => {
       } 
     });
     rooms.value = res.data.data;
+    if (isRoomLocked.value && lockedRoomValue.value !== null) {
+      filters.room = String(lockedRoomValue.value);
+      return;
+    }
     if (!rooms.value.includes(filters.room) && filters.room !== 'ALL') {
       filters.room = 'ALL';
     }
@@ -581,12 +639,31 @@ watch(() => filters.room, async () => {
   await fetchStudentsList();
 });
 
+watch(showFilterDialog, (isOpen) => {
+  if (isOpen && isProvinceLocked.value && lockedProvinceValue.value) {
+    if (tempFilters.province !== lockedProvinceValue.value) {
+      tempFilters.province = lockedProvinceValue.value;
+      onProvinceChange();
+    }
+  }
+});
+
+watch(
+  [() => user.value?.data_scope, () => gradeLevels.value.length],
+  () => {
+    applyActiveScope();
+  },
+  { immediate: true, deep: true }
+);
+
 // --- Init ---
 onMounted(async () => {
+  loadUser();
   await fetchLocations();
   await fetchSchools(); 
   await fetchGradeLevels();
-  
+  applyActiveScope();
+
   await fetchRooms();
   void fetchStudentsList();
 });

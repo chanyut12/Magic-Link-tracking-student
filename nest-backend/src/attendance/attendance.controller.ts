@@ -6,8 +6,10 @@ import {
   Query,
   HttpException,
   HttpStatus,
+  Headers,
 } from '@nestjs/common';
 import { AttendanceService } from './attendance.service';
+import { parseScopeHeader } from '../common/utils/authorization';
 
 @Controller('api/attendance')
 export class AttendanceController {
@@ -41,16 +43,22 @@ export class AttendanceController {
     @Query('grade') grade?: string,
     @Query('room') room?: string,
     @Query('schoolId') schoolId?: string,
+    @Headers('x-user-scope') scopeHeader?: string,
   ) {
-    return await this.attendanceService.getStudents(grade, room, schoolId);
+    const userScope = parseScopeHeader(scopeHeader);
+    return await this.attendanceService.getStudents(grade, room, schoolId, userScope);
   }
 
   @Get('history')
-  async getHistory(@Query('date') date: string) {
+  async getHistory(
+    @Query('date') date: string,
+    @Headers('x-user-scope') scopeHeader?: string,
+  ) {
     if (!date) {
       throw new HttpException('Date is required', HttpStatus.BAD_REQUEST);
     }
-    return await this.attendanceService.getHistory(date);
+    const userScope = parseScopeHeader(scopeHeader);
+    return await this.attendanceService.getHistory(date, userScope);
   }
 
   @Post()

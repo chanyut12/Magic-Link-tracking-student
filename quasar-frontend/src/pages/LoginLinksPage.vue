@@ -145,7 +145,10 @@
 
           <template v-slot:body-cell-name="props">
             <q-td :props="props">
-              <strong class="text-grey-9">{{ props.row.assigned_to_name || 'ไม่ระบุ' }}</strong>
+              <div>
+                <strong class="text-grey-9">{{ props.row.assigned_to_name || 'ไม่ระบุ' }}</strong>
+                <div class="text-caption text-grey-6">{{ ROLE_LABELS[props.row.login_role || 'TEACHER'] || (props.row.login_role || 'TEACHER') }}</div>
+              </div>
             </q-td>
           </template>
 
@@ -232,7 +235,7 @@
 
       <!-- Add Link Dialog -->
       <q-dialog v-model="addDialog" persistent>
-        <q-card style="width: 500px; max-width: 90vw; border-radius: 16px;">
+        <q-card style="width: 760px; max-width: 94vw; border-radius: 16px;">
           <q-card-section class="row items-center q-pb-none">
             <div class="text-h6 text-weight-bold text-grey-9">{{ showResult ? 'สรุปการสร้างลิงก์' : 'สร้างลิงก์เข้าสู่ระบบ' }}</div>
             <q-space />
@@ -240,43 +243,177 @@
           </q-card-section>
 
           <q-form v-if="!showResult" @submit="submitAddLink">
-            <q-card-section class="q-gutter-md q-pt-lg">
-              <div>
-                <div class="text-caption text-grey-7 q-mb-xs">ชื่อผู้ครอบครองลิงก์ (Name) *</div>
-                <q-input v-model="form.assigned_to_name" outlined dense placeholder="เช่น นนท์" :rules="[val => !!val || 'กรุณากรอกชื่อ']" />
-              </div>
-              <div>
-                <div class="text-caption text-grey-7 q-mb-xs">อีเมลสวมสิทธิ์ (Email) *</div>
-                <q-input v-model="form.assigned_to_email" outlined dense type="email" placeholder="เช่น user@gmail.com" :rules="[val => !!val || 'กรุณากรอกอีเมล', val => /.+@.+\..+/.test(val) || 'รูปแบบอีเมลไม่ถูกต้อง']" />
-              </div>
-              <div>
-                <div class="text-caption text-grey-7 q-mb-xs">สิทธิ์การใช้งาน (Permissions)</div>
-                <q-btn-dropdown unelevated outline color="grey-7" class="full-width" label="เลือกสิทธิ์การใช้งาน" no-caps>
-                  <q-list dense>
-                    <q-item v-for="opt in permissionOptions" :key="opt.value" tag="label" v-ripple>
-                      <q-item-section side><q-checkbox v-model="form.mock_permissions" :val="opt.value" dense /></q-item-section>
-                      <q-item-section><q-item-label>{{ opt.label }}</q-item-label></q-item-section>
-                    </q-item>
-                  </q-list>
-                </q-btn-dropdown>
-                <div class="q-mt-xs row q-gutter-xs">
-                  <q-chip v-for="p in form.mock_permissions" :key="p" dense removable color="blue-1" text-color="primary" @remove="form.mock_permissions = form.mock_permissions.filter(x => x !== p)">{{ permissionOptions.find(o => o.value === p)?.label || p }}</q-chip>
+            <q-card-section class="q-gutter-lg q-pt-lg" style="max-height: 72vh; overflow: auto;">
+              <div class="row q-col-gutter-md">
+                <div class="col-12 col-md-6">
+                  <div class="text-caption text-grey-7 q-mb-xs">ชื่อผู้ครอบครองลิงก์ *</div>
+                  <q-input v-model="form.assigned_to_name" outlined dense placeholder="เช่น นนท์" :rules="[val => !!val || 'กรุณากรอกชื่อ']" />
+                </div>
+                <div class="col-12 col-md-6">
+                  <div class="text-caption text-grey-7 q-mb-xs">อีเมลสำหรับ OTP / Login *</div>
+                  <q-input v-model="form.assigned_to_email" outlined dense type="email" placeholder="เช่น user@gmail.com" :rules="[val => !!val || 'กรุณากรอกอีเมล', val => /.+@.+\..+/.test(val) || 'รูปแบบอีเมลไม่ถูกต้อง']" />
                 </div>
               </div>
-              <div>
-                <div class="text-caption text-grey-7 q-mb-xs">บทบาท (ROLE) *</div>
-                <select v-model="form.selected_role" class="full-width q-pa-sm bg-grey-1 rounded-borders" style="border: 1px solid #e2e8f0; height: 40px; outline: none;">
-                  <option value="TEACHER">ครูประจำชั้น</option><option value="ADMIN_SCHOOL">ผู้ดูแลระบบโรงเรียน</option><option value="ADMIN">ผู้ดูแลระบบสูงสุด (Admin)</option>
-                </select>
+
+              <div class="row q-col-gutter-md">
+                <div class="col-12 col-md-6">
+                  <div class="text-caption text-grey-7 q-mb-xs">บทบาท *</div>
+                  <q-select
+                    v-model="form.role"
+                    :options="roleOptions"
+                    emit-value
+                    map-options
+                    outlined
+                    dense
+                    option-label="label"
+                    option-value="value"
+                  />
+                </div>
+                <div class="col-12 col-md-6">
+                  <div class="text-caption text-grey-7 q-mb-xs">อายุลิงก์</div>
+                  <div class="row q-col-gutter-sm">
+                    <div class="col-8">
+                      <q-input v-model.number="form.expires_value" type="number" outlined dense min="1" />
+                    </div>
+                    <div class="col-4">
+                      <q-select
+                        v-model="form.expires_unit"
+                        :options="expiresUnitOptions"
+                        emit-value
+                        map-options
+                        outlined
+                        dense
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
+
               <div>
-                <div class="text-caption text-grey-7 q-mb-xs">อายุลิงก์</div>
-                <div class="row q-col-gutter-sm">
-                  <div class="col-8"><q-input v-model.number="form.expires_value" type="number" outlined dense min="1" /></div>
-                  <div class="col-4">
-                    <select v-model="form.expires_unit" class="full-width q-pa-sm bg-grey-1 rounded-borders" style="border: 1px solid #e2e8f0; height: 40px; outline: none;">
-                      <option value="days">วัน</option><option value="hours">ชั่วโมง</option><option value="minutes">นาที</option>
-                    </select>
+                <div class="text-caption text-grey-7 q-mb-sm">สิทธิ์การใช้งาน</div>
+                <div class="permission-grid">
+                  <label
+                    v-for="opt in permissionOptions"
+                    :key="opt.value"
+                    class="permission-item"
+                    :class="{ 'permission-item--disabled': isPermissionLocked(opt.value) }"
+                  >
+                    <q-checkbox
+                      :model-value="form.permissions.includes(opt.value)"
+                      :disable="isPermissionLocked(opt.value)"
+                      dense
+                      @update:model-value="togglePermission(opt.value, $event)"
+                    />
+                    <span>{{ opt.label }}</span>
+                  </label>
+                </div>
+                <div class="q-mt-xs row q-gutter-xs">
+                  <q-chip
+                    v-for="permissionId in form.permissions"
+                    :key="permissionId"
+                    dense
+                    removable
+                    color="blue-1"
+                    text-color="primary"
+                    @remove="removePermission(permissionId)"
+                  >
+                    {{ permissionLabelMap[permissionId] || permissionId }}
+                  </q-chip>
+                </div>
+              </div>
+
+              <div>
+                <div class="row items-center justify-between q-mb-sm">
+                  <div>
+                    <div class="text-caption text-grey-7">Data Scope</div>
+                    <div class="text-caption text-blue-grey-6">{{ roleScopePreset.hint }}</div>
+                  </div>
+                  <q-toggle
+                    v-model="scopeForm.allProvinces"
+                    :disable="isNationwideToggleDisabled"
+                    label="ดูข้อมูลทุกจังหวัด"
+                    @update:model-value="onAllProvincesToggle"
+                  />
+                </div>
+
+                <div class="row q-col-gutter-md">
+                  <div class="col-12 col-md-6">
+                    <q-select
+                      v-model="scopeForm.province"
+                      :options="availableProvinceOptions"
+                      label="จังหวัด"
+                      outlined
+                      dense
+                      clearable
+                      :disable="scopeForm.allProvinces || isScopeFieldLocked('province')"
+                      @update:model-value="onScopeProvinceChange"
+                    />
+                  </div>
+                  <div class="col-12 col-md-6">
+                    <q-select
+                      v-model="scopeForm.district"
+                      :options="availableDistrictOptions"
+                      label="อำเภอ"
+                      outlined
+                      dense
+                      clearable
+                      :disable="scopeForm.allProvinces || !scopeForm.province || isScopeFieldLocked('district')"
+                      @update:model-value="onScopeDistrictChange"
+                    />
+                  </div>
+                  <div class="col-12 col-md-6">
+                    <q-select
+                      v-model="scopeForm.sub_district"
+                      :options="availableSubDistrictOptions"
+                      label="ตำบล"
+                      outlined
+                      dense
+                      clearable
+                      :disable="scopeForm.allProvinces || !scopeForm.district || isScopeFieldLocked('sub_district')"
+                      @update:model-value="onScopeSubDistrictChange"
+                    />
+                  </div>
+                  <div class="col-12 col-md-6">
+                    <q-select
+                      v-model="scopeForm.school_id"
+                      :options="filteredSchools"
+                      label="โรงเรียน"
+                      outlined
+                      dense
+                      clearable
+                      emit-value
+                      map-options
+                      option-label="label"
+                      option-value="value"
+                      :disable="scopeForm.allProvinces || isScopeFieldLocked('school_id')"
+                      @update:model-value="onScopeSchoolChange"
+                    />
+                  </div>
+                  <div class="col-12 col-md-6">
+                    <q-select
+                      v-model="scopeForm.grade_level"
+                      :options="availableGradeOptions"
+                      label="ระดับชั้น"
+                      outlined
+                      dense
+                      clearable
+                      emit-value
+                      map-options
+                      option-label="label"
+                      option-value="value"
+                      :disable="isScopeFieldLocked('grade_level')"
+                    />
+                  </div>
+                  <div class="col-12 col-md-6">
+                    <q-select
+                      v-model="scopeForm.room"
+                      :options="availableRoomOptions"
+                      label="ห้อง"
+                      outlined
+                      dense
+                      clearable
+                      :disable="isScopeFieldLocked('room') || !scopeForm.grade_level || !scopeForm.school_id"
+                    />
                   </div>
                 </div>
               </div>
@@ -374,8 +511,18 @@
 import { ref, reactive, computed, watch, onMounted } from 'vue';
 import { api } from 'boot/axios';
 import { useQuasar } from 'quasar';
+import { useUserStore } from '../composables/useUserStore';
+import {
+  getRoleScopePreset,
+  ROLE_LABELS,
+  ROLE_RANKS,
+  getLeafMenuItems,
+  type DataScope,
+  type ScopeFormField,
+} from '../constants/permissions';
 
 const $q = useQuasar();
+const { user } = useUserStore();
 
 interface LoginLink {
   id: string;
@@ -387,6 +534,20 @@ interface LoginLink {
   magic_link: string;
   created_at: string;
   admin_locked?: boolean | number;
+  login_role?: string | null;
+  login_permissions?: string[];
+  login_data_scope?: DataScope;
+}
+
+interface LocationDistrict {
+  province: string;
+  district: string;
+}
+
+interface LocationSubDistrict {
+  province: string;
+  district: string;
+  sub_district: string;
 }
 
 const loginLinks = ref<LoginLink[]>([]);
@@ -412,13 +573,12 @@ const adminActionDialog = reactive<{
   action: 'lock',
   linkId: '',
   reason: '',
-  loading: false
+  loading: false,
 });
 
-// Filters State (Added)
 const filters = reactive({
   status: 'ALL',
-  search: ''
+  search: '',
 });
 
 const qrCodeUrl = computed(() => {
@@ -433,7 +593,7 @@ const statusOptions = [
   { label: 'ทุกสถานะ', value: 'ALL' },
   { label: 'ใช้งานอยู่', value: 'ACTIVE' },
   { label: 'ถูกล็อก', value: 'LOCKED' },
-  { label: 'หมดอายุ', value: 'EXPIRED' }
+  { label: 'หมดอายุ', value: 'EXPIRED' },
 ];
 
 const columns = [
@@ -443,7 +603,7 @@ const columns = [
   { name: 'status', label: 'สถานะ', align: 'center' as const, field: 'status' },
   { name: 'actions', label: 'จัดการ', align: 'center' as const, field: 'id' },
   { name: 'expires', label: 'วันหมดอายุ', align: 'right' as const, field: 'expires_at' },
-  { name: 'created_at', label: 'วันที่สร้าง', align: 'right' as const, field: 'created_at' }
+  { name: 'created_at', label: 'วันที่สร้าง', align: 'right' as const, field: 'created_at' },
 ];
 
 const cardStats = computed(() => {
@@ -464,11 +624,9 @@ const activeRate = computed(() => {
   return Math.round((cardStats.value.active / cardStats.value.total) * 100);
 });
 
-// Computed Filtered List (Added)
 const filteredLoginLinks = computed(() => {
   const now = new Date();
   return loginLinks.value.filter(link => {
-    // 1. Status Filter
     const isLocked = Boolean(link.admin_locked);
     const isExpired = new Date(link.expires_at) < now;
     let s = 'ACTIVE';
@@ -477,7 +635,6 @@ const filteredLoginLinks = computed(() => {
 
     if (filters.status !== 'ALL' && s !== filters.status) return false;
 
-    // 2. Search Filter
     if (filters.search) {
       const needle = filters.search.toLowerCase();
       const nameMatch = (link.assigned_to_name || '').toLowerCase().includes(needle);
@@ -504,33 +661,174 @@ const getLinkUrl = (link: LoginLink) => {
   return link.magic_link.replace('/task/', '/login/magic/');
 };
 
-const permissionOptions = [
-  { label: 'ดูแดชบอร์ดรายงาน', value: 'VIEW_DASHBOARD' },
-  { label: 'จัดการรายชื่อนักเรียน', value: 'MANAGE_STUDENTS' },
-  { label: 'เช็คชื่อขาด/มา', value: 'CHECK_ATTENDANCE' },
-  { label: 'สร้างลิงก์/มอบหมายงาน', value: 'MANAGE_TASKS' }
+const permissionOptions = getLeafMenuItems().map((item) => ({
+  label: item.label,
+  value: item.id,
+}));
+
+const permissionLabelMap = computed<Record<string, string>>(() => (
+  Object.fromEntries(permissionOptions.map((item) => [item.value, item.label]))
+));
+
+const normalizeScopeValueList = (value: unknown): string[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return Array.from(new Set(value.map((item) => String(item).trim()).filter(Boolean)));
+};
+
+const currentUserRole = computed(() => user.value?.roles?.[0] || null);
+const currentUserPermissionSet = computed(() => new Set(user.value?.permissions || []));
+const currentUserScope = computed(() => ({
+  provinces: normalizeScopeValueList(user.value?.data_scope?.provinces),
+  districts: normalizeScopeValueList(user.value?.data_scope?.districts),
+  sub_districts: normalizeScopeValueList(user.value?.data_scope?.sub_districts),
+  school_ids: normalizeScopeValueList(user.value?.data_scope?.school_ids),
+  grade_levels: normalizeScopeValueList(user.value?.data_scope?.grade_levels),
+  room_ids: normalizeScopeValueList(user.value?.data_scope?.room_ids),
+}));
+
+const canUseNationwideScope = computed(() => (
+  currentUserScope.value.provinces.length === 0 &&
+  currentUserScope.value.districts.length === 0 &&
+  currentUserScope.value.sub_districts.length === 0 &&
+  currentUserScope.value.school_ids.length === 0
+));
+const roleScopePreset = computed(() => getRoleScopePreset(form.role));
+const isNationwideToggleDisabled = computed(() => (
+  roleScopePreset.value.mode !== 'flexible' || !canUseNationwideScope.value
+));
+
+const roleOptions = computed(() => {
+  const actorRole = currentUserRole.value;
+  const actorRank = ROLE_RANKS[actorRole || ''] || 0;
+
+  return Object.entries(ROLE_LABELS)
+    .filter(([role]) => {
+      const targetRank = ROLE_RANKS[role] || 0;
+      if (targetRank > actorRank) {
+        return false;
+      }
+
+      if (targetRank === actorRank && actorRole !== 'ADMIN') {
+        return false;
+      }
+
+      return true;
+    })
+    .sort((a, b) => (ROLE_RANKS[b[0]] || 0) - (ROLE_RANKS[a[0]] || 0))
+    .map(([value, label]) => ({ value, label }));
+});
+
+const expiresUnitOptions = [
+  { label: 'ชั่วโมง', value: 'hours' },
+  { label: 'วัน', value: 'days' },
+  { label: 'นาที', value: 'minutes' },
 ];
 
 const form = reactive({
   assigned_to_name: '',
   assigned_to_email: '',
-  mock_permissions: ['VIEW_DASHBOARD'] as string[],
-  selected_role: 'TEACHER',
+  permissions: [] as string[],
+  role: 'TEACHER',
   expires_value: 1,
-  expires_unit: 'days'
+  expires_unit: 'days',
 });
 
-const openAddDialog = () => {
-  form.assigned_to_name = '';
-  form.assigned_to_email = '';
-  form.mock_permissions = ['VIEW_DASHBOARD'];
-  form.selected_role = 'TEACHER';
-  form.expires_value = 1;
-  form.expires_unit = 'days';
-  showResult.value = false;
-  resultLink.value = '';
-  addDialog.value = true;
-};
+const scopeForm = reactive({
+  allProvinces: true,
+  province: null as string | null,
+  district: null as string | null,
+  sub_district: null as string | null,
+  school_id: null as number | null,
+  grade_level: null as number | null,
+  room: null as string | null,
+});
+
+const provinceOptions = ref<string[]>([]);
+const locationData = reactive({
+  districts: [] as LocationDistrict[],
+  subDistricts: [] as LocationSubDistrict[],
+});
+const schoolOptions = ref<{ label: string; value: number; province?: string; district?: string; sub_district?: string }[]>([]);
+const gradeOptions = ref<{ label: string; value: number }[]>([]);
+const roomOptions = ref<string[]>([]);
+
+const availableProvinceOptions = computed(() => (
+  currentUserScope.value.provinces.length > 0
+    ? provinceOptions.value.filter((province) => currentUserScope.value.provinces.includes(province))
+    : provinceOptions.value
+));
+
+const districtOptions = computed(() => {
+  if (!scopeForm.province) return [];
+  let options = Array.from(new Set(
+    locationData.districts
+      .filter((item) => item.province === scopeForm.province)
+      .map((item) => item.district),
+  ));
+
+  if (currentUserScope.value.districts.length > 0) {
+    options = options.filter((district) => currentUserScope.value.districts.includes(district));
+  }
+
+  return options;
+});
+
+const availableDistrictOptions = computed(() => districtOptions.value);
+
+const subDistrictOptions = computed(() => {
+  if (!scopeForm.district || !scopeForm.province) return [];
+  let options = Array.from(new Set(
+    locationData.subDistricts
+      .filter((item) => item.province === scopeForm.province && item.district === scopeForm.district)
+      .map((item) => item.sub_district),
+  ));
+
+  if (currentUserScope.value.sub_districts.length > 0) {
+    options = options.filter((subDistrict) => currentUserScope.value.sub_districts.includes(subDistrict));
+  }
+
+  return options;
+});
+
+const availableSubDistrictOptions = computed(() => subDistrictOptions.value);
+
+const filteredSchools = computed(() => {
+  let list = schoolOptions.value;
+  if (currentUserScope.value.provinces.length > 0) {
+    list = list.filter((school) => currentUserScope.value.provinces.includes(String(school.province || '')));
+  }
+  if (currentUserScope.value.districts.length > 0) {
+    list = list.filter((school) => currentUserScope.value.districts.includes(String(school.district || '')));
+  }
+  if (currentUserScope.value.sub_districts.length > 0) {
+    list = list.filter((school) => currentUserScope.value.sub_districts.includes(String(school.sub_district || '')));
+  }
+  if (currentUserScope.value.school_ids.length > 0) {
+    list = list.filter((school) => currentUserScope.value.school_ids.includes(String(school.value)));
+  }
+  if (scopeForm.allProvinces) {
+    return list;
+  }
+  if (scopeForm.province) list = list.filter((school) => school.province === scopeForm.province);
+  if (scopeForm.district) list = list.filter((school) => school.district === scopeForm.district);
+  if (scopeForm.sub_district) list = list.filter((school) => school.sub_district === scopeForm.sub_district);
+  return list;
+});
+
+const availableGradeOptions = computed(() => (
+  currentUserScope.value.grade_levels.length > 0
+    ? gradeOptions.value.filter((grade) => currentUserScope.value.grade_levels.includes(String(grade.value)))
+    : gradeOptions.value
+));
+
+const availableRoomOptions = computed(() => (
+  currentUserScope.value.room_ids.length > 0
+    ? roomOptions.value.filter((room) => currentUserScope.value.room_ids.includes(String(room)))
+    : roomOptions.value
+));
 
 const normalizePublicLink = (rawLink: string) => {
   if (!rawLink) return rawLink;
@@ -544,17 +842,316 @@ const normalizePublicLink = (rawLink: string) => {
   } catch { return rawLink; }
 };
 
+const fetchLocations = async () => {
+  try {
+    const res = await api.get('/api/attendance/locations');
+    provinceOptions.value = res.data?.data?.provinces || [];
+    locationData.districts = res.data?.data?.districts || [];
+    locationData.subDistricts = res.data?.data?.subDistricts || [];
+  } catch (err) {
+    console.error('Fetch locations error:', err);
+  }
+};
+
+const fetchSchools = async () => {
+  try {
+    const res = await api.get('/api/attendance/schools');
+    schoolOptions.value = (res.data?.data || []).map((school: {
+      id: number;
+      name: string;
+      province?: string;
+      district?: string;
+      sub_district?: string;
+      subDistrict?: string;
+    }) => ({
+      label: school.name,
+      value: school.id,
+      province: school.province,
+      district: school.district,
+      sub_district: school.sub_district || school.subDistrict,
+    }));
+  } catch (err) {
+    console.error('Fetch schools error:', err);
+  }
+};
+
+const fetchGrades = async () => {
+  try {
+    const res = await api.get('/api/attendance/grade-levels');
+    gradeOptions.value = (res.data?.data || []).map((grade: { id: number; label: string }) => ({
+      label: grade.label,
+      value: grade.id,
+    }));
+  } catch (err) {
+    console.error('Fetch grades error:', err);
+  }
+};
+
+const fetchRooms = async () => {
+  if (!scopeForm.grade_level || !scopeForm.school_id) {
+    roomOptions.value = [];
+    scopeForm.room = null;
+    return;
+  }
+
+  try {
+    const selectedGrade = gradeOptions.value.find((grade) => grade.value === scopeForm.grade_level);
+    if (!selectedGrade) {
+      roomOptions.value = [];
+      scopeForm.room = null;
+      return;
+    }
+
+    const res = await api.get('/api/attendance/rooms', {
+      params: {
+        grade: selectedGrade.label,
+        schoolId: scopeForm.school_id,
+      },
+    });
+    roomOptions.value = (res.data?.data || []).map(String);
+    if (scopeForm.room && !roomOptions.value.includes(String(scopeForm.room))) {
+      scopeForm.room = null;
+    }
+  } catch (err) {
+    console.error('Fetch rooms error:', err);
+  }
+};
+
+const ensureScopeOptionsLoaded = async () => {
+  const tasks: Promise<void>[] = [];
+  if (provinceOptions.value.length === 0) tasks.push(fetchLocations());
+  if (schoolOptions.value.length === 0) tasks.push(fetchSchools());
+  if (gradeOptions.value.length === 0) tasks.push(fetchGrades());
+  if (tasks.length > 0) {
+    await Promise.all(tasks);
+  }
+};
+
+watch(
+  () => [scopeForm.grade_level, scopeForm.school_id],
+  () => {
+    if (scopeForm.grade_level && scopeForm.school_id) {
+      void fetchRooms();
+    } else {
+      roomOptions.value = [];
+      scopeForm.room = null;
+    }
+  },
+);
+
+const onScopeProvinceChange = () => {
+  scopeForm.allProvinces = false;
+  scopeForm.district = null;
+  scopeForm.sub_district = null;
+  scopeForm.school_id = null;
+  scopeForm.grade_level = null;
+  scopeForm.room = null;
+  roomOptions.value = [];
+};
+
+const onScopeDistrictChange = () => {
+  scopeForm.sub_district = null;
+  scopeForm.school_id = null;
+  scopeForm.grade_level = null;
+  scopeForm.room = null;
+  roomOptions.value = [];
+};
+
+const onScopeSubDistrictChange = () => {
+  scopeForm.school_id = null;
+  scopeForm.grade_level = null;
+  scopeForm.room = null;
+  roomOptions.value = [];
+};
+
+const onScopeSchoolChange = () => {
+  scopeForm.grade_level = null;
+  scopeForm.room = null;
+  roomOptions.value = [];
+};
+
+const scopeFieldLabels: Record<ScopeFormField, string> = {
+  province: 'จังหวัด',
+  district: 'อำเภอ',
+  sub_district: 'ตำบล',
+  school_id: 'โรงเรียน',
+  grade_level: 'ระดับชั้น',
+  room: 'ห้องเรียน',
+};
+
+const isScopeFieldLocked = (field: ScopeFormField) => (
+  !roleScopePreset.value.allowedFields.includes(field)
+);
+
+const applyRoleScopePreset = () => {
+  const preset = roleScopePreset.value;
+
+  if (preset.mode === 'flexible') {
+    return;
+  }
+
+  if (preset.mode === 'global') {
+    scopeForm.allProvinces = true;
+    scopeForm.province = null;
+    scopeForm.district = null;
+    scopeForm.sub_district = null;
+    scopeForm.school_id = null;
+    scopeForm.grade_level = null;
+    scopeForm.room = null;
+    roomOptions.value = [];
+    return;
+  }
+
+  scopeForm.allProvinces = false;
+
+  if (!preset.allowedFields.includes('province')) scopeForm.province = null;
+  if (!preset.allowedFields.includes('district')) scopeForm.district = null;
+  if (!preset.allowedFields.includes('sub_district')) scopeForm.sub_district = null;
+  if (!preset.allowedFields.includes('school_id')) scopeForm.school_id = null;
+  if (!preset.allowedFields.includes('grade_level')) scopeForm.grade_level = null;
+  if (!preset.allowedFields.includes('room')) scopeForm.room = null;
+
+  if (preset.requiredFields.includes('province') && !scopeForm.province && availableProvinceOptions.value.length === 1) {
+    scopeForm.province = availableProvinceOptions.value[0] || null;
+  }
+
+  if (preset.requiredFields.includes('district') && !scopeForm.district && availableDistrictOptions.value.length === 1) {
+    scopeForm.district = availableDistrictOptions.value[0] || null;
+  }
+
+  if (preset.requiredFields.includes('sub_district') && !scopeForm.sub_district && availableSubDistrictOptions.value.length === 1) {
+    scopeForm.sub_district = availableSubDistrictOptions.value[0] || null;
+  }
+
+  if (preset.requiredFields.includes('school_id') && !scopeForm.school_id && filteredSchools.value.length === 1) {
+    scopeForm.school_id = filteredSchools.value[0]?.value || null;
+  }
+
+  if (isScopeFieldLocked('room')) {
+    roomOptions.value = [];
+  }
+};
+
+const onAllProvincesToggle = (enabled: boolean | null) => {
+  if (!canUseNationwideScope.value) {
+    scopeForm.allProvinces = false;
+    return;
+  }
+
+  if (!enabled) {
+    return;
+  }
+
+  scopeForm.province = null;
+  scopeForm.district = null;
+  scopeForm.sub_district = null;
+  scopeForm.school_id = null;
+  scopeForm.grade_level = null;
+  scopeForm.room = null;
+  roomOptions.value = [];
+};
+
+const canGrantPermission = (permissionId: string) => (
+  currentUserPermissionSet.value.has('*') ||
+  currentUserPermissionSet.value.has('ALL') ||
+  currentUserPermissionSet.value.has(permissionId)
+);
+
+const isPermissionLocked = (permissionId: string) => (
+  !form.permissions.includes(permissionId) && !canGrantPermission(permissionId)
+);
+
+const togglePermission = (permissionId: string, checked: boolean) => {
+  if (checked) {
+    if (!form.permissions.includes(permissionId) && canGrantPermission(permissionId)) {
+      form.permissions = [...form.permissions, permissionId];
+    }
+    return;
+  }
+
+  form.permissions = form.permissions.filter((item) => item !== permissionId);
+};
+
+const removePermission = (permissionId: string) => {
+  form.permissions = form.permissions.filter((item) => item !== permissionId);
+};
+
+const buildDataScope = (): DataScope => {
+  const dataScope: DataScope = {};
+  if (!scopeForm.allProvinces && scopeForm.province) dataScope.provinces = [scopeForm.province];
+  if (!scopeForm.allProvinces && scopeForm.district) dataScope.districts = [scopeForm.district];
+  if (!scopeForm.allProvinces && scopeForm.sub_district) dataScope.sub_districts = [scopeForm.sub_district];
+  if (!scopeForm.allProvinces && scopeForm.school_id) dataScope.school_ids = [scopeForm.school_id];
+  if (scopeForm.grade_level) dataScope.grade_levels = [scopeForm.grade_level];
+  if (scopeForm.room) dataScope.room_ids = [scopeForm.room];
+  return dataScope;
+};
+
+const resetScopeForm = () => {
+  scopeForm.allProvinces = canUseNationwideScope.value;
+  scopeForm.province = null;
+  scopeForm.district = null;
+  scopeForm.sub_district = null;
+  scopeForm.school_id = null;
+  scopeForm.grade_level = null;
+  scopeForm.room = null;
+  roomOptions.value = [];
+};
+
+const openAddDialog = async () => {
+  await ensureScopeOptionsLoaded();
+  form.assigned_to_name = '';
+  form.assigned_to_email = '';
+  form.permissions = [];
+  form.role = roleOptions.value.find((item) => item.value === 'TEACHER')?.value || roleOptions.value[0]?.value || 'TEACHER';
+  form.expires_value = 1;
+  form.expires_unit = 'days';
+  resetScopeForm();
+  applyRoleScopePreset();
+  showResult.value = false;
+  resultLink.value = '';
+  addDialog.value = true;
+};
+
+watch(() => form.role, () => {
+  applyRoleScopePreset();
+});
+
 const submitAddLink = async () => {
+  if (!form.assigned_to_name.trim() || !form.assigned_to_email.trim()) {
+    $q.notify({ message: 'กรุณากรอกชื่อและอีเมลให้ครบถ้วน', color: 'negative' });
+    return;
+  }
+
+  if (form.permissions.length === 0) {
+    $q.notify({ message: 'กรุณาเลือกสิทธิ์อย่างน้อย 1 รายการ', color: 'negative' });
+    return;
+  }
+
+  const missingScopeFields = roleScopePreset.value.requiredFields
+    .filter((field) => !scopeForm[field])
+    .map((field) => scopeFieldLabels[field]);
+
+  if (missingScopeFields.length > 0) {
+    $q.notify({
+      message: `กรุณาเลือก ${missingScopeFields.join(', ')} ให้ครบ`,
+      color: 'negative',
+    });
+    return;
+  }
+
   submitLoading.value = true;
   try {
     const payload = {
-      task_type: 'LOGIN', type: 'LOGIN',
-      assigned_to_name: form.assigned_to_name,
-      assigned_to_email: form.assigned_to_email,
-      mock_permissions: form.mock_permissions,
-      selected_role: form.selected_role,
+      task_type: 'LOGIN',
+      type: 'LOGIN',
+      assigned_to_name: form.assigned_to_name.trim(),
+      assigned_to_email: form.assigned_to_email.trim(),
+      permissions: [...form.permissions],
+      role: form.role,
+      data_scope: buildDataScope(),
       expires_value: form.expires_value,
-      expires_unit: form.expires_unit
+      expires_unit: form.expires_unit,
     };
     const res = await api.post('/api/tasks', payload);
     let link = normalizePublicLink(res.data.magic_link);
@@ -564,6 +1161,19 @@ const submitAddLink = async () => {
     void fetchLoginLinks();
   } catch (err) {
     console.error('Create link error:', err);
+    const message =
+      typeof err === 'object' &&
+      err !== null &&
+      'response' in err &&
+      typeof err.response === 'object' &&
+      err.response !== null &&
+      'data' in err.response &&
+      typeof err.response.data === 'object' &&
+      err.response.data !== null &&
+      'message' in err.response.data
+        ? String(err.response.data.message)
+        : 'ไม่สามารถสร้างลิงก์ได้';
+    $q.notify({ color: 'negative', message });
   } finally { submitLoading.value = false; }
 };
 
@@ -653,7 +1263,10 @@ const formatDate = (dateStr: string) => {
   });
 };
 
-onMounted(() => { void fetchLoginLinks(); });
+onMounted(() => {
+  void fetchLoginLinks();
+  void ensureScopeOptionsLoaded();
+});
 </script>
 
 <style scoped lang="scss">
@@ -697,5 +1310,25 @@ onMounted(() => { void fetchLoginLinks(); });
   border-radius: 12px;
   word-break: break-all;
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+}
+
+.permission-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.permission-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.permission-item--disabled {
+  opacity: 0.55;
 }
 </style>

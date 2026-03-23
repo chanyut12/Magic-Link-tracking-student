@@ -87,16 +87,12 @@ import { useRouter } from 'vue-router';
 import { api } from 'boot/axios';
 import { useQuasar } from 'quasar';
 import { AxiosError } from 'axios';
-
-interface User {
-  id: number;
-  username: string;
-  FirstName: string | null;
-  LastName: string | null;
-  roles: string[];
-  labels: string[];
-  affiliation?: string | null;
-}
+import {
+  persistAuthFlag,
+  persistUser,
+  type User,
+} from '../composables/useUserStore';
+import { getEffectivePermissions, getFirstAccessibleRoute } from '../constants/permissions';
 
 const router = useRouter();
 const $q = useQuasar();
@@ -124,9 +120,8 @@ const handleLogin = async () => {
 
     const user = response.data;
     
-    // Store user info
-    localStorage.setItem('sts_user', JSON.stringify(user));
-    localStorage.setItem('admin_access', 'true');
+    persistAuthFlag('local');
+    persistUser(user, 'local');
     
     $q.notify({
       message: `ยินดีต้อนรับคุณ ${user.FirstName || user.username}`,
@@ -134,8 +129,10 @@ const handleLogin = async () => {
       position: 'top'
     });
 
-    // Navigate to home
-    void router.push('/');
+    const targetRoute = getFirstAccessibleRoute(
+      getEffectivePermissions(user.roles || [], user.permissions || []),
+    );
+    void router.push(targetRoute);
   } catch (error) {
     console.error('Login error:', error);
     let errorMsg = 'ชื่อผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง';

@@ -178,7 +178,6 @@ const userRoleLabel = computed(() => {
   if (roles.includes('DIRECTOR')) return 'ผู้อำนวยการ';
   if (roles.includes('TEACHER')) return 'คุณครู';
   if (roles.includes('EXECUTIVE')) return 'ผู้บริหาร';
-  if (roles.includes('STAFF')) return 'เจ้าหน้าที่';
   
   return roles[0] || 'ผู้ใช้งาน';
 });

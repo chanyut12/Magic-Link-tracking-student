@@ -6,15 +6,36 @@ import {
   createWebHistory,
 } from 'vue-router';
 import routes from './routes';
+import { getEffectivePermissions } from '../constants/permissions';
 
-/*
- * If not building with SSR mode, you can
- * directly export the Router instantiation;
- *
- * The function below can be async too; either use
- * async/await or return a Promise which resolves
- * with the Router instance.
- */
+interface User {
+  id: number;
+  username: string;
+  roles: string[];
+  permissions: string[];
+}
+
+function getUser(): User | null {
+  const userStr = sessionStorage.getItem('sts_user') || localStorage.getItem('sts_user');
+  if (userStr) {
+    try {
+      return JSON.parse(userStr) as User;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+function hasPermission(user: User | null, permission: string): boolean {
+  if (!user) return false;
+
+  const roles = user.roles || [];
+  const customPermissions = user.permissions || [];
+  const effectivePermissions = getEffectivePermissions(roles, customPermissions);
+
+  return effectivePermissions.includes(permission);
+}
 
 export default defineRouter(function (/* { store, ssrContext } */) {
   const createHistory = process.env.SERVER
@@ -27,14 +48,13 @@ export default defineRouter(function (/* { store, ssrContext } */) {
     scrollBehavior: () => ({ left: 0, top: 0 }),
     routes,
 
-    // Leave this as is and make changes in quasar.conf.js instead!
-    // quasar.conf.js -> build -> vueRouterMode
-    // quasar.conf.js -> build -> publicPath
     history: createHistory(process.env.VUE_ROUTER_BASE),
   });
 
   Router.beforeEach((to) => {
     const isAdmin = (sessionStorage.getItem('admin_access') === 'true') || (localStorage.getItem('admin_access') === 'true');
+    const user = getUser();
+    
     if (to.matched.some(record => record.meta.requiresAuth)) {
       if (!isAdmin) {
         return {
@@ -42,7 +62,13 @@ export default defineRouter(function (/* { store, ssrContext } */) {
           query: { next: to.fullPath }
         };
       }
+      
+      const requiredPermission = to.meta.permission as string | undefined;
+      if (requiredPermission && !hasPermission(user, requiredPermission)) {
+        return { path: '/forbidden' };
+      }
     }
+    
     return true;
   });
 

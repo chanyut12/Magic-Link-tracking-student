@@ -225,21 +225,22 @@ export class DatabaseService implements OnModuleInit {
           email TEXT,
           affiliation TEXT,
           status TEXT DEFAULT 'ACTIVE',
-          permissions JSONB DEFAULT '[]',
+          permissions JSONB DEFAULT '[]'::jsonb,
+          role TEXT DEFAULT 'TEACHER',
+          data_scope JSONB DEFAULT '{}'::jsonb,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-
-        CREATE TABLE IF NOT EXISTS user_roles (
-          user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-          role_id INTEGER REFERENCES roles(id) ON DELETE CASCADE,
-          PRIMARY KEY (user_id, role_id)
         );
 
         -- Seed Roles
         INSERT INTO roles (name, label) VALUES ('ADMIN', 'ผู้ดูแลระบบ') ON CONFLICT (name) DO UPDATE SET label = EXCLUDED.label;
+        INSERT INTO roles (name, label) VALUES ('ADMIN_PROVINCE', 'แอดมินระดับจังหวัด') ON CONFLICT (name) DO UPDATE SET label = EXCLUDED.label;
+        INSERT INTO roles (name, label) VALUES ('ADMIN_DISTRICT', 'แอดมินระดับอำเภอ') ON CONFLICT (name) DO UPDATE SET label = EXCLUDED.label;
+        INSERT INTO roles (name, label) VALUES ('ADMIN_SUBDISTRICT', 'แอดมินระดับตำบล') ON CONFLICT (name) DO UPDATE SET label = EXCLUDED.label;
+        INSERT INTO roles (name, label) VALUES ('ADMIN_SCHOOL', 'แอดมินระดับโรงเรียน') ON CONFLICT (name) DO UPDATE SET label = EXCLUDED.label;
         INSERT INTO roles (name, label) VALUES ('DIRECTOR', 'ผู้อำนวยการ') ON CONFLICT (name) DO UPDATE SET label = EXCLUDED.label;
         INSERT INTO roles (name, label) VALUES ('TEACHER', 'คุณครู') ON CONFLICT (name) DO UPDATE SET label = EXCLUDED.label;
         INSERT INTO roles (name, label) VALUES ('EXECUTIVE', 'ผู้บริหาร') ON CONFLICT (name) DO UPDATE SET label = EXCLUDED.label;
+        INSERT INTO roles (name, label) VALUES ('STUDENT', 'นักเรียน') ON CONFLICT (name) DO UPDATE SET label = EXCLUDED.label;
 
         CREATE TABLE IF NOT EXISTS external_users (
           "ExternalID" SERIAL PRIMARY KEY,
@@ -258,6 +259,8 @@ export class DatabaseService implements OnModuleInit {
         ALTER TABLE users ADD COLUMN IF NOT EXISTS "affiliation" TEXT;
         ALTER TABLE users ADD COLUMN IF NOT EXISTS "status" TEXT DEFAULT 'ACTIVE';
         ALTER TABLE users ADD COLUMN IF NOT EXISTS "permissions" JSONB DEFAULT '[]';
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS "role" TEXT;
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS "data_scope" JSONB DEFAULT '{}'::jsonb;
 
         CREATE INDEX IF NOT EXISTS idx_task_links_token ON task_links(token_hash);
         CREATE INDEX IF NOT EXISTS idx_task_links_task_id ON task_links(task_id);
@@ -270,6 +273,10 @@ export class DatabaseService implements OnModuleInit {
         ALTER TABLE task_links ALTER COLUMN otp_expires_at TYPE TIMESTAMP WITH TIME ZONE USING otp_expires_at AT TIME ZONE 'UTC';
         ALTER TABLE task_links ALTER COLUMN admin_lock_at TYPE TIMESTAMP WITH TIME ZONE USING admin_lock_at AT TIME ZONE 'UTC';
         ALTER TABLE task_links ALTER COLUMN created_at TYPE TIMESTAMP WITH TIME ZONE USING created_at AT TIME ZONE 'UTC';
+        ALTER TABLE task_links ADD COLUMN IF NOT EXISTS created_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
+        ALTER TABLE task_links ADD COLUMN IF NOT EXISTS login_role TEXT;
+        ALTER TABLE task_links ADD COLUMN IF NOT EXISTS login_permissions JSONB DEFAULT '[]'::jsonb;
+        ALTER TABLE task_links ADD COLUMN IF NOT EXISTS login_data_scope JSONB DEFAULT '{}'::jsonb;
         
         -- Add missing columns
         ALTER TABLE cases ADD COLUMN IF NOT EXISTS result_summary TEXT;
@@ -320,6 +327,104 @@ export class DatabaseService implements OnModuleInit {
         INSERT INTO system_settings (setting_key, setting_value, description) 
         VALUES ('ALERT_SCHEDULE_TIME', '18:00', 'เวลาที่จะรันบอทตรวจสอบข้อมูล (HH:MM) เมื่อเลือกรูปแบบ SCHEDULED')
         ON CONFLICT (setting_key) DO NOTHING;
+
+        UPDATE users
+        SET role = NULL
+        WHERE role IS NOT NULL AND btrim(role) = '';
+
+        DO $migration$
+        BEGIN
+          IF EXISTS (
+            SELECT 1
+            FROM information_schema.tables
+            WHERE table_schema = current_schema()
+              AND table_name = 'user_roles'
+          ) THEN
+            EXECUTE $sql$
+              WITH ranked_roles AS (
+                SELECT DISTINCT ON (ur.user_id)
+                  ur.user_id,
+                  CASE
+                    WHEN r.name = 'STAFF' THEN 'TEACHER'
+                    ELSE r.name
+                  END AS role_name
+                FROM user_roles ur
+                JOIN roles r ON r.id = ur.role_id
+                ORDER BY
+                  ur.user_id,
+                  CASE
+                    WHEN r.name = 'ADMIN' THEN 1
+                    WHEN r.name = 'ADMIN_PROVINCE' THEN 2
+                    WHEN r.name = 'ADMIN_DISTRICT' THEN 3
+                    WHEN r.name = 'ADMIN_SUBDISTRICT' THEN 4
+                    WHEN r.name = 'ADMIN_SCHOOL' THEN 5
+                    WHEN r.name = 'DIRECTOR' THEN 6
+                    WHEN r.name = 'EXECUTIVE' THEN 7
+                    WHEN r.name IN ('TEACHER', 'STAFF') THEN 8
+                    WHEN r.name = 'STUDENT' THEN 9
+                    ELSE 999
+                  END,
+                  ur.role_id
+              )
+              UPDATE users u
+              SET role = rr.role_name
+              FROM ranked_roles rr
+              WHERE u.id = rr.user_id
+                AND (u.role IS NULL OR u.role NOT IN (SELECT name FROM roles));
+            $sql$;
+          END IF;
+        END
+        $migration$;
+
+        UPDATE users
+        SET role = 'TEACHER'
+        WHERE role = 'STAFF';
+
+        UPDATE users
+        SET role = 'TEACHER'
+        WHERE role IS NULL
+          OR role NOT IN (SELECT name FROM roles WHERE name <> 'STAFF');
+
+        DELETE FROM roles
+        WHERE name = 'STAFF';
+
+        UPDATE users
+        SET permissions = '[]'::jsonb
+        WHERE permissions IS NULL;
+
+        UPDATE users
+        SET data_scope = '{}'::jsonb
+        WHERE data_scope IS NULL;
+
+        ALTER TABLE users
+        ALTER COLUMN permissions SET DEFAULT '[]'::jsonb;
+
+        ALTER TABLE users
+        ALTER COLUMN data_scope SET DEFAULT '{}'::jsonb;
+
+        ALTER TABLE users
+        ALTER COLUMN role SET DEFAULT 'TEACHER';
+
+        ALTER TABLE users
+        ALTER COLUMN role SET NOT NULL;
+
+        DO $constraint$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1
+            FROM pg_constraint
+            WHERE conname = 'fk_users_role_name'
+          ) THEN
+            ALTER TABLE users
+            ADD CONSTRAINT fk_users_role_name
+            FOREIGN KEY (role) REFERENCES roles(name)
+            ON UPDATE CASCADE
+            ON DELETE RESTRICT;
+          END IF;
+        END
+        $constraint$;
+
+        DROP TABLE IF EXISTS user_roles;
 
         -- Phase 2: Master Data
         CREATE TABLE IF NOT EXISTS risk_factors (

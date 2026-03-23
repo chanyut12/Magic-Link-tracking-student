@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
+import { buildDataScopeQuery, DataScope } from '../common/utils/authorization';
 import { AutomationService, NewCase } from '../automation/automation.service';
 
 @Injectable()
@@ -82,7 +83,7 @@ export class AttendanceService {
     }
   }
 
-  async getStudents(grade?: string, room?: string, schoolId?: string) {
+  async getStudents(grade?: string, room?: string, schoolId?: string, userScope?: DataScope) {
     try {
       let query = `
         SELECT 
@@ -100,6 +101,23 @@ export class AttendanceService {
         WHERE 1=1
       `;
       const params: any[] = [];
+
+      // Apply Data Scope Filter
+      if (userScope) {
+        const scopeRes = buildDataScopeQuery(userScope, {
+          school_id: `s."SchoolID_Onec"`,
+          grade: `s."GradeLevelID_Onec"`,
+          room: `s."RoomID_Onec"::text`,
+          province: `sc.province`,
+          district: `sc.district`,
+          sub_district: `sc.sub_district`,
+        }, params.length + 1);
+
+        if (scopeRes.sql !== '1=1') {
+          query += ` AND (${scopeRes.sql})`;
+          params.push(...scopeRes.params);
+        }
+      }
 
       if (grade && grade !== 'ALL') {
         params.push(grade);
@@ -124,10 +142,9 @@ export class AttendanceService {
     }
   }
 
-  async getHistory(date: string) {
+  async getHistory(date: string, userScope?: DataScope) {
     try {
-      const result = await this.db.query(
-        `
+      let query = `
         SELECT 
           a.*, 
           a."SchoolID_Onec" as school_id,
@@ -138,11 +155,30 @@ export class AttendanceService {
         FROM attendance a
         JOIN student_term s ON s."PersonID_Onec" = a."PersonID_Onec"
         LEFT JOIN grade_levels gl ON s."GradeLevelID_Onec" = gl.id
+        LEFT JOIN schools sc ON s."SchoolID_Onec" = sc.id
         WHERE a."AttendanceDate" = $1
-        ORDER BY s."GradeLevelID_Onec" ASC, s."RoomID_Onec" ASC
-      `,
-        [date],
-      );
+      `;
+      const params: any[] = [date];
+
+      if (userScope) {
+        const scopeRes = buildDataScopeQuery(userScope, {
+          school_id: `a."SchoolID_Onec"`,
+          grade: `s."GradeLevelID_Onec"`,
+          room: `s."RoomID_Onec"::text`,
+          province: `sc.province`,
+          district: `sc.district`,
+          sub_district: `sc.sub_district`,
+        }, params.length + 1);
+
+        if (scopeRes.sql !== '1=1') {
+          query += ` AND (${scopeRes.sql})`;
+          params.push(...scopeRes.params);
+        }
+      }
+
+      query += ` ORDER BY s."GradeLevelID_Onec" ASC, s."RoomID_Onec" ASC`;
+
+      const result = await this.db.query(query, params);
 
       // Map back to frontend expected status strings if needed,
       // but let's keep them as integers or map here

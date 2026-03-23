@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { v4 as uuidv4 } from 'uuid';
 import { DatabaseService } from '../database/database.service';
 import { clean } from '../common/utils/helpers';
+import * as crypto from 'crypto';
 
 type ReviewAction = 'ASSIST' | 'FORWARD' | 'CLOSE';
 
@@ -34,7 +34,7 @@ export class CaseService {
     const reviewNote = clean(String(body.review_note || '')) || null;
     const reviewedBy = clean(String(body.reviewed_by || '')) || 'ผอ.';
     const nextStatus = this.getCaseStatusByAction(reviewAction);
-    const reviewId = uuidv4();
+    const reviewId = crypto.randomUUID();
 
     try {
       const caseResult = await this.db.query(

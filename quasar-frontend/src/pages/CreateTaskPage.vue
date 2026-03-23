@@ -257,7 +257,6 @@
             <select v-model="formData.selected_role" style="width: 100% !important; height: 48px;">
               <option value="ADMIN_SCHOOL">ผู้บริหารโรงเรียน</option>
               <option value="TEACHER">ครูประจำชั้น</option>
-              <option value="STAFF">เจ้าหน้าที่ทั่วไป</option>
             </select>
           </div>
 
@@ -384,13 +383,14 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { api } from 'boot/axios';
 import type { AxiosError } from 'axios';
 import { useQuasar } from 'quasar';
 
 const $q = useQuasar();
 const route = useRoute();
+const router = useRouter();
 const currentStep = ref(1);
 const loading = ref(false);
 const showResult = ref(false);
@@ -561,6 +561,11 @@ const hasValidCoordinates = computed(() => {
 });
 
 const selectType = (type: string) => {
+  if (type === 'LOGIN') {
+    void router.push('/login-links');
+    return;
+  }
+
   formData.type = type;
   currentStep.value = 2;
 };

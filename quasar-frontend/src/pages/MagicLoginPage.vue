@@ -55,6 +55,8 @@ import { ref, onMounted, onUnmounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { api } from 'boot/axios';
 import { useQuasar } from 'quasar';
+import { persistAuthFlag, persistUser } from '../composables/useUserStore';
+import { getEffectivePermissions, getFirstAccessibleRoute } from '../constants/permissions';
 
 const $q = useQuasar();
 const route = useRoute();
@@ -91,10 +93,19 @@ const checkLoginStatus = async () => {
       }
     } else if (res.data.id) {
       // Normal Login Flow (No OTP needed)
-      sessionStorage.setItem('sts_user', JSON.stringify(res.data));
-      sessionStorage.setItem('admin_access', 'true');
+      const virtualUser = {
+        ...res.data,
+        virtual_login: true,
+        magic_link_token: token,
+        magic_session_token: savedToken || undefined,
+      };
+      persistAuthFlag('session');
+      persistUser(virtualUser, 'session');
       $q.notify({ message: 'เข้าสู่ระบบสำเร็จ', color: 'positive', icon: 'check' });
-      void router.push('/');
+      const targetRoute = getFirstAccessibleRoute(
+        getEffectivePermissions(virtualUser.roles || [], virtualUser.permissions || []),
+      );
+      void router.push(targetRoute);
     }
   } catch (err) {
     console.error('Magic login error:', err);

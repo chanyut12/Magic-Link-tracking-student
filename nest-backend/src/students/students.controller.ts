@@ -1,8 +1,9 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, Headers } from '@nestjs/common';
 
 import { StudentsService } from './students.service';
 import { CreateStudentDto } from './dto/create-student.dto';
 import { UpdateStudentDto } from './dto/update-student.dto';
+import { parseScopeHeader } from '../common/utils/authorization';
 
 @Controller('api/students')
 export class StudentsController {
@@ -14,8 +15,9 @@ export class StudentsController {
   }
 
   @Get()
-  findAll(@Query() query: any) {
-    return this.studentsService.findAll(query);
+  findAll(@Query() query: any, @Headers('x-user-scope') scopeHeader?: string) {
+    const userScope = parseScopeHeader(scopeHeader);
+    return this.studentsService.findAll(query, userScope);
   }
 
   @Get('cases/by-name/:name')

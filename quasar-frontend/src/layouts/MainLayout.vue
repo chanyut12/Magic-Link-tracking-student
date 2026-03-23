@@ -55,7 +55,16 @@
               </q-list>
             </q-menu>
           </q-btn>
-          <q-btn flat round dense color="grey-8" icon="fas fa-cog" class="header-icon-btn" to="/settings" />
+          <q-btn
+            v-if="userPermissions.includes('settings')"
+            flat
+            round
+            dense
+            color="grey-8"
+            icon="fas fa-cog"
+            class="header-icon-btn"
+            to="/settings"
+          />
         </div>
       </q-toolbar>
     </q-header>
@@ -69,127 +78,60 @@
       class="q-drawer"
     >
       <div class="column no-wrap" style="height: 100vh;">
-        <!-- Pinned Logo Section -->
         <div class="logo-section">
           <i class="fas fa-graduation-cap"></i>
           <span>ระบบติดตามนักเรียน</span>
         </div>
 
-        <!-- Scrollable Menu Area -->
         <div class="col" style="overflow-y: auto;">
           <div class="menu-label">เมนู</div>
           <q-list padding class="q-px-none">
-            <q-item clickable v-ripple to="/" exact class="nav-item">
-              <q-item-section avatar min-width="44px">
-                <i class="fas fa-home"></i>
-              </q-item-section>
-              <q-item-section>หน้าหลัก</q-item-section>
-            </q-item>
-
-            <q-item clickable v-ripple to="/dashboard" class="nav-item">
-              <q-item-section avatar min-width="44px">
-                <i class="fas fa-chart-line"></i>
-              </q-item-section>
-              <q-item-section>รายงานนักเรียน</q-item-section>
-            </q-item>
-
-            <q-item clickable v-ripple to="/students" class="nav-item">
-              <q-item-section avatar min-width="44px">
-                <i class="fas fa-user-graduate"></i>
-              </q-item-section>
-              <q-item-section>รายชื่อนักเรียน</q-item-section>
-            </q-item>
-
-            <q-item
-              clickable
-              v-ripple
-              :to="`/students/${currentUser?.PersonID_Onec || 'unknown'}`"
-              class="nav-item"
-            >
-              <q-item-section avatar min-width="44px">
-                <i class="fas fa-user-circle"></i>
-              </q-item-section>
-              <q-item-section>ข้อมูลตัวเอง(สำหรับนักเรียน)</q-item-section>
-            </q-item>
-
-            <q-item clickable v-ripple to="/create" class="nav-item">
-              <q-item-section avatar min-width="44px">
-                <i class="fas fa-link"></i>
-              </q-item-section>
-              <q-item-section>สร้างลิงค์</q-item-section>
-            </q-item>
-
-            <q-item clickable v-ripple to="/import-data" class="nav-item">
-              <q-item-section avatar min-width="44px">
-                <i class="fas fa-file-import"></i>
-              </q-item-section>
-              <q-item-section>นำเข้าข้อมูล</q-item-section>
-            </q-item>
-
-            <q-expansion-item
-              clickable
-              class="nav-item"
-              :default-opened="isAttendanceRoute"
-            >
-              <template #header>
+            <template v-for="item in visibleMenuItems" :key="item.id">
+              <q-item 
+                v-if="!item.children" 
+                clickable 
+                v-ripple 
+                :to="item.route" 
+                :exact="item.id === 'home'"
+                class="nav-item"
+              >
                 <q-item-section avatar min-width="44px">
-                  <i class="fas fa-clipboard-check"></i>
+                  <i :class="item.icon"></i>
                 </q-item-section>
-                <q-item-section>ระบบเช็คชื่อ</q-item-section>
-              </template>
-
-              <q-item clickable v-ripple to="/attendance-dashboard" class="nav-sub-item">
-                <q-item-section avatar min-width="44px">
-                  <i class="fas fa-chart-bar"></i>
-                </q-item-section>
-                <q-item-section>Dashboard เช็คชื่อ</q-item-section>
+                <q-item-section>{{ item.label }}</q-item-section>
               </q-item>
 
-              <q-item clickable v-ripple to="/attendance" class="nav-sub-item">
-                <q-item-section avatar min-width="44px">
-                  <i class="fas fa-edit"></i>
-                </q-item-section>
-                <q-item-section>เช็คชื่อ</q-item-section>
-              </q-item>
-            </q-expansion-item>
+              <q-expansion-item
+                v-else
+                clickable
+                class="nav-item"
+                :default-opened="isExpansionOpened(item)"
+              >
+                <template #header>
+                  <q-item-section avatar min-width="44px">
+                    <i :class="item.icon"></i>
+                  </q-item-section>
+                  <q-item-section>{{ item.label }}</q-item-section>
+                </template>
 
-            <q-expansion-item
-              clickable
-              class="nav-item"
-              :default-opened="isManageUsersRoute"
-            >
-              <template #header>
-                <q-item-section avatar min-width="44px">
-                  <i class="fas fa-users-cog"></i>
-                </q-item-section>
-                <q-item-section>จัดการสิทธิ์ผู้ใช้งาน</q-item-section>
-              </template>
-
-              <q-item clickable v-ripple to="/manage-users" class="nav-sub-item">
-                <q-item-section avatar min-width="44px">
-                  <i class="fas fa-users"></i>
-                </q-item-section>
-                <q-item-section>จัดการรายชื่อผู้ใช้งาน</q-item-section>
-              </q-item>
-
-              <q-item clickable v-ripple to="/login-links" class="nav-sub-item">
-                <q-item-section avatar min-width="44px">
-                  <i class="fas fa-link"></i>
-                </q-item-section>
-                <q-item-section>ลิงก์เข้าสู่ระบบ</q-item-section>
-              </q-item>
-            </q-expansion-item>
-
-            <q-item clickable v-ripple to="/settings" class="nav-item">
-              <q-item-section avatar min-width="44px">
-                <i class="fas fa-cogs"></i>
-              </q-item-section>
-              <q-item-section>ตั้งค่าระบบ (Master Data)</q-item-section>
-            </q-item>
+                <q-item 
+                  v-for="child in item.children" 
+                  :key="child.id" 
+                  clickable 
+                  v-ripple 
+                  :to="child.route" 
+                  class="nav-sub-item"
+                >
+                  <q-item-section avatar min-width="44px">
+                    <i :class="child.icon"></i>
+                  </q-item-section>
+                  <q-item-section>{{ child.label }}</q-item-section>
+                </q-item>
+              </q-expansion-item>
+            </template>
           </q-list>
         </div>
 
-        <!-- Pinned Logout Section -->
         <div class="user-profile">
           <div class="avatar">{{ userInitials }}</div>
           <div>
@@ -212,25 +154,31 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { api } from 'boot/axios';
 import { useQuasar } from 'quasar';
+import { 
+  MENU_ITEMS, 
+  filterMenuItems, 
+  getEffectivePermissions,
+  type MenuItem 
+} from '../constants/permissions';
+import { 
+  useUserStore, 
+  startProfileSync, 
+  stopProfileSync 
+} from '../composables/useUserStore';
 
 const route = useRoute();
 const router = useRouter();
 const $q = useQuasar();
 const leftDrawerOpen = ref(false);
 
-interface User {
-  id: number;
-  username: string;
-  FirstName: string | null;
-  LastName: string | null;
-  roles: string[];
-  labels?: string[];
-  assigned_to_name?: string;
-  name?: string;
-  selected_role?: string;
-  role?: string;
-  PersonID_Onec?: string;
-}
+const { 
+  user, 
+  loadUser, 
+  userRoleLabel, 
+  userDisplayName, 
+  userInitials, 
+  clearUser 
+} = useUserStore();
 
 interface CaseNotification {
   id: number;
@@ -243,52 +191,58 @@ interface CaseNotification {
   status: string;
 }
 
-const currentUser = ref<User | null>(null);
-
-// Watch for route changes to refresh user data instantly on router navigation
-watch(() => route.path, () => {
-  const userStr = sessionStorage.getItem('sts_user') || localStorage.getItem('sts_user');
-  if (userStr) {
-    try {
-      currentUser.value = JSON.parse(userStr) as User;
-    } catch (e) {
-      console.error('Failed to parse sts_user', e);
-    }
-  } else {
-    currentUser.value = null;
-  }
-}, { immediate: true });
 const notifications = ref<CaseNotification[]>([]);
 let notifInterval: number | null = null;
 
-onMounted(() => {
-  const userStr = sessionStorage.getItem('sts_user') || localStorage.getItem('sts_user');
-  if (userStr) {
-    try {
-      currentUser.value = JSON.parse(userStr) as User;
-    } catch (e) {
-      console.error('Failed to parse sts_user', e);
-    }
-  }
+const userPermissions = computed(() => {
+  if (!user.value) return [];
+  const roles = user.value.roles || [];
+  const customPermissions = user.value.permissions || [];
+  return getEffectivePermissions(roles, customPermissions);
+});
 
-  // Load initial notifications for OPEN cases
+const visibleMenuItems = computed(() => {
+  return filterMenuItems(MENU_ITEMS, userPermissions.value);
+});
+
+watch(
+  [() => route.fullPath, () => user.value?.id, () => userPermissions.value.join('|')],
+  () => {
+    if (!route.meta.requiresAuth || !user.value) {
+      return;
+    }
+
+    const requiredPermission = route.meta.permission as string | undefined;
+    if (requiredPermission && !userPermissions.value.includes(requiredPermission) && route.path !== '/forbidden') {
+      void router.replace('/forbidden');
+    }
+  },
+  { immediate: true }
+);
+
+watch(() => route.path, () => {
+  loadUser();
+}, { immediate: true });
+
+onMounted(() => {
+  loadUser();
   void fetchNotifications();
-  // Poll every 5s for faster updates
   notifInterval = window.setInterval(() => {
     void fetchNotifications();
   }, 5000);
+  startProfileSync(5000);
 });
 
 onUnmounted(() => {
   if (notifInterval) {
     clearInterval(notifInterval);
   }
+  stopProfileSync();
 });
 
 async function fetchNotifications() {
   try {
     const res = await api.get('/api/cases');
-    // Filter only OPEN cases that need attention
     notifications.value = res.data.filter((c: CaseNotification) => c.status === 'OPEN');
   } catch (err) {
     console.warn('Failed to fetch notifications', err);
@@ -320,7 +274,6 @@ function formatDate(dateStr: string) {
 }
 
 function goToCase(caseId: number) {
-  // Mark as read individually on click
   if (!readCaseIds.value.includes(caseId)) {
     readCaseIds.value.push(caseId);
     localStorage.setItem('read_case_ids', JSON.stringify(readCaseIds.value));
@@ -328,76 +281,34 @@ function goToCase(caseId: number) {
   void router.push(`/task-detail/${caseId}`);
 }
 
-const userDisplayName = computed(() => {
-  if (!currentUser.value) return 'ผู้ดูแลระบบ';
-  const { FirstName, LastName, username } = currentUser.value;
-  if (FirstName && LastName) return `${FirstName} ${LastName}`;
-
-  // Magic link support
-  const nameFromMagic = currentUser.value.assigned_to_name || currentUser.value.name;
-  if (nameFromMagic) return nameFromMagic;
-
-  return FirstName || username || 'ผู้ใช้งาน';
-});
-
-const userRoleLabel = computed(() => {
-  if (!currentUser.value) return 'ผู้ดูแลระบบ';
-
-  const labels = currentUser.value.labels || [];
-  if (labels.length > 0) {
-    return labels.join(', ');
-  }
-
-  // Magic link support
-  const singleRole = currentUser.value.selected_role || currentUser.value.role;
-  if (singleRole === 'ADMIN') return 'ผู้ดูแลระบบ';
-  if (singleRole === 'TEACHER') return 'คุณครู';
-  if (singleRole === 'ADMIN_SCHOOL') return 'ผู้ดูแลระบบโรงเรียน';
-  if (singleRole === 'DIRECTOR') return 'ผู้อำนวยการ';
-
-  const roles = currentUser.value.roles || [];
-  if (roles.includes('ADMIN')) return 'ผู้ดูแลระบบ';
-  if (roles.includes('DIRECTOR')) return 'ผู้อำนวยการ';
-  if (roles.includes('TEACHER')) return 'คุณครู';
-  if (roles.includes('EXECUTIVE')) return 'ผู้บริหาร';
-  if (roles.includes('STAFF')) return 'เจ้าหน้าที่';
-
-  return roles[0] || 'ผู้ใช้งาน';
-});
-
-const userInitials = computed(() => {
-  if (currentUser.value?.FirstName) return currentUser.value.FirstName.charAt(0).toUpperCase();
-  if (currentUser.value?.username) return currentUser.value.username.charAt(0).toUpperCase();
-
-  const nameFromMagic = currentUser.value?.assigned_to_name || currentUser.value?.name;
-  if (nameFromMagic) return nameFromMagic.charAt(0).toUpperCase();
-
-  return 'A';
-});
+function isExpansionOpened(item: MenuItem): boolean {
+  if (!item.children) return false;
+  const childRoutes = item.children.map(c => c.route).filter(Boolean);
+  return childRoutes.includes(route.path);
+}
 
 const hideNavigation = computed(() => !!route.meta.hideNav);
 
-const isAttendanceRoute = computed(() =>
-  route.path === '/attendance' || route.path === '/attendance-dashboard'
-);
-
-const isManageUsersRoute = computed(() =>
-  route.path === '/manage-users' || route.path === '/login-links'
-);
-
 const pageTitle = computed(() => {
-  if (route.path === '/') return 'หน้าหลัก';
-  if (route.path === '/dashboard') return 'รายงานนักเรียน';
-  if (route.path === '/students') return 'รายชื่อนักเรียน';
-  if (route.path === '/create') return 'สร้างภารกิจใหม่';
-  if (route.path === '/import-data') return 'นำเข้าข้อมูล';
-  if (route.path === '/attendance') return 'เช็คชื่อ';
-  if (route.path === '/attendance-dashboard') return 'Dashboard เช็คชื่อ';
-  if (route.path === '/admin-access') return 'Admin Access';
-  if (route.path === '/manage-users') return 'จัดการผู้ใช้งาน';
-  if (route.path === '/settings') return 'ตั้งค่าระบบและข้อมูลพื้นฐาน';
+  const titles: Record<string, string> = {
+    '/': 'หน้าหลัก',
+    '/dashboard': 'รายงานนักเรียน',
+    '/students': 'รายชื่อนักเรียน',
+    '/create': 'สร้างภารกิจใหม่',
+    '/import-data': 'นำเข้าข้อมูล',
+    '/attendance': 'เช็คชื่อ',
+    '/attendance-dashboard': 'Dashboard เช็คชื่อ',
+    '/admin-access': 'Admin Access',
+    '/manage-users': 'จัดการผู้ใช้งาน',
+    '/settings': 'ตั้งค่าระบบและข้อมูลพื้นฐาน',
+    '/my-attendance': 'ข้อมูลการเข้าเรียนของฉัน',
+    '/forbidden': 'ไม่มีสิทธิ์เข้าถึง',
+  };
+  
   if (route.path.startsWith('/task-detail/')) return 'รายละเอียดเคส';
-  return 'Student Tracking System';
+  if (route.path.startsWith('/students/')) return 'ข้อมูลนักเรียน';
+  
+  return titles[route.path] || 'Student Tracking System';
 });
 
 function toggleLeftDrawer () {
@@ -405,26 +316,19 @@ function toggleLeftDrawer () {
 }
 
 async function logout() {
-  sessionStorage.removeItem('admin_access');
-  sessionStorage.removeItem('sts_user');
-  localStorage.removeItem('admin_access');
-  localStorage.removeItem('sts_user');
+  clearUser();
   $q.notify({
     message: 'ออกจากระบบสำเร็จ',
     color: 'positive',
     position: 'top'
   });
 
-  // Use direct window navigation for reliable redirection
   window.location.href = '#/admin-access';
-
-  // router push as fallback
   await router.push('/admin-access');
 }
 </script>
 
 <style lang="scss">
-// Global styles are now in app.scss
 .nav-item {
   .q-item__section--avatar {
     min-width: 32px !important;

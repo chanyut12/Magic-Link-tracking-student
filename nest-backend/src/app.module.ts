@@ -9,6 +9,7 @@ import { SettingsModule } from './settings/settings.module';
 import { MasterDataModule } from './master-data/master-data.module';
 import { AutomationModule } from './automation/automation.module';
 import { ImportsModule } from './imports/imports.module';
+import { AuthModule } from './auth/auth.module';
 
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -19,6 +20,7 @@ import { StudentsModule } from './students/students.module';
     ConfigModule.forRoot({ isGlobal: true }),
     ScheduleModule.forRoot(),
     DatabaseModule,
+    AuthModule,
     TaskModule,
     AttendanceModule,
     UsersModule,

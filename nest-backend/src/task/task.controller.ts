@@ -9,9 +9,22 @@ import {
   Req,
   HttpException,
   HttpStatus,
+  UseGuards,
 } from '@nestjs/common';
 import { TaskService } from './task.service';
 import type { Request } from 'express';
+import { AuthGuard, PermissionsGuard, RequirePermission } from '../auth';
+
+type RequestWithActor = Request & {
+  user?: {
+    id: number;
+    username: string;
+    roles: string[];
+    permissions: string[];
+    data_scope?: Record<string, unknown>;
+    virtual_login?: boolean;
+  };
+};
 
 @Controller('api/tasks')
 export class TaskController {
@@ -31,19 +44,34 @@ export class TaskController {
     return `${req.protocol}://${req.get('host')}`;
   }
 
+  private resolveStatusCode(err: unknown, fallbackStatus: HttpStatus): HttpStatus {
+    if (typeof err === 'object' && err !== null && 'getStatus' in err && typeof err.getStatus === 'function') {
+      return err.getStatus() as HttpStatus;
+    }
+
+    return fallbackStatus;
+  }
+
+  @UseGuards(AuthGuard)
   @Post()
-  async createTask(@Body() body: any, @Req() req: Request) {
+  async createTask(@Body() body: any, @Req() req: RequestWithActor) {
     try {
       const baseUrl = this.resolveBaseUrl(req);
-      return await this.taskService.createTask(body, baseUrl);
+      return await this.taskService.createTask(req.user, body, baseUrl);
     } catch (err) {
-      throw new HttpException(err.message, HttpStatus.BAD_REQUEST);
+      const message = err instanceof Error ? err.message : 'เกิดข้อผิดพลาด';
+      throw new HttpException(
+        message,
+        this.resolveStatusCode(err, HttpStatus.BAD_REQUEST),
+      );
     }
   }
 
+  @UseGuards(AuthGuard, PermissionsGuard)
+  @RequirePermission('login-links')
   @Get('login-links')
-  async getLoginLinks() {
-    return await this.taskService.getLoginLinks();
+  async getLoginLinks(@Req() req: RequestWithActor) {
+    return await this.taskService.getLoginLinks(req.user);
   }
 
   @Get(':token')

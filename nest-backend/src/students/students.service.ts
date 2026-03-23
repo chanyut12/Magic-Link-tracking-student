@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { CreateStudentDto } from './dto/create-student.dto';
 import { UpdateStudentDto } from './dto/update-student.dto';
 import { DatabaseService } from '../database/database.service';
+import { buildDataScopeQuery, DataScope } from '../common/utils/authorization';
 
 @Injectable()
 export class StudentsService {
@@ -13,7 +14,7 @@ export class StudentsService {
     return 'This action adds a new student';
   }
 
-  async findAll(queryParams?: any) {
+  async findAll(queryParams?: any, userScope?: DataScope) {
     try {
       let query = `
         SELECT 
@@ -29,6 +30,23 @@ export class StudentsService {
         WHERE 1=1
       `;
       const params: any[] = [];
+
+      // Apply Data Scope Filter
+      if (userScope) {
+        const scopeRes = buildDataScopeQuery(userScope, {
+          school_id: `s."SchoolID_Onec"`,
+          grade: `s."GradeLevelID_Onec"`,
+          room: `s."RoomID_Onec"::text`,
+          province: `sc.province`,
+          district: `sc.district`,
+          sub_district: `sc.sub_district`,
+        }, params.length + 1);
+
+        if (scopeRes.sql !== '1=1') {
+          query += ` AND (${scopeRes.sql})`;
+          params.push(...scopeRes.params);
+        }
+      }
 
       if (queryParams) {
         if (queryParams.grade && queryParams.grade !== 'ALL') {
