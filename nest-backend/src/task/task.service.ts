@@ -12,10 +12,13 @@ import { EmailService } from './email.service';
 import { AutomationService } from '../automation/automation.service';
 import * as crypto from 'crypto';
 import {
+  GRANT_EXEMPT_PERMISSION_IDS,
   getRoleScopeValidationError,
   ROLE_BASELINES,
   ROLE_LABELS,
   ROLE_RANKS,
+  VALID_PERMISSION_IDS,
+  type RoleScopeMode,
 } from '../auth/permissions.constants';
 
 export interface DataScope {
@@ -35,6 +38,16 @@ interface ActorContext {
   permissions: string[];
   data_scope?: DataScope;
   virtual_login?: boolean;
+}
+
+interface RoleDefinition {
+  id: number;
+  name: string;
+  label: string;
+  rank: number;
+  default_permissions: string[];
+  scope_mode: RoleScopeMode;
+  is_system: boolean;
 }
 
 function maskName(name: string | null | undefined): string {
@@ -102,6 +115,93 @@ export class TaskService {
     };
   }
 
+  private async getRoleDefinitions(): Promise<RoleDefinition[]> {
+    const res = await this.db.query(
+      `
+        SELECT
+          id,
+          name,
+          label,
+          rank,
+          default_permissions,
+          scope_mode,
+          is_system
+        FROM roles
+        ORDER BY rank DESC, name ASC
+      `,
+    );
+
+    return res.rows.map((row: any) => ({
+      id: Number(row.id),
+      name: String(row.name),
+      label: String(row.label),
+      rank: Number(row.rank) || 0,
+      default_permissions: this.normalizePermissionList(row.default_permissions),
+      scope_mode: (typeof row.scope_mode === 'string' ? row.scope_mode : 'flexible') as RoleScopeMode,
+      is_system: row.is_system === true,
+    }));
+  }
+
+  private async getRoleMap(): Promise<Map<string, RoleDefinition>> {
+    const definitions = await this.getRoleDefinitions();
+    return new Map(definitions.map((definition) => [definition.name, definition]));
+  }
+
+  private getRoleRank(role?: string | null, roleMap?: Map<string, RoleDefinition>): number {
+    if (!role) {
+      return 0;
+    }
+
+    const dbRank = roleMap?.get(role)?.rank;
+    if (typeof dbRank === 'number' && dbRank > 0) {
+      return dbRank;
+    }
+
+    return ROLE_RANKS[role] || 0;
+  }
+
+  private getRoleLabel(role?: string | null, roleMap?: Map<string, RoleDefinition>): string {
+    if (!role) {
+      return '';
+    }
+
+    return roleMap?.get(role)?.label || ROLE_LABELS[role] || role;
+  }
+
+  private getRoleDefaultPermissions(
+    role?: string | null,
+    roleMap?: Map<string, RoleDefinition>,
+  ): string[] {
+    if (!role) {
+      return [];
+    }
+
+    const dbPermissions = roleMap?.get(role)?.default_permissions;
+    if (Array.isArray(dbPermissions) && dbPermissions.length > 0) {
+      return dbPermissions;
+    }
+
+    return Array.from(new Set(ROLE_BASELINES[role] || []));
+  }
+
+  private getRoleScopeMode(
+    role?: string | null,
+    roleMap?: Map<string, RoleDefinition>,
+  ): RoleScopeMode {
+    if (!role) {
+      return 'flexible';
+    }
+
+    return roleMap?.get(role)?.scope_mode || 'flexible';
+  }
+
+  private assertValidPermissionList(permissionIds: string[]): void {
+    const invalidPermissions = permissionIds.filter((permissionId) => !VALID_PERMISSION_IDS.includes(permissionId));
+    if (invalidPermissions.length > 0) {
+      throw new BadRequestException(`สิทธิ์ไม่ถูกต้อง: ${invalidPermissions.join(', ')}`);
+    }
+  }
+
   private getPrimaryRole(user?: { role?: string | null; roles?: string[] | null } | null): string | null {
     if (user?.role && user.role.trim().length > 0) {
       return user.role.trim();
@@ -127,17 +227,13 @@ export class TaskService {
     return requestedRole.trim();
   }
 
-  private getRoleRank(role?: string | null): number {
-    if (!role) {
-      return 0;
-    }
-
-    return ROLE_RANKS[role] || 0;
-  }
-
-  private canManageRole(actorRole?: string | null, targetRole?: string | null): boolean {
-    const actorRank = this.getRoleRank(actorRole);
-    const targetRank = this.getRoleRank(targetRole);
+  private canManageRole(
+    actorRole?: string | null,
+    targetRole?: string | null,
+    roleMap?: Map<string, RoleDefinition>,
+  ): boolean {
+    const actorRank = this.getRoleRank(actorRole, roleMap);
+    const targetRank = this.getRoleRank(targetRole, roleMap);
 
     if (targetRank > actorRank) {
       return false;
@@ -208,7 +304,9 @@ export class TaskService {
       return true;
     }
 
-    return targetPermissions.every((permission) => actorPermissions.includes(permission));
+    return targetPermissions
+      .filter((permission) => !GRANT_EXEMPT_PERMISSION_IDS.includes(permission))
+      .every((permission) => actorPermissions.includes(permission));
   }
 
   private hasPermission(actor: ActorContext, permission: string): boolean {
@@ -227,13 +325,17 @@ export class TaskService {
     return actor;
   }
 
-  private resolveEffectivePermissions(role: string, permissions: unknown): string[] {
+  private resolveEffectivePermissions(
+    role: string,
+    permissions: unknown,
+    roleMap?: Map<string, RoleDefinition>,
+  ): string[] {
     const storedPermissions = this.normalizePermissionList(permissions);
     if (storedPermissions.length > 0) {
       return storedPermissions;
     }
 
-    return Array.from(new Set(ROLE_BASELINES[role] || []));
+    return this.getRoleDefaultPermissions(role, roleMap);
   }
 
   private assertCanCreateTask(actor: ActorContext, taskType: string): void {
@@ -243,11 +345,16 @@ export class TaskService {
     }
   }
 
-  private assertAssignableLoginPayload(actor: ActorContext, data: any): void {
+  private async assertAssignableLoginPayload(
+    actor: ActorContext,
+    data: any,
+    roleMap?: Map<string, RoleDefinition>,
+  ): Promise<void> {
+    const currentRoleMap = roleMap || await this.getRoleMap();
     const actorRole = this.getPrimaryRole({ roles: actor.roles });
     const requestedRole = this.normalizeRole(data);
-    const actorRank = this.getRoleRank(actorRole);
-    const requestedRank = this.getRoleRank(requestedRole);
+    const actorRank = this.getRoleRank(actorRole, currentRoleMap);
+    const requestedRank = this.getRoleRank(requestedRole, currentRoleMap);
 
     if (requestedRank === 0) {
       throw new ForbiddenException(`ไม่สามารถกำหนดตำแหน่ง ${requestedRole} ได้`);
@@ -260,6 +367,7 @@ export class TaskService {
     const requestedPermissions = this.normalizePermissionList(
       data?.permissions ?? data?.mock_permissions,
     );
+    this.assertValidPermissionList(requestedPermissions);
     if (!this.canGrantPermissions(actor.permissions || [], requestedPermissions)) {
       throw new ForbiddenException('ไม่สามารถกำหนดสิทธิ์ที่ตนเองไม่มีได้');
     }
@@ -268,7 +376,10 @@ export class TaskService {
       throw new ForbiddenException('ไม่สามารถกำหนดขอบเขตข้อมูลกว้างกว่าสิทธิ์ของตนเองได้');
     }
 
-    const roleScopeError = getRoleScopeValidationError(requestedRole, data?.data_scope);
+    const roleScopeError = getRoleScopeValidationError(requestedRole, data?.data_scope, {
+      scopeMode: this.getRoleScopeMode(requestedRole, currentRoleMap),
+      roleLabel: this.getRoleLabel(requestedRole, currentRoleMap),
+    });
     if (roleScopeError) {
       throw new ForbiddenException(roleScopeError);
     }
@@ -306,14 +417,14 @@ export class TaskService {
   private canManageLoginLink(actor: ActorContext, link: {
     login_role?: string | null;
     login_data_scope?: unknown;
-  }): boolean {
+  }, roleMap?: Map<string, RoleDefinition>): boolean {
     const actorRole = this.getPrimaryRole({ roles: actor.roles });
     const targetRole =
       typeof link.login_role === 'string' && link.login_role.trim().length > 0
         ? link.login_role.trim()
         : 'TEACHER';
 
-    if (!this.canManageRole(actorRole, targetRole)) {
+    if (!this.canManageRole(actorRole, targetRole, roleMap)) {
       return false;
     }
 
@@ -335,6 +446,9 @@ export class TaskService {
 
     this.assertCanCreateTask(currentActor, taskType);
 
+    const roleMap = taskType === 'LOGIN'
+      ? await this.getRoleMap()
+      : undefined;
     const loginRole = taskType === 'LOGIN' ? this.normalizeRole(data) : null;
     const loginPermissions = taskType === 'LOGIN'
       ? this.normalizePermissionList(data.permissions ?? data.mock_permissions)
@@ -344,12 +458,12 @@ export class TaskService {
       : {};
 
     if (taskType === 'LOGIN') {
-      this.assertAssignableLoginPayload(currentActor, {
+      await this.assertAssignableLoginPayload(currentActor, {
         ...data,
         role: loginRole,
         permissions: loginPermissions,
         data_scope: loginDataScope,
-      });
+      }, roleMap);
     }
 
     const taskId = crypto.randomUUID();
@@ -632,6 +746,7 @@ export class TaskService {
         throw new Error('ลิงก์นี้ไม่มีข้อมูลอีเมลผู้ใช้งานที่เชื่อมโยง');
       }
 
+      const roleMap = await this.getRoleMap();
       const resolvedRole =
         typeof link.login_role === 'string' && link.login_role.trim().length > 0
           ? link.login_role.trim()
@@ -639,6 +754,7 @@ export class TaskService {
       const resolvedPermissions = this.resolveEffectivePermissions(
         resolvedRole,
         link.login_permissions,
+        roleMap,
       );
       const resolvedScope = this.normalizeScope(link.login_data_scope);
 
@@ -653,7 +769,7 @@ export class TaskService {
         role: resolvedRole,
         permissions: resolvedPermissions,
         roles: [resolvedRole],
-        labels: [ROLE_LABELS[resolvedRole] || resolvedRole],
+        labels: [this.getRoleLabel(resolvedRole, roleMap) || resolvedRole],
         data_scope: resolvedScope,
         virtual_login: true,
       };
@@ -668,9 +784,11 @@ export class TaskService {
       const res = await this.db.query(
         `SELECT tl.id, tl.task_id, tl.assigned_to_name, tl.assigned_to_email, tl.expires_at, tl.status, tl.magic_link,
                 tl.admin_locked, tl.login_role, tl.login_permissions, tl.login_data_scope, tl.created_by_user_id,
+                r.label AS login_role_label,
                 t.created_at
          FROM task_links tl
          JOIN tasks t ON t.id = tl.task_id
+         LEFT JOIN roles r ON r.name = tl.login_role
          WHERE t.task_type = 'LOGIN'
          ORDER BY t.created_at DESC`
       );
@@ -679,7 +797,8 @@ export class TaskService {
         return res.rows;
       }
 
-      return res.rows.filter((link: any) => this.canManageLoginLink(actor, link));
+      const roleMap = await this.getRoleMap();
+      return res.rows.filter((link: any) => this.canManageLoginLink(actor, link, roleMap));
     } catch (err) {
       this.logger.error(`getLoginLinks error: ${err.message}`);
       throw err;
@@ -1140,7 +1259,8 @@ export class TaskService {
       }
       if (link.status !== 'ACTIVE')
         throw new Error('Only ACTIVE links can be changed by admin');
-      if (!this.canManageLoginLink(currentActor, link)) {
+      const roleMap = await this.getRoleMap();
+      if (!this.canManageLoginLink(currentActor, link, roleMap)) {
         throw new ForbiddenException('ไม่มีสิทธิ์จัดการลิงก์นี้');
       }
 

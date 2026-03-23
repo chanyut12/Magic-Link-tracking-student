@@ -300,6 +300,7 @@ const pageTitle = computed(() => {
     '/attendance-dashboard': 'Dashboard เช็คชื่อ',
     '/admin-access': 'Admin Access',
     '/manage-users': 'จัดการผู้ใช้งาน',
+    '/manage-role-groups': 'จัดการกลุ่มผู้ใช้งาน',
     '/settings': 'ตั้งค่าระบบและข้อมูลพื้นฐาน',
     '/my-attendance': 'ข้อมูลการเข้าเรียนของฉัน',
     '/forbidden': 'ไม่มีสิทธิ์เข้าถึง',

@@ -147,7 +147,7 @@
             <q-td :props="props">
               <div>
                 <strong class="text-grey-9">{{ props.row.assigned_to_name || 'ไม่ระบุ' }}</strong>
-                <div class="text-caption text-grey-6">{{ ROLE_LABELS[props.row.login_role || 'TEACHER'] || (props.row.login_role || 'TEACHER') }}</div>
+                <div class="text-caption text-grey-6">{{ props.row.login_role_label || roleLabelMap[props.row.login_role || 'TEACHER'] || (props.row.login_role || 'TEACHER') }}</div>
               </div>
             </q-td>
           </template>
@@ -290,13 +290,37 @@
               </div>
 
               <div>
-                <div class="text-caption text-grey-7 q-mb-sm">สิทธิ์การใช้งาน</div>
+                <div class="row items-start justify-between q-col-gutter-md q-mb-sm">
+                  <div class="col-12 col-md">
+                    <div class="text-caption text-grey-7">สิทธิ์การใช้งาน</div>
+                    <div class="text-caption text-blue-grey-6">
+                      ค่าเริ่มต้นของ {{ selectedRoleMeta?.label || form.role }} จะขึ้นเป็นสีน้ำเงิน ส่วนสิทธิ์ที่เพิ่มหรือปิดจาก default จะมีสีแยกให้เห็นทันที
+                    </div>
+                  </div>
+                </div>
+                <div class="permission-legend q-mb-sm">
+                  <div
+                    v-for="item in permissionLegendItems"
+                    :key="item.state"
+                    class="permission-legend-item"
+                    :class="`permission-legend-item--${item.state}`"
+                  >
+                    <span class="permission-legend-swatch"></span>
+                    <div>
+                      <div class="text-caption text-weight-bold">{{ item.shortLabel }}</div>
+                      <div class="text-caption text-blue-grey-7">{{ item.description }}</div>
+                    </div>
+                  </div>
+                </div>
                 <div class="permission-grid">
                   <label
                     v-for="opt in permissionOptions"
                     :key="opt.value"
                     class="permission-item"
-                    :class="{ 'permission-item--disabled': isPermissionLocked(opt.value) }"
+                    :class="[
+                      `permission-item--${getPermissionVisualState(opt.value)}`,
+                      { 'permission-item--disabled': isPermissionLocked(opt.value) },
+                    ]"
                   >
                     <q-checkbox
                       :model-value="form.permissions.includes(opt.value)"
@@ -304,7 +328,14 @@
                       dense
                       @update:model-value="togglePermission(opt.value, $event)"
                     />
-                    <span>{{ opt.label }}</span>
+                    <span class="permission-item__label">{{ opt.label }}</span>
+                    <span
+                      v-if="getPermissionVisualState(opt.value) !== 'neutral'"
+                      class="permission-state-badge"
+                      :class="`permission-state-badge--${getPermissionVisualState(opt.value)}`"
+                    >
+                      {{ getPermissionVisualMeta(opt.value).shortLabel }}
+                    </span>
                   </label>
                 </div>
                 <div class="q-mt-xs row q-gutter-xs">
@@ -315,6 +346,8 @@
                     removable
                     color="blue-1"
                     text-color="primary"
+                    class="selected-permission-chip"
+                    :class="`selected-permission-chip--${getPermissionVisualState(permissionId)}`"
                     @remove="removePermission(permissionId)"
                   >
                     {{ permissionLabelMap[permissionId] || permissionId }}
@@ -508,16 +541,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch, onMounted } from 'vue';
+import { ref, reactive, computed, watch, onMounted, nextTick } from 'vue';
 import { api } from 'boot/axios';
 import { useQuasar } from 'quasar';
 import { useUserStore } from '../composables/useUserStore';
 import {
+  GRANT_EXEMPT_PERMISSION_IDS,
+  PERMISSION_DELTA_LEGEND,
+  PERMISSION_DELTA_META,
   getRoleScopePreset,
-  ROLE_LABELS,
-  ROLE_RANKS,
+  getPermissionDeltaState,
   getLeafMenuItems,
   type DataScope,
+  type RoleDefinition,
   type ScopeFormField,
 } from '../constants/permissions';
 
@@ -535,6 +571,7 @@ interface LoginLink {
   created_at: string;
   admin_locked?: boolean | number;
   login_role?: string | null;
+  login_role_label?: string | null;
   login_permissions?: string[];
   login_data_scope?: DataScope;
 }
@@ -551,6 +588,7 @@ interface LocationSubDistrict {
 }
 
 const loginLinks = ref<LoginLink[]>([]);
+const rolesCatalog = ref<RoleDefinition[]>([]);
 const loading = ref(false);
 const lastUpdated = ref('--:--');
 const pagination = ref({ page: 1, rowsPerPage: 20 });
@@ -670,6 +708,21 @@ const permissionLabelMap = computed<Record<string, string>>(() => (
   Object.fromEntries(permissionOptions.map((item) => [item.value, item.label]))
 ));
 
+const roleLabelMap = computed<Record<string, string>>(() => (
+  Object.fromEntries(rolesCatalog.value.map((role) => [role.name, role.label]))
+));
+const permissionLegendItems = PERMISSION_DELTA_LEGEND;
+
+const form = reactive({
+  assigned_to_name: '',
+  assigned_to_email: '',
+  permissions: [] as string[],
+  role: 'TEACHER',
+  expires_value: 1,
+  expires_unit: 'days',
+});
+const suppressRolePermissionSync = ref(false);
+
 const normalizeScopeValueList = (value: unknown): string[] => {
   if (!Array.isArray(value)) {
     return [];
@@ -688,6 +741,10 @@ const currentUserScope = computed(() => ({
   grade_levels: normalizeScopeValueList(user.value?.data_scope?.grade_levels),
   room_ids: normalizeScopeValueList(user.value?.data_scope?.room_ids),
 }));
+const selectedRoleMeta = computed(() => (
+  rolesCatalog.value.find((role) => role.name === form.role) || null
+));
+const roleDefaultPermissions = computed(() => selectedRoleMeta.value?.default_permissions || []);
 
 const canUseNationwideScope = computed(() => (
   currentUserScope.value.provinces.length === 0 &&
@@ -695,18 +752,20 @@ const canUseNationwideScope = computed(() => (
   currentUserScope.value.sub_districts.length === 0 &&
   currentUserScope.value.school_ids.length === 0
 ));
-const roleScopePreset = computed(() => getRoleScopePreset(form.role));
+const roleScopePreset = computed(() => (
+  getRoleScopePreset(form.role, selectedRoleMeta.value?.scope_mode)
+));
 const isNationwideToggleDisabled = computed(() => (
   roleScopePreset.value.mode !== 'flexible' || !canUseNationwideScope.value
 ));
 
 const roleOptions = computed(() => {
   const actorRole = currentUserRole.value;
-  const actorRank = ROLE_RANKS[actorRole || ''] || 0;
+  const actorRank = rolesCatalog.value.find((role) => role.name === actorRole)?.rank || 0;
 
-  return Object.entries(ROLE_LABELS)
-    .filter(([role]) => {
-      const targetRank = ROLE_RANKS[role] || 0;
+  return rolesCatalog.value
+    .filter((role) => {
+      const targetRank = role.rank || 0;
       if (targetRank > actorRank) {
         return false;
       }
@@ -717,8 +776,8 @@ const roleOptions = computed(() => {
 
       return true;
     })
-    .sort((a, b) => (ROLE_RANKS[b[0]] || 0) - (ROLE_RANKS[a[0]] || 0))
-    .map(([value, label]) => ({ value, label }));
+    .sort((a, b) => (b.rank || 0) - (a.rank || 0))
+    .map((role) => ({ value: role.name, label: role.label }));
 });
 
 const expiresUnitOptions = [
@@ -726,15 +785,6 @@ const expiresUnitOptions = [
   { label: 'วัน', value: 'days' },
   { label: 'นาที', value: 'minutes' },
 ];
-
-const form = reactive({
-  assigned_to_name: '',
-  assigned_to_email: '',
-  permissions: [] as string[],
-  role: 'TEACHER',
-  expires_value: 1,
-  expires_unit: 'days',
-});
 
 const scopeForm = reactive({
   allProvinces: true,
@@ -884,6 +934,15 @@ const fetchGrades = async () => {
     }));
   } catch (err) {
     console.error('Fetch grades error:', err);
+  }
+};
+
+const fetchRolesCatalog = async () => {
+  try {
+    const res = await api.get<RoleDefinition[]>('/api/users/roles');
+    rolesCatalog.value = res.data;
+  } catch (err) {
+    console.error('Fetch roles error:', err);
   }
 };
 
@@ -1052,6 +1111,7 @@ const onAllProvincesToggle = (enabled: boolean | null) => {
 };
 
 const canGrantPermission = (permissionId: string) => (
+  GRANT_EXEMPT_PERMISSION_IDS.includes(permissionId) ||
   currentUserPermissionSet.value.has('*') ||
   currentUserPermissionSet.value.has('ALL') ||
   currentUserPermissionSet.value.has(permissionId)
@@ -1059,6 +1119,19 @@ const canGrantPermission = (permissionId: string) => (
 
 const isPermissionLocked = (permissionId: string) => (
   !form.permissions.includes(permissionId) && !canGrantPermission(permissionId)
+);
+
+const getPermissionVisualState = (permissionId: string) => (
+  getPermissionDeltaState(
+    permissionId,
+    form.permissions,
+    roleDefaultPermissions.value,
+    isPermissionLocked(permissionId),
+  )
+);
+
+const getPermissionVisualMeta = (permissionId: string) => (
+  PERMISSION_DELTA_META[getPermissionVisualState(permissionId)]
 );
 
 const togglePermission = (permissionId: string, checked: boolean) => {
@@ -1100,13 +1173,19 @@ const resetScopeForm = () => {
 
 const openAddDialog = async () => {
   await ensureScopeOptionsLoaded();
+  if (rolesCatalog.value.length === 0) {
+    await fetchRolesCatalog();
+  }
   form.assigned_to_name = '';
   form.assigned_to_email = '';
+  suppressRolePermissionSync.value = true;
   form.permissions = [];
   form.role = roleOptions.value.find((item) => item.value === 'TEACHER')?.value || roleOptions.value[0]?.value || 'TEACHER';
   form.expires_value = 1;
   form.expires_unit = 'days';
   resetScopeForm();
+  await nextTick();
+  suppressRolePermissionSync.value = false;
   applyRoleScopePreset();
   showResult.value = false;
   resultLink.value = '';
@@ -1114,6 +1193,13 @@ const openAddDialog = async () => {
 };
 
 watch(() => form.role, () => {
+  if (!suppressRolePermissionSync.value) {
+    form.permissions = Array.from(
+      new Set(
+        (selectedRoleMeta.value?.default_permissions || []).filter((permissionId) => canGrantPermission(permissionId)),
+      ),
+    );
+  }
   applyRoleScopePreset();
 });
 
@@ -1264,6 +1350,7 @@ const formatDate = (dateStr: string) => {
 };
 
 onMounted(() => {
+  void fetchRolesCatalog();
   void fetchLoginLinks();
   void ensureScopeOptionsLoaded();
 });
@@ -1318,6 +1405,67 @@ onMounted(() => {
   gap: 10px;
 }
 
+.permission-legend {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.permission-legend-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+}
+
+.permission-legend-swatch {
+  width: 12px;
+  height: 12px;
+  margin-top: 3px;
+  border-radius: 999px;
+  flex-shrink: 0;
+  background: #94a3b8;
+}
+
+.permission-legend-item--default {
+  border-color: #93c5fd;
+  background: #eff6ff;
+
+  .permission-legend-swatch {
+    background: #2563eb;
+  }
+}
+
+.permission-legend-item--added {
+  border-color: #86efac;
+  background: #f0fdf4;
+
+  .permission-legend-swatch {
+    background: #16a34a;
+  }
+}
+
+.permission-legend-item--removed {
+  border-color: #fdba74;
+  background: #fff7ed;
+
+  .permission-legend-swatch {
+    background: #ea580c;
+  }
+}
+
+.permission-legend-item--locked {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+
+  .permission-legend-swatch {
+    background: #64748b;
+  }
+}
+
 .permission-item {
   display: flex;
   align-items: center;
@@ -1326,9 +1474,86 @@ onMounted(() => {
   border: 1px solid #e2e8f0;
   border-radius: 12px;
   background: #fff;
+  transition: all 0.18s ease;
+}
+
+.permission-item__label {
+  flex: 1;
+}
+
+.permission-item--default {
+  background: #eff6ff;
+  border-color: #93c5fd;
+}
+
+.permission-item--added {
+  background: #f0fdf4;
+  border-color: #86efac;
+}
+
+.permission-item--removed {
+  background: #fff7ed;
+  border-color: #fdba74;
+  border-style: dashed;
+}
+
+.permission-item--locked {
+  background: #f8fafc;
+  border-color: #cbd5e1;
 }
 
 .permission-item--disabled {
   opacity: 0.55;
+}
+
+.permission-state-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  line-height: 1;
+  border: 1px solid transparent;
+}
+
+.permission-state-badge--default,
+.selected-permission-chip--default {
+  background: #dbeafe !important;
+  border-color: #93c5fd !important;
+  color: #1d4ed8 !important;
+}
+
+.permission-state-badge--added,
+.selected-permission-chip--added {
+  background: #dcfce7 !important;
+  border-color: #86efac !important;
+  color: #15803d !important;
+}
+
+.permission-state-badge--removed,
+.selected-permission-chip--removed {
+  background: #ffedd5 !important;
+  border-color: #fdba74 !important;
+  color: #c2410c !important;
+}
+
+.permission-state-badge--locked,
+.selected-permission-chip--locked {
+  background: #e2e8f0 !important;
+  border-color: #cbd5e1 !important;
+  color: #475569 !important;
+}
+
+.selected-permission-chip {
+  border: 1px solid transparent;
+  font-weight: 600;
+}
+
+@media (max-width: 768px) {
+  .permission-legend,
+  .permission-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

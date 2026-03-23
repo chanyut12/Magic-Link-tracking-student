@@ -36,11 +36,42 @@ export class UsersController {
     return await this.usersService.getAllUsers(req.user);
   }
 
-  @UseGuards(AuthGuard, PermissionsGuard)
-  @RequirePermission('manage-users-list')
+  @UseGuards(AuthGuard)
   @Get('roles')
   async getRoles(@Req() req: RequestWithActor) {
     return await this.usersService.getRoles(req.user);
+  }
+
+  @UseGuards(AuthGuard, PermissionsGuard)
+  @RequirePermission('manage-role-groups')
+  @Get('role-groups')
+  async getRoleGroups(@Req() req: RequestWithActor) {
+    return await this.usersService.getRoleGroups(req.user);
+  }
+
+  @UseGuards(AuthGuard, PermissionsGuard)
+  @RequirePermission('manage-role-groups')
+  @Post('role-groups')
+  async createRoleGroup(@Body() data: any, @Req() req: RequestWithActor) {
+    return await this.usersService.createRoleGroup(req.user, data);
+  }
+
+  @UseGuards(AuthGuard, PermissionsGuard)
+  @RequirePermission('manage-role-groups')
+  @Put('role-groups/:name')
+  async updateRoleGroup(
+    @Param('name') name: string,
+    @Body() data: any,
+    @Req() req: RequestWithActor,
+  ) {
+    return await this.usersService.updateRoleGroup(req.user, name, data);
+  }
+
+  @UseGuards(AuthGuard, PermissionsGuard)
+  @RequirePermission('manage-role-groups')
+  @Delete('role-groups/:name')
+  async deleteRoleGroup(@Param('name') name: string, @Req() req: RequestWithActor) {
+    return await this.usersService.deleteRoleGroup(req.user, name);
   }
 
   @UseGuards(AuthGuard, PermissionsGuard)

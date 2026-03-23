@@ -1,40 +1,21 @@
-export const ROLE_RANKS: Record<string, number> = {
-  STUDENT: 1,
-  TEACHER: 2,
-  EXECUTIVE: 3,
-  DIRECTOR: 4,
-  ADMIN_SCHOOL: 5,
-  ADMIN_SUBDISTRICT: 6,
-  ADMIN_DISTRICT: 7,
-  ADMIN_PROVINCE: 8,
-  ADMIN: 9,
-};
+export type RoleScopeMode =
+  | 'flexible'
+  | 'global'
+  | 'province'
+  | 'district'
+  | 'sub_district'
+  | 'school';
 
-export const ROLE_BASELINES: Record<string, string[]> = {
-  ADMIN: ['home', 'dashboard', 'students', 'create', 'attendance', 'attendance-dashboard', 'manage-users-list', 'login-links', 'settings', 'import-data'],
-  ADMIN_PROVINCE: ['home', 'dashboard', 'students', 'create', 'attendance', 'attendance-dashboard', 'manage-users-list', 'login-links'],
-  ADMIN_DISTRICT: ['home', 'dashboard', 'students', 'create', 'attendance', 'attendance-dashboard', 'manage-users-list', 'login-links'],
-  ADMIN_SUBDISTRICT: ['home', 'dashboard', 'students', 'create', 'attendance', 'attendance-dashboard', 'manage-users-list', 'login-links'],
-  ADMIN_SCHOOL: ['home', 'dashboard', 'students', 'create', 'attendance', 'attendance-dashboard', 'manage-users-list', 'login-links'],
-  DIRECTOR: ['home', 'dashboard', 'students', 'create', 'attendance', 'attendance-dashboard', 'manage-users-list', 'login-links', 'settings'],
-  EXECUTIVE: ['home', 'dashboard', 'students', 'attendance-dashboard'],
-  TEACHER: ['home', 'students', 'attendance', 'attendance-dashboard'],
-  STUDENT: ['home', 'student-self'],
-};
+export interface SystemRoleDefinition {
+  name: string;
+  label: string;
+  rank: number;
+  default_permissions: string[];
+  scope_mode: RoleScopeMode;
+  is_system: boolean;
+}
 
-export const ROLE_LABELS: Record<string, string> = {
-  ADMIN: 'ผู้ดูแลระบบ',
-  ADMIN_PROVINCE: 'แอดมินระดับจังหวัด',
-  ADMIN_DISTRICT: 'แอดมินระดับอำเภอ',
-  ADMIN_SUBDISTRICT: 'แอดมินระดับตำบล',
-  ADMIN_SCHOOL: 'แอดมินระดับโรงเรียน',
-  DIRECTOR: 'ผู้อำนวยการ',
-  EXECUTIVE: 'ผู้บริหาร',
-  TEACHER: 'คุณครู',
-  STUDENT: 'นักเรียน',
-};
-
-export interface DataScope {
+interface DataScope {
   provinces?: string[];
   districts?: string[];
   sub_districts?: string[];
@@ -43,6 +24,210 @@ export interface DataScope {
   room_ids?: Array<number | string>;
   own_only?: boolean;
 }
+
+interface PermissionMenuItem {
+  id: string;
+  children?: PermissionMenuItem[];
+}
+
+export const PERMISSION_MENU_ITEMS: PermissionMenuItem[] = [
+  { id: 'home' },
+  { id: 'dashboard' },
+  { id: 'students' },
+  { id: 'student-self' },
+  { id: 'create' },
+  { id: 'import-data' },
+  {
+    id: 'attendance-system',
+    children: [
+      { id: 'attendance-dashboard' },
+      { id: 'attendance' },
+    ],
+  },
+  {
+    id: 'manage-users',
+    children: [
+      { id: 'manage-users-list' },
+      { id: 'manage-role-groups' },
+      { id: 'login-links' },
+    ],
+  },
+  { id: 'settings' },
+];
+
+function collectLeafPermissionIds(items: PermissionMenuItem[]): string[] {
+  return items.flatMap((item) => (
+    item.children && item.children.length > 0
+      ? collectLeafPermissionIds(item.children)
+      : [item.id]
+  ));
+}
+
+export const VALID_PERMISSION_IDS = collectLeafPermissionIds(PERMISSION_MENU_ITEMS);
+
+export const GRANT_EXEMPT_PERMISSION_IDS = ['student-self'];
+
+export const SYSTEM_ROLE_DEFINITIONS: SystemRoleDefinition[] = [
+  {
+    name: 'ADMIN',
+    label: 'ผู้ดูแลระบบ',
+    rank: 9,
+    default_permissions: [
+      'home',
+      'dashboard',
+      'students',
+      'create',
+      'attendance',
+      'attendance-dashboard',
+      'manage-users-list',
+      'manage-role-groups',
+      'login-links',
+      'settings',
+      'import-data',
+    ],
+    scope_mode: 'global',
+    is_system: true,
+  },
+  {
+    name: 'ADMIN_PROVINCE',
+    label: 'แอดมินระดับจังหวัด',
+    rank: 8,
+    default_permissions: [
+      'home',
+      'dashboard',
+      'students',
+      'create',
+      'attendance',
+      'attendance-dashboard',
+      'manage-users-list',
+      'login-links',
+    ],
+    scope_mode: 'province',
+    is_system: true,
+  },
+  {
+    name: 'ADMIN_DISTRICT',
+    label: 'แอดมินระดับอำเภอ',
+    rank: 7,
+    default_permissions: [
+      'home',
+      'dashboard',
+      'students',
+      'create',
+      'attendance',
+      'attendance-dashboard',
+      'manage-users-list',
+      'login-links',
+    ],
+    scope_mode: 'district',
+    is_system: true,
+  },
+  {
+    name: 'ADMIN_SUBDISTRICT',
+    label: 'แอดมินระดับตำบล',
+    rank: 6,
+    default_permissions: [
+      'home',
+      'dashboard',
+      'students',
+      'create',
+      'attendance',
+      'attendance-dashboard',
+      'manage-users-list',
+      'login-links',
+    ],
+    scope_mode: 'sub_district',
+    is_system: true,
+  },
+  {
+    name: 'ADMIN_SCHOOL',
+    label: 'แอดมินระดับโรงเรียน',
+    rank: 5,
+    default_permissions: [
+      'home',
+      'dashboard',
+      'students',
+      'create',
+      'attendance',
+      'attendance-dashboard',
+      'manage-users-list',
+      'login-links',
+    ],
+    scope_mode: 'school',
+    is_system: true,
+  },
+  {
+    name: 'DIRECTOR',
+    label: 'ผู้อำนวยการ',
+    rank: 4,
+    default_permissions: [
+      'home',
+      'dashboard',
+      'students',
+      'create',
+      'attendance',
+      'attendance-dashboard',
+      'manage-users-list',
+      'login-links',
+      'settings',
+    ],
+    scope_mode: 'flexible',
+    is_system: true,
+  },
+  {
+    name: 'EXECUTIVE',
+    label: 'ผู้บริหาร',
+    rank: 3,
+    default_permissions: [
+      'home',
+      'dashboard',
+      'students',
+      'attendance-dashboard',
+    ],
+    scope_mode: 'flexible',
+    is_system: true,
+  },
+  {
+    name: 'TEACHER',
+    label: 'คุณครู',
+    rank: 2,
+    default_permissions: [
+      'home',
+      'students',
+      'attendance',
+      'attendance-dashboard',
+    ],
+    scope_mode: 'flexible',
+    is_system: true,
+  },
+  {
+    name: 'STUDENT',
+    label: 'นักเรียน',
+    rank: 1,
+    default_permissions: [
+      'home',
+      'student-self',
+    ],
+    scope_mode: 'flexible',
+    is_system: true,
+  },
+];
+
+export const ROLE_RANKS: Record<string, number> = Object.fromEntries(
+  SYSTEM_ROLE_DEFINITIONS.map((role) => [role.name, role.rank]),
+);
+
+export const ROLE_BASELINES: Record<string, string[]> = Object.fromEntries(
+  SYSTEM_ROLE_DEFINITIONS.map((role) => [role.name, role.default_permissions]),
+);
+
+export const ROLE_LABELS: Record<string, string> = Object.fromEntries(
+  SYSTEM_ROLE_DEFINITIONS.map((role) => [role.name, role.label]),
+);
+
+export const ROLE_SCOPE_MODES: Record<string, RoleScopeMode> = Object.fromEntries(
+  SYSTEM_ROLE_DEFINITIONS.map((role) => [role.name, role.scope_mode]),
+);
 
 function normalizeScopeArray(value: unknown): string[] {
   if (!Array.isArray(value)) {
@@ -58,7 +243,14 @@ function normalizeScopeArray(value: unknown): string[] {
   );
 }
 
-export function getRoleScopeValidationError(role: string, scope: unknown): string | null {
+export function getRoleScopeValidationError(
+  role: string,
+  scope: unknown,
+  options?: {
+    scopeMode?: RoleScopeMode | null;
+    roleLabel?: string | null;
+  },
+): string | null {
   const source = scope && typeof scope === 'object' ? (scope as DataScope) : {};
   const normalized = {
     provinces: normalizeScopeArray(source.provinces),
@@ -71,8 +263,14 @@ export function getRoleScopeValidationError(role: string, scope: unknown): strin
 
   const hasExtraSchoolFiltering =
     normalized.grade_levels.length > 0 || normalized.room_ids.length > 0;
+  const scopeMode = options?.scopeMode || ROLE_SCOPE_MODES[role] || 'flexible';
+  const roleLabel = options?.roleLabel || ROLE_LABELS[role] || role;
 
-  if (role === 'ADMIN') {
+  if (scopeMode === 'flexible') {
+    return null;
+  }
+
+  if (scopeMode === 'global') {
     const hasAnyScope =
       normalized.provinces.length > 0 ||
       normalized.districts.length > 0 ||
@@ -81,13 +279,13 @@ export function getRoleScopeValidationError(role: string, scope: unknown): strin
       hasExtraSchoolFiltering;
 
     return hasAnyScope
-      ? 'ผู้ดูแลระบบส่วนกลางต้องใช้ขอบเขตข้อมูลระดับประเทศเท่านั้น'
+      ? `${roleLabel}ต้องใช้ขอบเขตข้อมูลระดับประเทศเท่านั้น`
       : null;
   }
 
-  if (role === 'ADMIN_PROVINCE') {
+  if (scopeMode === 'province') {
     if (normalized.provinces.length !== 1) {
-      return 'แอดมินระดับจังหวัดต้องเลือกจังหวัด 1 แห่ง';
+      return `${roleLabel}ต้องเลือกจังหวัด 1 แห่ง`;
     }
     if (
       normalized.districts.length > 0 ||
@@ -95,47 +293,47 @@ export function getRoleScopeValidationError(role: string, scope: unknown): strin
       normalized.school_ids.length > 0 ||
       hasExtraSchoolFiltering
     ) {
-      return 'แอดมินระดับจังหวัดห้ามจำกัดอำเภอ ตำบล โรงเรียน ชั้น หรือห้อง';
+      return `${roleLabel}ห้ามจำกัดอำเภอ ตำบล โรงเรียน ชั้น หรือห้อง`;
     }
   }
 
-  if (role === 'ADMIN_DISTRICT') {
+  if (scopeMode === 'district') {
     if (normalized.provinces.length !== 1 || normalized.districts.length !== 1) {
-      return 'แอดมินระดับอำเภอต้องเลือกจังหวัดและอำเภออย่างละ 1 รายการ';
+      return `${roleLabel}ต้องเลือกจังหวัดและอำเภออย่างละ 1 รายการ`;
     }
     if (
       normalized.sub_districts.length > 0 ||
       normalized.school_ids.length > 0 ||
       hasExtraSchoolFiltering
     ) {
-      return 'แอดมินระดับอำเภอห้ามจำกัดตำบล โรงเรียน ชั้น หรือห้อง';
+      return `${roleLabel}ห้ามจำกัดตำบล โรงเรียน ชั้น หรือห้อง`;
     }
   }
 
-  if (role === 'ADMIN_SUBDISTRICT') {
+  if (scopeMode === 'sub_district') {
     if (
       normalized.provinces.length !== 1 ||
       normalized.districts.length !== 1 ||
       normalized.sub_districts.length !== 1
     ) {
-      return 'แอดมินระดับตำบลต้องเลือกจังหวัด อำเภอ และตำบลอย่างละ 1 รายการ';
+      return `${roleLabel}ต้องเลือกจังหวัด อำเภอ และตำบลอย่างละ 1 รายการ`;
     }
     if (normalized.school_ids.length > 0 || hasExtraSchoolFiltering) {
-      return 'แอดมินระดับตำบลห้ามจำกัดโรงเรียน ชั้น หรือห้อง';
+      return `${roleLabel}ห้ามจำกัดโรงเรียน ชั้น หรือห้อง`;
     }
   }
 
-  if (role === 'ADMIN_SCHOOL') {
+  if (scopeMode === 'school') {
     if (
       normalized.provinces.length !== 1 ||
       normalized.districts.length !== 1 ||
       normalized.sub_districts.length !== 1 ||
       normalized.school_ids.length !== 1
     ) {
-      return 'แอดมินระดับโรงเรียนต้องเลือกจังหวัด อำเภอ ตำบล และโรงเรียนอย่างละ 1 รายการ';
+      return `${roleLabel}ต้องเลือกจังหวัด อำเภอ ตำบล และโรงเรียนอย่างละ 1 รายการ`;
     }
     if (hasExtraSchoolFiltering) {
-      return 'แอดมินระดับโรงเรียนห้ามจำกัดระดับชั้นหรือห้องเรียน';
+      return `${roleLabel}ห้ามจำกัดระดับชั้นหรือห้องเรียน`;
     }
   }
 

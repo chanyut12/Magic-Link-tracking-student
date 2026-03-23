@@ -16,6 +16,26 @@ export interface MenuItem {
   children?: MenuItem[];
 }
 
+export type RoleScopeMode =
+  | 'flexible'
+  | 'global'
+  | 'province'
+  | 'district'
+  | 'sub_district'
+  | 'school';
+
+export interface RoleDefinition {
+  id: number;
+  name: string;
+  label: string;
+  rank: number;
+  default_permissions: string[];
+  scope_mode: RoleScopeMode;
+  is_system: boolean;
+  user_count?: number;
+  login_link_count?: number;
+}
+
 export type ScopeFormField =
   | 'province'
   | 'district'
@@ -25,11 +45,34 @@ export type ScopeFormField =
   | 'room';
 
 export interface RoleScopePreset {
-  mode: 'flexible' | 'global' | 'province' | 'district' | 'sub_district' | 'school';
+  mode: RoleScopeMode;
   allowedFields: ScopeFormField[];
   requiredFields: ScopeFormField[];
   hint: string;
 }
+
+export type PermissionDeltaState =
+  | 'default'
+  | 'added'
+  | 'removed'
+  | 'neutral'
+  | 'locked';
+
+export interface PermissionDeltaMeta {
+  label: string;
+  shortLabel: string;
+  description: string;
+}
+
+export interface PermissionDeltaSummary {
+  defaultCount: number;
+  addedCount: number;
+  removedCount: number;
+  neutralCount: number;
+  lockedCount: number;
+}
+
+export const GRANT_EXEMPT_PERMISSION_IDS = ['student-self'];
 
 export const ROLE_RANKS: Record<string, number> = {
   STUDENT: 1,
@@ -44,7 +87,7 @@ export const ROLE_RANKS: Record<string, number> = {
 };
 
 export const ROLE_BASELINES: Record<string, string[]> = {
-  ADMIN: ['home', 'dashboard', 'students', 'create', 'attendance', 'attendance-dashboard', 'manage-users-list', 'login-links', 'settings', 'import-data'],
+  ADMIN: ['home', 'dashboard', 'students', 'create', 'attendance', 'attendance-dashboard', 'manage-users-list', 'manage-role-groups', 'login-links', 'settings', 'import-data'],
   ADMIN_PROVINCE: ['home', 'dashboard', 'students', 'create', 'attendance', 'attendance-dashboard', 'manage-users-list', 'login-links'],
   ADMIN_DISTRICT: ['home', 'dashboard', 'students', 'create', 'attendance', 'attendance-dashboard', 'manage-users-list', 'login-links'],
   ADMIN_SUBDISTRICT: ['home', 'dashboard', 'students', 'create', 'attendance', 'attendance-dashboard', 'manage-users-list', 'login-links'],
@@ -67,46 +110,65 @@ export const ROLE_LABELS: Record<string, string> = {
   STUDENT: 'นักเรียน',
 };
 
-export const ROLE_SCOPE_PRESETS: Record<string, RoleScopePreset> = {
-  ADMIN: {
-    mode: 'global',
-    allowedFields: [],
-    requiredFields: [],
-    hint: 'ผู้ดูแลระบบส่วนกลางจะเห็นข้อมูลทั้งประเทศเสมอ',
-  },
-  ADMIN_PROVINCE: {
-    mode: 'province',
-    allowedFields: ['province'],
-    requiredFields: ['province'],
-    hint: 'แอดมินระดับจังหวัดต้องผูกกับจังหวัดเดียว และจะเห็นทั้งจังหวัด',
-  },
-  ADMIN_DISTRICT: {
-    mode: 'district',
-    allowedFields: ['province', 'district'],
-    requiredFields: ['province', 'district'],
-    hint: 'แอดมินระดับอำเภอต้องผูกกับจังหวัดและอำเภอเดียว',
-  },
-  ADMIN_SUBDISTRICT: {
-    mode: 'sub_district',
-    allowedFields: ['province', 'district', 'sub_district'],
-    requiredFields: ['province', 'district', 'sub_district'],
-    hint: 'แอดมินระดับตำบลต้องผูกกับจังหวัด อำเภอ และตำบลเดียว',
-  },
-  ADMIN_SCHOOL: {
-    mode: 'school',
-    allowedFields: ['province', 'district', 'sub_district', 'school_id'],
-    requiredFields: ['province', 'district', 'sub_district', 'school_id'],
-    hint: 'แอดมินระดับโรงเรียนต้องผูกกับโรงเรียนเดียว และจะเห็นทั้งโรงเรียน',
-  },
+export const ROLE_SCOPE_MODE_LABELS: Record<RoleScopeMode, string> = {
+  flexible: 'กำหนดเอง',
+  global: 'ระดับประเทศ',
+  province: 'ระดับจังหวัด',
+  district: 'ระดับอำเภอ',
+  sub_district: 'ระดับตำบล',
+  school: 'ระดับโรงเรียน',
 };
 
-export function getRoleScopePreset(role?: string | null): RoleScopePreset {
-  return ROLE_SCOPE_PRESETS[role || ''] || {
+export const ROLE_SCOPE_PRESETS: Record<RoleScopeMode, RoleScopePreset> = {
+  flexible: {
     mode: 'flexible',
     allowedFields: ['province', 'district', 'sub_district', 'school_id', 'grade_level', 'room'],
     requiredFields: [],
     hint: 'กำหนดขอบเขตข้อมูลได้ตามต้องการ',
-  };
+  },
+  global: {
+    mode: 'global',
+    allowedFields: [],
+    requiredFields: [],
+    hint: 'บทบาทนี้จะเห็นข้อมูลทั้งประเทศเสมอ',
+  },
+  province: {
+    mode: 'province',
+    allowedFields: ['province'],
+    requiredFields: ['province'],
+    hint: 'บทบาทนี้ต้องผูกกับจังหวัดเดียว และจะเห็นทั้งจังหวัด',
+  },
+  district: {
+    mode: 'district',
+    allowedFields: ['province', 'district'],
+    requiredFields: ['province', 'district'],
+    hint: 'บทบาทนี้ต้องผูกกับจังหวัดและอำเภอเดียว',
+  },
+  sub_district: {
+    mode: 'sub_district',
+    allowedFields: ['province', 'district', 'sub_district'],
+    requiredFields: ['province', 'district', 'sub_district'],
+    hint: 'บทบาทนี้ต้องผูกกับจังหวัด อำเภอ และตำบลเดียว',
+  },
+  school: {
+    mode: 'school',
+    allowedFields: ['province', 'district', 'sub_district', 'school_id'],
+    requiredFields: ['province', 'district', 'sub_district', 'school_id'],
+    hint: 'บทบาทนี้ต้องผูกกับโรงเรียนเดียว และจะเห็นทั้งโรงเรียน',
+  },
+};
+
+export const ROLE_SCOPE_MODE_BY_ROLE: Record<string, RoleScopeMode> = {
+  ADMIN: 'global',
+  ADMIN_PROVINCE: 'province',
+  ADMIN_DISTRICT: 'district',
+  ADMIN_SUBDISTRICT: 'sub_district',
+  ADMIN_SCHOOL: 'school',
+};
+
+export function getRoleScopePreset(role?: string | null, scopeMode?: RoleScopeMode | null): RoleScopePreset {
+  const resolvedMode = scopeMode || ROLE_SCOPE_MODE_BY_ROLE[role || ''] || 'flexible';
+  return ROLE_SCOPE_PRESETS[resolvedMode] || ROLE_SCOPE_PRESETS.flexible;
 }
 
 export const MENU_ITEMS: MenuItem[] = [
@@ -131,6 +193,7 @@ export const MENU_ITEMS: MenuItem[] = [
     icon: 'fas fa-users-cog',
     children: [
       { id: 'manage-users-list', label: 'จัดการรายชื่อผู้ใช้งาน', icon: 'fas fa-users', route: '/manage-users' },
+      { id: 'manage-role-groups', label: 'จัดการกลุ่มผู้ใช้งาน', icon: 'fas fa-user-tag', route: '/manage-role-groups' },
       { id: 'login-links', label: 'ลิงก์เข้าสู่ระบบ', icon: 'fas fa-link', route: '/login-links' },
     ],
   },
@@ -184,4 +247,114 @@ export function getLeafMenuItems(menuItems: MenuItem[] = MENU_ITEMS): MenuItem[]
       ? getLeafMenuItems(item.children)
       : [item]
   ));
+}
+
+export const PERMISSION_DELTA_META: Record<PermissionDeltaState, PermissionDeltaMeta> = {
+  default: {
+    label: 'ค่าเริ่มต้นของ role',
+    shortLabel: 'ค่าเริ่มต้น',
+    description: 'สิทธิ์นี้มาจากค่าเริ่มต้นของ role ที่เลือกไว้',
+  },
+  added: {
+    label: 'เพิ่มจากค่าเริ่มต้น',
+    shortLabel: 'เพิ่ม',
+    description: 'สิทธิ์นี้ถูกเพิ่มเกินจาก default ของ role',
+  },
+  removed: {
+    label: 'เอาออกจากค่าเริ่มต้น',
+    shortLabel: 'ปิด default',
+    description: 'role ควรมีสิทธิ์นี้ แต่ถูกเอาออกเฉพาะบัญชีนี้',
+  },
+  neutral: {
+    label: 'ไม่ได้เลือก',
+    shortLabel: 'ไม่ได้เลือก',
+    description: 'สิทธิ์นี้ไม่อยู่ใน default และยังไม่ได้เปิดใช้งาน',
+  },
+  locked: {
+    label: 'ไม่มีสิทธิ์มอบต่อ',
+    shortLabel: 'ล็อก',
+    description: 'ผู้ใช้ปัจจุบันไม่สามารถมอบสิทธิ์นี้ให้ผู้อื่นได้',
+  },
+};
+
+export const PERMISSION_DELTA_LEGEND = ([
+  'default',
+  'added',
+  'removed',
+  'locked',
+] as PermissionDeltaState[]).map((state) => ({
+  state,
+  ...PERMISSION_DELTA_META[state],
+}));
+
+export function getPermissionDeltaState(
+  permissionId: string,
+  selectedPermissions: string[],
+  defaultPermissions: string[],
+  isLocked = false,
+): PermissionDeltaState {
+  if (isLocked) {
+    return 'locked';
+  }
+
+  const selectedSet = new Set(selectedPermissions);
+  const defaultSet = new Set(defaultPermissions);
+  const isSelected = selectedSet.has(permissionId);
+  const isDefault = defaultSet.has(permissionId);
+
+  if (isSelected && isDefault) {
+    return 'default';
+  }
+
+  if (isSelected) {
+    return 'added';
+  }
+
+  if (isDefault) {
+    return 'removed';
+  }
+
+  return 'neutral';
+}
+
+export function getPermissionDeltaSummary(
+  permissionIds: string[],
+  selectedPermissions: string[],
+  defaultPermissions: string[],
+  isLocked: (permissionId: string) => boolean = () => false,
+): PermissionDeltaSummary {
+  return permissionIds.reduce<PermissionDeltaSummary>((summary, permissionId) => {
+    const state = getPermissionDeltaState(
+      permissionId,
+      selectedPermissions,
+      defaultPermissions,
+      isLocked(permissionId),
+    );
+
+    switch (state) {
+      case 'default':
+        summary.defaultCount += 1;
+        break;
+      case 'added':
+        summary.addedCount += 1;
+        break;
+      case 'removed':
+        summary.removedCount += 1;
+        break;
+      case 'locked':
+        summary.lockedCount += 1;
+        break;
+      default:
+        summary.neutralCount += 1;
+        break;
+    }
+
+    return summary;
+  }, {
+    defaultCount: 0,
+    addedCount: 0,
+    removedCount: 0,
+    neutralCount: 0,
+    lockedCount: 0,
+  });
 }

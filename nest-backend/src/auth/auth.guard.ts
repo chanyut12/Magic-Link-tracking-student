@@ -1,7 +1,7 @@
 import { Injectable, CanActivate, ExecutionContext, ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { PERMISSIONS_KEY, ROLES_KEY } from './permissions.decorator';
-import { hasPermission, ROLE_BASELINES } from './permissions.constants';
+import { hasPermission } from './permissions.constants';
 import { DatabaseService } from '../database/database.service';
 import { hashToken } from '../common/utils/helpers';
 import * as crypto from 'crypto';
@@ -19,7 +19,12 @@ interface RequestWithUser {
   session?: Record<string, unknown>;
 }
 
-function resolvePermissions(roles: string[], permissions: unknown): string[] {
+function resolvePermissions(
+  roles: string[],
+  permissions: unknown,
+  defaultPermissions: unknown,
+): string[] {
+  void roles;
   const storedPermissions = Array.isArray(permissions)
     ? permissions.filter(
         (permission): permission is string =>
@@ -32,7 +37,14 @@ function resolvePermissions(roles: string[], permissions: unknown): string[] {
   }
 
   return Array.from(
-    new Set(roles.flatMap((role) => ROLE_BASELINES[role] || [])),
+    new Set(
+      Array.isArray(defaultPermissions)
+        ? defaultPermissions.filter(
+            (permission): permission is string =>
+              typeof permission === 'string' && permission.trim().length > 0,
+          )
+        : [],
+    ),
   );
 }
 
@@ -81,8 +93,10 @@ export class AuthGuard implements CanActivate {
           u.username,
           CASE WHEN u.role IS NOT NULL THEN ARRAY[u.role]::text[] ELSE ARRAY[]::text[] END as roles,
           u.permissions,
-          u.data_scope
+          u.data_scope,
+          r.default_permissions AS role_default_permissions
         FROM users u
+        LEFT JOIN roles r ON r.name = u.role
         WHERE u.id = $1 AND u.status = 'ACTIVE'`,
         [userId]
       );
@@ -95,7 +109,7 @@ export class AuthGuard implements CanActivate {
         id: row.id,
         username: row.username,
         roles,
-        permissions: resolvePermissions(roles, row.permissions),
+        permissions: resolvePermissions(roles, row.permissions, row.role_default_permissions),
         data_scope: row.data_scope,
       };
     } catch (error) {
@@ -145,6 +159,7 @@ export class AuthGuard implements CanActivate {
           tl.assigned_to_email,
           tl.login_role,
           tl.login_permissions,
+          r.default_permissions AS role_default_permissions,
           tl.login_data_scope,
           tl.otp_verified,
           tl.expires_at,
@@ -153,6 +168,7 @@ export class AuthGuard implements CanActivate {
           t.task_type
         FROM task_links tl
         JOIN tasks t ON t.id = tl.task_id
+        LEFT JOIN roles r ON r.name = tl.login_role
         WHERE tl.token_hash = $1`,
         [tokenHash],
       );
@@ -176,7 +192,7 @@ export class AuthGuard implements CanActivate {
         typeof row.login_role === 'string' && row.login_role.trim().length > 0
           ? row.login_role.trim()
           : 'TEACHER';
-      const permissions = resolvePermissions([role], row.login_permissions);
+      const permissions = resolvePermissions([role], row.login_permissions, row.role_default_permissions);
 
       return {
         id: this.buildVirtualUserId(row.id),
@@ -298,8 +314,10 @@ export class OptionalAuthGuard implements CanActivate {
           u.username,
           CASE WHEN u.role IS NOT NULL THEN ARRAY[u.role]::text[] ELSE ARRAY[]::text[] END as roles,
           u.permissions,
-          u.data_scope
+          u.data_scope,
+          r.default_permissions AS role_default_permissions
         FROM users u
+        LEFT JOIN roles r ON r.name = u.role
         WHERE u.id = $1 AND u.status = 'ACTIVE'`,
         [userId]
       );
@@ -312,7 +330,7 @@ export class OptionalAuthGuard implements CanActivate {
         id: row.id,
         username: row.username,
         roles,
-        permissions: resolvePermissions(roles, row.permissions),
+        permissions: resolvePermissions(roles, row.permissions, row.role_default_permissions),
         data_scope: row.data_scope,
       };
     } catch {
@@ -362,6 +380,7 @@ export class OptionalAuthGuard implements CanActivate {
           tl.assigned_to_email,
           tl.login_role,
           tl.login_permissions,
+          r.default_permissions AS role_default_permissions,
           tl.login_data_scope,
           tl.otp_verified,
           tl.expires_at,
@@ -370,6 +389,7 @@ export class OptionalAuthGuard implements CanActivate {
           t.task_type
         FROM task_links tl
         JOIN tasks t ON t.id = tl.task_id
+        LEFT JOIN roles r ON r.name = tl.login_role
         WHERE tl.token_hash = $1`,
         [tokenHash],
       );
@@ -393,7 +413,7 @@ export class OptionalAuthGuard implements CanActivate {
         typeof row.login_role === 'string' && row.login_role.trim().length > 0
           ? row.login_role.trim()
           : 'TEACHER';
-      const permissions = resolvePermissions([role], row.login_permissions);
+      const permissions = resolvePermissions([role], row.login_permissions, row.role_default_permissions);
 
       return {
         id: this.buildVirtualUserId(row.id),

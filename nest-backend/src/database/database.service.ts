@@ -1,6 +1,7 @@
 import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
 import { Pool, PoolClient } from 'pg';
 import * as path from 'path';
+import { SYSTEM_ROLE_DEFINITIONS } from '../auth/permissions.constants';
 
 // Load .env explicitly since it's located in the parent directory
 import * as dotenv from 'dotenv';
@@ -212,8 +213,17 @@ export class DatabaseService implements OnModuleInit {
         CREATE TABLE IF NOT EXISTS roles (
           id SERIAL PRIMARY KEY,
           name TEXT NOT NULL UNIQUE,
-          label TEXT NOT NULL
+          label TEXT NOT NULL,
+          rank INTEGER NOT NULL DEFAULT 0,
+          default_permissions JSONB NOT NULL DEFAULT '[]'::jsonb,
+          scope_mode TEXT NOT NULL DEFAULT 'flexible',
+          is_system BOOLEAN NOT NULL DEFAULT FALSE
         );
+
+        ALTER TABLE roles ADD COLUMN IF NOT EXISTS rank INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE roles ADD COLUMN IF NOT EXISTS default_permissions JSONB NOT NULL DEFAULT '[]'::jsonb;
+        ALTER TABLE roles ADD COLUMN IF NOT EXISTS scope_mode TEXT NOT NULL DEFAULT 'flexible';
+        ALTER TABLE roles ADD COLUMN IF NOT EXISTS is_system BOOLEAN NOT NULL DEFAULT FALSE;
 
         CREATE TABLE IF NOT EXISTS users (
           id SERIAL PRIMARY KEY,
@@ -231,16 +241,33 @@ export class DatabaseService implements OnModuleInit {
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
-        -- Seed Roles
-        INSERT INTO roles (name, label) VALUES ('ADMIN', 'ผู้ดูแลระบบ') ON CONFLICT (name) DO UPDATE SET label = EXCLUDED.label;
-        INSERT INTO roles (name, label) VALUES ('ADMIN_PROVINCE', 'แอดมินระดับจังหวัด') ON CONFLICT (name) DO UPDATE SET label = EXCLUDED.label;
-        INSERT INTO roles (name, label) VALUES ('ADMIN_DISTRICT', 'แอดมินระดับอำเภอ') ON CONFLICT (name) DO UPDATE SET label = EXCLUDED.label;
-        INSERT INTO roles (name, label) VALUES ('ADMIN_SUBDISTRICT', 'แอดมินระดับตำบล') ON CONFLICT (name) DO UPDATE SET label = EXCLUDED.label;
-        INSERT INTO roles (name, label) VALUES ('ADMIN_SCHOOL', 'แอดมินระดับโรงเรียน') ON CONFLICT (name) DO UPDATE SET label = EXCLUDED.label;
-        INSERT INTO roles (name, label) VALUES ('DIRECTOR', 'ผู้อำนวยการ') ON CONFLICT (name) DO UPDATE SET label = EXCLUDED.label;
-        INSERT INTO roles (name, label) VALUES ('TEACHER', 'คุณครู') ON CONFLICT (name) DO UPDATE SET label = EXCLUDED.label;
-        INSERT INTO roles (name, label) VALUES ('EXECUTIVE', 'ผู้บริหาร') ON CONFLICT (name) DO UPDATE SET label = EXCLUDED.label;
-        INSERT INTO roles (name, label) VALUES ('STUDENT', 'นักเรียน') ON CONFLICT (name) DO UPDATE SET label = EXCLUDED.label;
+        INSERT INTO roles (name, label, rank, default_permissions, scope_mode, is_system)
+        VALUES ('ADMIN', 'ผู้ดูแลระบบ', 9, '["home","dashboard","students","create","attendance","attendance-dashboard","manage-users-list","manage-role-groups","login-links","settings","import-data"]'::jsonb, 'global', TRUE)
+        ON CONFLICT (name) DO NOTHING;
+        INSERT INTO roles (name, label, rank, default_permissions, scope_mode, is_system)
+        VALUES ('ADMIN_PROVINCE', 'แอดมินระดับจังหวัด', 8, '["home","dashboard","students","create","attendance","attendance-dashboard","manage-users-list","login-links"]'::jsonb, 'province', TRUE)
+        ON CONFLICT (name) DO NOTHING;
+        INSERT INTO roles (name, label, rank, default_permissions, scope_mode, is_system)
+        VALUES ('ADMIN_DISTRICT', 'แอดมินระดับอำเภอ', 7, '["home","dashboard","students","create","attendance","attendance-dashboard","manage-users-list","login-links"]'::jsonb, 'district', TRUE)
+        ON CONFLICT (name) DO NOTHING;
+        INSERT INTO roles (name, label, rank, default_permissions, scope_mode, is_system)
+        VALUES ('ADMIN_SUBDISTRICT', 'แอดมินระดับตำบล', 6, '["home","dashboard","students","create","attendance","attendance-dashboard","manage-users-list","login-links"]'::jsonb, 'sub_district', TRUE)
+        ON CONFLICT (name) DO NOTHING;
+        INSERT INTO roles (name, label, rank, default_permissions, scope_mode, is_system)
+        VALUES ('ADMIN_SCHOOL', 'แอดมินระดับโรงเรียน', 5, '["home","dashboard","students","create","attendance","attendance-dashboard","manage-users-list","login-links"]'::jsonb, 'school', TRUE)
+        ON CONFLICT (name) DO NOTHING;
+        INSERT INTO roles (name, label, rank, default_permissions, scope_mode, is_system)
+        VALUES ('DIRECTOR', 'ผู้อำนวยการ', 4, '["home","dashboard","students","create","attendance","attendance-dashboard","manage-users-list","login-links","settings"]'::jsonb, 'flexible', TRUE)
+        ON CONFLICT (name) DO NOTHING;
+        INSERT INTO roles (name, label, rank, default_permissions, scope_mode, is_system)
+        VALUES ('EXECUTIVE', 'ผู้บริหาร', 3, '["home","dashboard","students","attendance-dashboard"]'::jsonb, 'flexible', TRUE)
+        ON CONFLICT (name) DO NOTHING;
+        INSERT INTO roles (name, label, rank, default_permissions, scope_mode, is_system)
+        VALUES ('TEACHER', 'คุณครู', 2, '["home","students","attendance","attendance-dashboard"]'::jsonb, 'flexible', TRUE)
+        ON CONFLICT (name) DO NOTHING;
+        INSERT INTO roles (name, label, rank, default_permissions, scope_mode, is_system)
+        VALUES ('STUDENT', 'นักเรียน', 1, '["home","student-self"]'::jsonb, 'flexible', TRUE)
+        ON CONFLICT (name) DO NOTHING;
 
         CREATE TABLE IF NOT EXISTS external_users (
           "ExternalID" SERIAL PRIMARY KEY,
@@ -261,6 +288,10 @@ export class DatabaseService implements OnModuleInit {
         ALTER TABLE users ADD COLUMN IF NOT EXISTS "permissions" JSONB DEFAULT '[]';
         ALTER TABLE users ADD COLUMN IF NOT EXISTS "role" TEXT;
         ALTER TABLE users ADD COLUMN IF NOT EXISTS "data_scope" JSONB DEFAULT '{}'::jsonb;
+        ALTER TABLE roles ADD COLUMN IF NOT EXISTS rank INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE roles ADD COLUMN IF NOT EXISTS default_permissions JSONB NOT NULL DEFAULT '[]'::jsonb;
+        ALTER TABLE roles ADD COLUMN IF NOT EXISTS scope_mode TEXT NOT NULL DEFAULT 'flexible';
+        ALTER TABLE roles ADD COLUMN IF NOT EXISTS is_system BOOLEAN NOT NULL DEFAULT FALSE;
 
         CREATE INDEX IF NOT EXISTS idx_task_links_token ON task_links(token_hash);
         CREATE INDEX IF NOT EXISTS idx_task_links_task_id ON task_links(task_id);
@@ -448,6 +479,52 @@ export class DatabaseService implements OnModuleInit {
           name TEXT NOT NULL UNIQUE
         );
       `);
+
+      for (const role of SYSTEM_ROLE_DEFINITIONS) {
+        await client.query(
+          `
+            INSERT INTO roles (name, label, rank, default_permissions, scope_mode, is_system)
+            VALUES ($1, $2, $3, $4::jsonb, $5, $6)
+            ON CONFLICT (name) DO NOTHING
+          `,
+          [
+            role.name,
+            role.label,
+            role.rank,
+            JSON.stringify(role.default_permissions),
+            role.scope_mode,
+            role.is_system,
+          ],
+        );
+
+        await client.query(
+          `
+            UPDATE roles
+            SET
+              label = CASE WHEN btrim(label) = '' THEN $2 ELSE label END,
+              rank = CASE WHEN rank = 0 THEN $3 ELSE rank END,
+              default_permissions = CASE
+                WHEN default_permissions IS NULL OR default_permissions = '[]'::jsonb THEN $4::jsonb
+                ELSE default_permissions
+              END,
+              scope_mode = CASE
+                WHEN scope_mode IS NULL OR btrim(scope_mode) = '' THEN $5
+                ELSE scope_mode
+              END,
+              is_system = $6
+            WHERE name = $1
+          `,
+          [
+            role.name,
+            role.label,
+            role.rank,
+            JSON.stringify(role.default_permissions),
+            role.scope_mode,
+            role.is_system,
+          ],
+        );
+      }
+
       await client.query('COMMIT');
       this.logger.log('Migrations complete.');
     } catch (e) {

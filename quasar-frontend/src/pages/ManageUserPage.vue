@@ -407,11 +407,38 @@
 
               <q-tab-panels v-model="activeTab" animated class="permission-panels q-mt-md">
                 <q-tab-panel name="menu" class="q-pa-none">
+                    <div class="permission-insight-panel q-mb-md">
+                      <div class="permission-insight-copy">
+                        <div class="text-weight-bold text-grey-9">
+                          ค่าเริ่มต้นของบทบาท: {{ selectedRoleMeta?.label || 'ยังไม่ได้เลือกบทบาท' }}
+                        </div>
+                        <div class="text-caption text-blue-grey-7">
+                          สีของขอบจะช่วยบอกว่าเมนูนี้เป็น default ของ role, ถูกเพิ่มเกินค่าเริ่มต้น, หรือถูกปิดจากค่าเริ่มต้น
+                        </div>
+                      </div>
+                      <div class="permission-legend">
+                        <div
+                          v-for="item in permissionLegendItems"
+                          :key="item.state"
+                          class="permission-legend-item"
+                          :class="`permission-legend-item--${item.state}`"
+                        >
+                          <span class="permission-legend-swatch"></span>
+                          <div>
+                            <div class="text-caption text-weight-bold">{{ item.shortLabel }}</div>
+                            <div class="text-caption text-blue-grey-7">{{ item.description }}</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                     <div class="permission-list q-gutter-y-sm">
                       <div v-for="menu in menuList" :key="menu.id" class="menu-permission-item">
                         <div
-                          class="row items-center q-pa-sm bg-grey-2 rounded-card cursor-pointer"
-                          :class="{ 'permission-locked': isMenuLocked(menu) }"
+                          class="row items-center q-pa-sm bg-grey-2 rounded-card cursor-pointer permission-menu-row"
+                          :class="[
+                            { 'permission-locked': isMenuLocked(menu) },
+                            !menu.children ? `permission-state-card--${getPermissionVisualState(menu.id)}` : '',
+                          ]"
                           @click="toggleMenuPermission(menu)"
                         >
                           <q-checkbox 
@@ -422,6 +449,39 @@
                           />
                           <span class="text-weight-medium">{{ menu.label }}</span>
                           <q-space />
+                          <div v-if="menu.children" class="permission-menu-summary q-mr-sm">
+                            <span
+                              v-if="getMenuPermissionSummary(menu).defaultCount"
+                              class="permission-mini-pill permission-mini-pill--default"
+                            >
+                              ค่าเริ่มต้น {{ getMenuPermissionSummary(menu).defaultCount }}
+                            </span>
+                            <span
+                              v-if="getMenuPermissionSummary(menu).addedCount"
+                              class="permission-mini-pill permission-mini-pill--added"
+                            >
+                              เพิ่ม {{ getMenuPermissionSummary(menu).addedCount }}
+                            </span>
+                            <span
+                              v-if="getMenuPermissionSummary(menu).removedCount"
+                              class="permission-mini-pill permission-mini-pill--removed"
+                            >
+                              ปิด {{ getMenuPermissionSummary(menu).removedCount }}
+                            </span>
+                            <span
+                              v-if="getMenuPermissionSummary(menu).lockedCount"
+                              class="permission-mini-pill permission-mini-pill--locked"
+                            >
+                              ล็อก {{ getMenuPermissionSummary(menu).lockedCount }}
+                            </span>
+                          </div>
+                          <span
+                            v-else-if="getPermissionVisualState(menu.id) !== 'neutral'"
+                            class="permission-state-badge q-mr-sm"
+                            :class="`permission-state-badge--${getPermissionVisualState(menu.id)}`"
+                          >
+                            {{ getPermissionVisualMeta(menu.id).shortLabel }}
+                          </span>
                           <q-icon
                             v-if="isMenuLocked(menu)"
                             name="lock"
@@ -440,8 +500,11 @@
                           <div 
                             v-for="child in menu.children" 
                             :key="child.id" 
-                            class="row items-center q-pa-sm bg-grey-2 rounded-card cursor-pointer"
-                            :class="{ 'permission-locked': isPermissionLocked(child.id) }"
+                            class="row items-center q-pa-sm bg-grey-2 rounded-card cursor-pointer permission-state-card"
+                            :class="[
+                              `permission-state-card--${getPermissionVisualState(child.id)}`,
+                              { 'permission-locked': isPermissionLocked(child.id) },
+                            ]"
                             @click="togglePermission(child.id)"
                           >
                             <q-checkbox 
@@ -452,6 +515,13 @@
                             />
                             <span>{{ child.label }}</span>
                             <q-space />
+                            <span
+                              v-if="getPermissionVisualState(child.id) !== 'neutral'"
+                              class="permission-state-badge q-mr-sm"
+                              :class="`permission-state-badge--${getPermissionVisualState(child.id)}`"
+                            >
+                              {{ getPermissionVisualMeta(child.id).shortLabel }}
+                            </span>
                             <q-icon
                               v-if="isPermissionLocked(child.id)"
                               name="lock"
@@ -609,17 +679,23 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed, watch, reactive } from 'vue';
+import { ref, onMounted, computed, watch, reactive, nextTick } from 'vue';
 import { api } from 'boot/axios';
 import { useQuasar, QForm, type QTableColumn } from 'quasar';
 import { AxiosError } from 'axios';
 import { useRoute, useRouter } from 'vue-router';
 import { useUserStore, getStoredUser } from '../composables/useUserStore';
 import {
+  GRANT_EXEMPT_PERMISSION_IDS,
+  MENU_ITEMS,
+  PERMISSION_DELTA_LEGEND,
+  PERMISSION_DELTA_META,
   getEffectivePermissions,
+  getPermissionDeltaState,
+  getPermissionDeltaSummary,
   getRoleScopePreset,
-  ROLE_RANKS,
   type ScopeFormField,
+  type RoleDefinition,
 } from '../constants/permissions';
 
 interface User {
@@ -648,19 +724,13 @@ interface User {
   };
 }
 
-interface Role {
-  id: number;
-  name: string;
-  label: string;
-}
-
 const $q = useQuasar();
 const route = useRoute();
 const router = useRouter();
 const { user: currentUser, refreshUserProfile } = useUserStore();
 const searchText = ref('');
 const users = ref<User[]>([]);
-const roles = ref<Role[]>([]);
+const roles = ref<RoleDefinition[]>([]);
 const loading = ref(false);
 const rowsPerPageOptions = [10, 20, 50];
 const pagination = ref({
@@ -675,6 +745,7 @@ const isEdit = ref(false);
 const activeTab = ref('menu');
 const selectedRole = ref<string | null>(null);
 const customPermissions = ref<string[]>([]);
+const suppressRolePermissionSync = ref(false);
 const userFormRef = ref<QForm | null>(null);
 const userForm = ref<User>({
   id: null,
@@ -741,7 +812,14 @@ const canUseNationwideScope = computed(() => (
   currentUserScope.value.sub_districts.length === 0 &&
   currentUserScope.value.school_ids.length === 0
 ));
-const roleScopePreset = computed(() => getRoleScopePreset(selectedRole.value));
+const selectedRoleMeta = computed(() => (
+  roles.value.find((role) => role.name === selectedRole.value) || null
+));
+const permissionLegendItems = PERMISSION_DELTA_LEGEND;
+const roleDefaultPermissions = computed(() => selectedRoleMeta.value?.default_permissions || []);
+const roleScopePreset = computed(() => (
+  getRoleScopePreset(selectedRole.value, selectedRoleMeta.value?.scope_mode)
+));
 const isNationwideToggleDisabled = computed(() => (
   roleScopePreset.value.mode !== 'flexible' || !canUseNationwideScope.value
 ));
@@ -1029,37 +1107,6 @@ const applyRoleScopePreset = () => {
   }
 };
 
-const menuList = ref([
-  { id: 'home', label: 'หน้าหลัก' },
-  { 
-    id: 'dashboard', 
-    label: 'รายงานนักเรียน'
-  },
-  { id: 'students', label: 'รายชื่อนักเรียน' },
-  { id: 'student-self', label: 'ข้อมูลตัวเอง (นักเรียน)' },
-  { id: 'create', label: 'สร้างลิงค์' },
-  { id: 'import-data', label: 'นำเข้าข้อมูล' },
-  { 
-    id: 'attendance-system', 
-    label: 'ระบบเช็คชื่อ', 
-    expanded: false,
-    children: [
-      { id: 'attendance-dashboard', label: 'Dashboard เช็คชื่อ' },
-      { id: 'attendance', label: 'เช็คชื่อ' }
-    ]
-  },
-  { 
-    id: 'manage-users', 
-    label: 'จัดการสิทธิ์ผู้ใช้งาน', 
-    expanded: false,
-    children: [
-      { id: 'manage-users-list', label: 'จัดการรายชื่อผู้ใช้งาน' },
-      { id: 'login-links', label: 'ลิงก์เข้าสู่ระบบ' }
-    ]
-  },
-  { id: 'settings', label: 'ตั้งค่าระบบ (Master Data)' }
-]);
-
 type PermissionMenuItem = {
   id: string;
   label: string;
@@ -1067,12 +1114,29 @@ type PermissionMenuItem = {
   children?: PermissionMenuItem[];
 };
 
+const toPermissionMenuItems = (items: typeof MENU_ITEMS): PermissionMenuItem[] => (
+  items.map((item) => ({
+    id: item.id,
+    label: item.label,
+    expanded: false,
+    ...(item.children ? { children: toPermissionMenuItems(item.children) } : {}),
+  }))
+);
+
+const createPermissionMenuItems = () => toPermissionMenuItems(MENU_ITEMS);
+
+const menuList = ref<PermissionMenuItem[]>(createPermissionMenuItems());
+
+const resetPermissionMenuState = () => {
+  menuList.value = createPermissionMenuItems();
+};
+
 const roleOptions = computed(() => {
   const currentRole = currentUser.value?.roles?.[0] || null;
-  const currentRank = ROLE_RANKS[currentRole || ''] || 0;
+  const currentRank = roles.value.find((role) => role.name === currentRole)?.rank || 0;
   const assignableRoles = roles.value
     .filter((role) => {
-      const targetRank = ROLE_RANKS[role.name] || 0;
+      const targetRank = role.rank || 0;
       if (targetRank > currentRank) {
         return false;
       }
@@ -1248,6 +1312,7 @@ const openAddDialog = async () => {
 const editUser = async (user: User) => {
   isEdit.value = true;
   activeTab.value = 'menu';
+  resetPermissionMenuState();
   await ensureScopeOptionsLoaded();
 
   userForm.value = {
@@ -1269,9 +1334,12 @@ const editUser = async (user: User) => {
   };
 
   applyScopeForm(user.data_scope);
+  suppressRolePermissionSync.value = true;
   selectedRole.value = user.role || user.roles?.[0] || null;
   setCustomPermissionsFromStored([...(user.permissions || [])]);
   syncDisplayedPermissions();
+  await nextTick();
+  suppressRolePermissionSync.value = false;
   if (scopeForm.value.grade_level && scopeForm.value.school_id) {
     await fetchRooms();
   } else {
@@ -1413,6 +1481,7 @@ const resetForm = () => {
   isEdit.value = false;
   selectedRole.value = null;
   customPermissions.value = [];
+  resetPermissionMenuState();
   userForm.value = {
     id: null,
     username: '',
@@ -1456,7 +1525,7 @@ const collectLeafPermissionIds = (items: PermissionMenuItem[]): string[] => {
   ));
 };
 
-const validPermissionIds = computed(() => new Set(collectLeafPermissionIds(menuList.value as PermissionMenuItem[])));
+const validPermissionIds = computed(() => new Set(collectLeafPermissionIds(menuList.value)));
 
 const sanitizePermissions = (permissions: string[]) => {
   return Array.from(new Set(permissions.filter((permission) => validPermissionIds.value.has(permission))));
@@ -1467,6 +1536,7 @@ const setCustomPermissionsFromStored = (permissions: string[]) => {
 };
 
 const canGrantPermission = (permissionId: string) => (
+  GRANT_EXEMPT_PERMISSION_IDS.includes(permissionId) ||
   currentUserPermissionSet.value.has('*') ||
   currentUserPermissionSet.value.has('ALL') ||
   currentUserPermissionSet.value.has(permissionId)
@@ -1475,6 +1545,19 @@ const canGrantPermission = (permissionId: string) => (
 const isPermissionLocked = (permissionId: string) => (
   !effectivePermissions.value.includes(permissionId) &&
   !canGrantPermission(permissionId)
+);
+
+const getPermissionVisualState = (permissionId: string) => (
+  getPermissionDeltaState(
+    permissionId,
+    effectivePermissions.value,
+    roleDefaultPermissions.value,
+    isPermissionLocked(permissionId),
+  )
+);
+
+const getPermissionVisualMeta = (permissionId: string) => (
+  PERMISSION_DELTA_META[getPermissionVisualState(permissionId)]
 );
 
 const getLeafChildPermissions = (menu: PermissionMenuItem): string[] => {
@@ -1508,10 +1591,24 @@ const isMenuLocked = (menu: PermissionMenuItem) => {
   ));
 };
 
+const getMenuPermissionSummary = (menu: PermissionMenuItem) => (
+  getPermissionDeltaSummary(
+    getLeafChildPermissions(menu),
+    effectivePermissions.value,
+    roleDefaultPermissions.value,
+    (permissionId) => isPermissionLocked(permissionId),
+  )
+);
+
 watch(selectedRole, (newRole) => {
   userForm.value.roles = newRole ? [newRole] : [];
   userForm.value.role = newRole;
   applyRoleScopePreset();
+  if (!suppressRolePermissionSync.value) {
+    customPermissions.value = sanitizePermissions(
+      (selectedRoleMeta.value?.default_permissions || []).filter((permissionId) => canGrantPermission(permissionId)),
+    );
+  }
   syncDisplayedPermissions();
 });
 
@@ -2183,6 +2280,81 @@ onMounted(() => {
   margin-bottom: 12px;
 }
 
+.permission-insight-panel {
+  display: grid;
+  gap: 16px;
+  padding: 18px 20px;
+  border-radius: 24px;
+  background: linear-gradient(135deg, #ffffff, #eff6ff);
+  border: 1px solid #dbeafe;
+}
+
+.permission-insight-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.permission-legend {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.permission-legend-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.permission-legend-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  margin-top: 3px;
+  flex-shrink: 0;
+  background: #94a3b8;
+}
+
+.permission-legend-item--default {
+  border-color: #93c5fd;
+  background: #eff6ff;
+
+  .permission-legend-swatch {
+    background: #2563eb;
+  }
+}
+
+.permission-legend-item--added {
+  border-color: #86efac;
+  background: #f0fdf4;
+
+  .permission-legend-swatch {
+    background: #16a34a;
+  }
+}
+
+.permission-legend-item--removed {
+  border-color: #fdba74;
+  background: #fff7ed;
+
+  .permission-legend-swatch {
+    background: #ea580c;
+  }
+}
+
+.permission-legend-item--locked {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+
+  .permission-legend-swatch {
+    background: #64748b;
+  }
+}
+
 .scope-mode-banner {
   padding: 14px 18px;
   border-radius: 20px;
@@ -2200,6 +2372,79 @@ onMounted(() => {
     background: #eef2ff !important;
     border-color: rgba(15, 77, 194, 0.2);
   }
+}
+
+.permission-menu-row,
+.permission-state-card {
+  position: relative;
+}
+
+.permission-state-card--default {
+  background: #eff6ff !important;
+  border-color: #93c5fd;
+}
+
+.permission-state-card--added {
+  background: #f0fdf4 !important;
+  border-color: #86efac;
+}
+
+.permission-state-card--removed {
+  background: #fff7ed !important;
+  border-color: #fdba74;
+  border-style: dashed;
+}
+
+.permission-state-card--locked {
+  background: #f8fafc !important;
+  border-color: #cbd5e1;
+}
+
+.permission-menu-summary {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.permission-mini-pill,
+.permission-state-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  line-height: 1;
+  border: 1px solid transparent;
+}
+
+.permission-mini-pill--default,
+.permission-state-badge--default {
+  background: #dbeafe;
+  border-color: #93c5fd;
+  color: #1d4ed8;
+}
+
+.permission-mini-pill--added,
+.permission-state-badge--added {
+  background: #dcfce7;
+  border-color: #86efac;
+  color: #15803d;
+}
+
+.permission-mini-pill--removed,
+.permission-state-badge--removed {
+  background: #ffedd5;
+  border-color: #fdba74;
+  color: #c2410c;
+}
+
+.permission-mini-pill--locked,
+.permission-state-badge--locked {
+  background: #e2e8f0;
+  border-color: #cbd5e1;
+  color: #475569;
 }
 
 .permission-locked {
@@ -2249,6 +2494,14 @@ onMounted(() => {
   .add-user-btn {
     margin-left: 0;
     width: 100%;
+  }
+
+  .permission-legend {
+    grid-template-columns: 1fr;
+  }
+
+  .permission-menu-summary {
+    max-width: 180px;
   }
 
   .table-wrap {

@@ -1,10 +1,20 @@
-import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { PasswordService } from '../auth/password.service';
 import {
+  GRANT_EXEMPT_PERMISSION_IDS,
   ROLE_BASELINES,
+  ROLE_LABELS,
   ROLE_RANKS,
+  VALID_PERMISSION_IDS,
   getRoleScopeValidationError,
+  type RoleScopeMode,
 } from '../auth/permissions.constants';
 
 interface DataScope {
@@ -25,13 +35,25 @@ interface ActorContext {
   data_scope?: DataScope;
 }
 
+export interface RoleDefinition {
+  id: number;
+  name: string;
+  label: string;
+  rank: number;
+  default_permissions: string[];
+  scope_mode: RoleScopeMode;
+  is_system: boolean;
+  user_count?: number;
+  login_link_count?: number;
+}
+
 @Injectable()
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
 
   constructor(
     private readonly db: DatabaseService,
-    private readonly passwordService: PasswordService
+    private readonly passwordService: PasswordService,
   ) {}
 
   private normalizePermissionList(permissions: unknown): string[] {
@@ -49,7 +71,9 @@ export class UsersService {
     );
   }
 
-  private normalizeScope(scope: unknown): Required<Omit<DataScope, 'own_only'>> & Pick<DataScope, 'own_only'> {
+  private normalizeScope(
+    scope: unknown,
+  ): Required<Omit<DataScope, 'own_only'>> & Pick<DataScope, 'own_only'> {
     const source = scope && typeof scope === 'object' ? (scope as DataScope) : {};
     const normalizeArray = (value: unknown): string[] => {
       if (!Array.isArray(value)) {
@@ -76,29 +100,159 @@ export class UsersService {
     };
   }
 
-  private getPrimaryRole(user?: { role?: string | null; roles?: string[] | null } | null): string | null {
-    if (user?.role && user.role.trim().length > 0) {
-      return user.role.trim();
+  private normalizeRoleName(name: unknown): string {
+    if (typeof name !== 'string') {
+      return '';
     }
 
-    const firstRole = Array.isArray(user?.roles)
-      ? user.roles.find((role): role is string => typeof role === 'string' && role.trim().length > 0)
-      : null;
-
-    return firstRole?.trim() || null;
+    return name.trim().toUpperCase().replace(/\s+/g, '_');
   }
 
-  private getRoleRank(role?: string | null): number {
+  private normalizeScopeMode(mode: unknown): RoleScopeMode {
+    if (
+      mode === 'global' ||
+      mode === 'province' ||
+      mode === 'district' ||
+      mode === 'sub_district' ||
+      mode === 'school'
+    ) {
+      return mode;
+    }
+
+    return 'flexible';
+  }
+
+  private async getRoleDefinitions(includeUsage = false): Promise<RoleDefinition[]> {
+    const sql = includeUsage
+      ? `
+          SELECT
+            r.id,
+            r.name,
+            r.label,
+            r.rank,
+            r.default_permissions,
+            r.scope_mode,
+            r.is_system,
+            COALESCE(u.user_count, 0)::int AS user_count,
+            COALESCE(tl.login_link_count, 0)::int AS login_link_count
+          FROM roles r
+          LEFT JOIN (
+            SELECT role, COUNT(*) AS user_count
+            FROM users
+            GROUP BY role
+          ) u ON u.role = r.name
+          LEFT JOIN (
+            SELECT login_role, COUNT(*) AS login_link_count
+            FROM task_links
+            WHERE login_role IS NOT NULL
+            GROUP BY login_role
+          ) tl ON tl.login_role = r.name
+          ORDER BY r.rank DESC, r.name ASC
+        `
+      : `
+          SELECT
+            id,
+            name,
+            label,
+            rank,
+            default_permissions,
+            scope_mode,
+            is_system
+          FROM roles
+          ORDER BY rank DESC, name ASC
+        `;
+
+    const res = await this.db.query(sql);
+    return res.rows.map((row: any) => ({
+      id: Number(row.id),
+      name: String(row.name),
+      label: String(row.label),
+      rank: Number(row.rank) || 0,
+      default_permissions: this.normalizePermissionList(row.default_permissions),
+      scope_mode: this.normalizeScopeMode(row.scope_mode),
+      is_system: row.is_system === true,
+      user_count: row.user_count !== undefined ? Number(row.user_count) || 0 : undefined,
+      login_link_count: row.login_link_count !== undefined ? Number(row.login_link_count) || 0 : undefined,
+    }));
+  }
+
+  private async getRoleMap(includeUsage = false): Promise<Map<string, RoleDefinition>> {
+    const definitions = await this.getRoleDefinitions(includeUsage);
+    return new Map(definitions.map((definition) => [definition.name, definition]));
+  }
+
+  private getRoleRank(role?: string | null, roleMap?: Map<string, RoleDefinition>): number {
     if (!role) {
       return 0;
+    }
+
+    const dbRank = roleMap?.get(role)?.rank;
+    if (typeof dbRank === 'number' && dbRank > 0) {
+      return dbRank;
     }
 
     return ROLE_RANKS[role] || 0;
   }
 
-  private canManageRole(actorRole?: string | null, targetRole?: string | null): boolean {
-    const actorRank = this.getRoleRank(actorRole);
-    const targetRank = this.getRoleRank(targetRole);
+  private getRoleLabel(role?: string | null, roleMap?: Map<string, RoleDefinition>): string {
+    if (!role) {
+      return '';
+    }
+
+    return roleMap?.get(role)?.label || ROLE_LABELS[role] || role;
+  }
+
+  private getRoleDefaultPermissions(
+    role?: string | null,
+    roleMap?: Map<string, RoleDefinition>,
+  ): string[] {
+    if (!role) {
+      return [];
+    }
+
+    const dbPermissions = roleMap?.get(role)?.default_permissions;
+    if (Array.isArray(dbPermissions) && dbPermissions.length > 0) {
+      return dbPermissions;
+    }
+
+    return Array.from(new Set(ROLE_BASELINES[role] || []));
+  }
+
+  private getRoleScopeMode(
+    role?: string | null,
+    roleMap?: Map<string, RoleDefinition>,
+  ): RoleScopeMode {
+    if (!role) {
+      return 'flexible';
+    }
+
+    return roleMap?.get(role)?.scope_mode || 'flexible';
+  }
+
+  private getPrimaryRole(
+    user?: { role?: string | null; roles?: string[] | null } | null,
+  ): string | null {
+    if (user?.role && user.role.trim().length > 0) {
+      return user.role.trim();
+    }
+
+    const firstRole = Array.isArray(user?.roles)
+      ? user.roles.find(
+          (role): role is string =>
+            typeof role === 'string' && role.trim().length > 0,
+        )
+      : null;
+
+    return firstRole?.trim() || null;
+  }
+
+  private canManageRole(
+    actorRole?: string | null,
+    targetRole?: string | null,
+    roleMap?: Map<string, RoleDefinition>,
+  ): boolean {
+    const actorRank = this.getRoleRank(actorRole, roleMap);
+    const targetRank = this.getRoleRank(targetRole, roleMap);
 
     if (targetRank > actorRank) {
       return false;
@@ -169,50 +323,60 @@ export class UsersService {
       return true;
     }
 
-    return targetPermissions.every((permission) => actorPermissions.includes(permission));
+    return targetPermissions
+      .filter((permission) => !GRANT_EXEMPT_PERMISSION_IDS.includes(permission))
+      .every((permission) => actorPermissions.includes(permission));
   }
 
   private resolveDisplayPermissions(
-    roles: string[],
     permissions: unknown,
+    roleDefaultPermissions: unknown,
     fallbackRole?: string | null,
+    roleMap?: Map<string, RoleDefinition>,
   ): string[] {
     const storedPermissions = this.normalizePermissionList(permissions);
     if (storedPermissions.length > 0) {
       return storedPermissions;
     }
 
-    const candidateRoles = [
-      ...roles,
-      ...(typeof fallbackRole === 'string' && fallbackRole.trim().length > 0
-        ? [fallbackRole]
-        : []),
-    ];
+    const fallbackDefaults = this.normalizePermissionList(roleDefaultPermissions);
+    if (fallbackDefaults.length > 0) {
+      return fallbackDefaults;
+    }
 
-    return Array.from(
-      new Set(
-        candidateRoles.flatMap((role) => ROLE_BASELINES[role] || []),
-      ),
-    );
+    return this.getRoleDefaultPermissions(fallbackRole, roleMap);
   }
 
-  private hydrateUserPermissions<T extends { roles?: string[] | null; permissions?: unknown; role?: string | null }>(user: T): T {
+  private hydrateUserPermissions<
+    T extends {
+      roles?: string[] | null;
+      permissions?: unknown;
+      role?: string | null;
+      role_default_permissions?: unknown;
+    },
+  >(user: T, roleMap?: Map<string, RoleDefinition>): T {
     const roles = Array.isArray(user.roles)
-      ? user.roles.filter((role): role is string => typeof role === 'string' && role.trim().length > 0)
+      ? user.roles.filter(
+          (role): role is string =>
+            typeof role === 'string' && role.trim().length > 0,
+        )
       : [];
     const fallbackRole =
       typeof user.role === 'string' && user.role.trim().length > 0
         ? user.role.trim()
         : null;
-    const normalizedRoles = roles.length > 0
-      ? roles
-      : (fallbackRole ? [fallbackRole] : []);
+    const normalizedRoles = roles.length > 0 ? roles : fallbackRole ? [fallbackRole] : [];
 
     return {
       ...user,
       role: fallbackRole,
       roles: normalizedRoles,
-      permissions: this.resolveDisplayPermissions(normalizedRoles, user.permissions, fallbackRole),
+      permissions: this.resolveDisplayPermissions(
+        user.permissions,
+        user.role_default_permissions,
+        fallbackRole,
+        roleMap,
+      ),
     };
   }
 
@@ -221,7 +385,10 @@ export class UsersService {
       (typeof data?.role === 'string' && data.role.trim().length > 0
         ? data.role
         : Array.isArray(data?.roles)
-          ? data.roles.find((role: unknown): role is string => typeof role === 'string' && role.trim().length > 0)
+          ? data.roles.find(
+              (role: unknown): role is string =>
+                typeof role === 'string' && role.trim().length > 0,
+            )
           : null) || 'TEACHER';
 
     return requestedRole.trim();
@@ -235,9 +402,25 @@ export class UsersService {
     return actor;
   }
 
+  private assertValidPermissionList(permissionIds: string[]): void {
+    const invalidPermissions = permissionIds.filter(
+      (permissionId) => !VALID_PERMISSION_IDS.includes(permissionId),
+    );
+
+    if (invalidPermissions.length > 0) {
+      throw new BadRequestException(`สิทธิ์ไม่ถูกต้อง: ${invalidPermissions.join(', ')}`);
+    }
+  }
+
   private canManageUser(
     actor: ActorContext,
-    target: { id?: number | null; role?: string | null; roles?: string[] | null; data_scope?: unknown },
+    target: {
+      id?: number | null;
+      role?: string | null;
+      roles?: string[] | null;
+      data_scope?: unknown;
+    },
+    roleMap?: Map<string, RoleDefinition>,
   ): boolean {
     if (actor.id === target.id) {
       return true;
@@ -246,22 +429,24 @@ export class UsersService {
     const actorRole = this.getPrimaryRole({ roles: actor.roles });
     const targetRole = this.getPrimaryRole(target);
 
-    if (!this.canManageRole(actorRole, targetRole)) {
+    if (!this.canManageRole(actorRole, targetRole, roleMap)) {
       return false;
     }
 
     return this.isScopeSubsetOfActor(target.data_scope, actor.data_scope);
   }
 
-  private assertAssignablePayload(
+  private async assertAssignablePayload(
     actor: ActorContext,
     data: any,
     options: { allowEqualRole: boolean },
-  ): void {
+    roleMap?: Map<string, RoleDefinition>,
+  ): Promise<void> {
+    const currentRoleMap = roleMap || await this.getRoleMap();
     const actorRole = this.getPrimaryRole({ roles: actor.roles });
     const requestedRole = this.normalizeRole(data);
-    const actorRank = this.getRoleRank(actorRole);
-    const requestedRank = this.getRoleRank(requestedRole);
+    const actorRank = this.getRoleRank(actorRole, currentRoleMap);
+    const requestedRank = this.getRoleRank(requestedRole, currentRoleMap);
 
     if (requestedRank === 0) {
       throw new ForbiddenException(`ไม่สามารถกำหนดตำแหน่ง ${requestedRole} ได้`);
@@ -272,10 +457,14 @@ export class UsersService {
       : requestedRank > actorRank || (requestedRank === actorRank && actorRole !== 'ADMIN');
 
     if (exceedsRoleAuthority) {
-      throw new ForbiddenException('ไม่สามารถกำหนดตำแหน่งสูงกว่าหรือเทียบเท่าตำแหน่งของตนเองได้');
+      throw new ForbiddenException(
+        'ไม่สามารถกำหนดตำแหน่งสูงกว่าหรือเทียบเท่าตำแหน่งของตนเองได้',
+      );
     }
 
     const requestedPermissions = this.normalizePermissionList(data?.permissions);
+    this.assertValidPermissionList(requestedPermissions);
+
     if (!this.canGrantPermissions(actor.permissions || [], requestedPermissions)) {
       throw new ForbiddenException('ไม่สามารถกำหนดสิทธิ์ที่ตนเองไม่มีได้');
     }
@@ -284,50 +473,140 @@ export class UsersService {
       throw new ForbiddenException('ไม่สามารถกำหนดขอบเขตข้อมูลกว้างกว่าสิทธิ์ของตนเองได้');
     }
 
-    const roleScopeError = getRoleScopeValidationError(requestedRole, data?.data_scope);
+    const roleScopeError = getRoleScopeValidationError(requestedRole, data?.data_scope, {
+      scopeMode: this.getRoleScopeMode(requestedRole, currentRoleMap),
+      roleLabel: this.getRoleLabel(requestedRole, currentRoleMap),
+    });
     if (roleScopeError) {
       throw new ForbiddenException(roleScopeError);
     }
   }
 
-  async getAllUsers(actor?: ActorContext) {
+  private async getUserRecordById(
+    id: number,
+    roleMap?: Map<string, RoleDefinition>,
+  ): Promise<any | null> {
     const sql = `
-      SELECT u.id, u.username, u."FirstName", u."LastName", u."PersonID_Onec", 
-             u.phone, u.email, u.affiliation, u.status, u.permissions, u.role, u.data_scope, u.created_at,
-             CASE WHEN u.role IS NOT NULL THEN ARRAY[u.role]::text[] ELSE ARRAY[]::text[] END as roles,
-             CASE WHEN r.label IS NOT NULL THEN ARRAY[r.label]::text[] ELSE ARRAY[]::text[] END as labels
-      FROM users u
-      LEFT JOIN roles r ON r.name = u.role
-      ORDER BY u.created_at DESC
-    `;
-    const result = await this.db.query(sql);
-    const hydratedUsers = result.rows.map((row: any) => this.hydrateUserPermissions(row));
-
-    if (!actor) {
-      return hydratedUsers;
-    }
-
-    return hydratedUsers.filter((user: any) => this.canManageUser(actor, user));
-  }
-
-  async getUserById(id: number, actor?: ActorContext) {
-    const sql = `
-      SELECT u.id, u.username, u."FirstName", u."LastName", u."PersonID_Onec", 
-             u.phone, u.email, u.affiliation, u.status, u.permissions, u.role, u.data_scope, u.created_at,
-             CASE WHEN u.role IS NOT NULL THEN ARRAY[u.role]::text[] ELSE ARRAY[]::text[] END as roles,
-             CASE WHEN r.label IS NOT NULL THEN ARRAY[r.label]::text[] ELSE ARRAY[]::text[] END as labels
+      SELECT
+        u.id,
+        u.username,
+        u."FirstName",
+        u."LastName",
+        u."PersonID_Onec",
+        u.phone,
+        u.email,
+        u.affiliation,
+        u.status,
+        u.permissions,
+        u.role,
+        u.data_scope,
+        u.created_at,
+        CASE WHEN u.role IS NOT NULL THEN ARRAY[u.role]::text[] ELSE ARRAY[]::text[] END AS roles,
+        CASE WHEN r.label IS NOT NULL THEN ARRAY[r.label]::text[] ELSE ARRAY[]::text[] END AS labels,
+        r.default_permissions AS role_default_permissions
       FROM users u
       LEFT JOIN roles r ON r.name = u.role
       WHERE u.id = $1
     `;
     const result = await this.db.query(sql, [id]);
-    const user = result.rows[0] ? this.hydrateUserPermissions(result.rows[0]) : null;
+    const row = result.rows[0];
+
+    return row ? this.hydrateUserPermissions(row, roleMap) : null;
+  }
+
+  private normalizeRoleGroupPayload(
+    data: any,
+    existing?: RoleDefinition | null,
+  ): {
+    name: string;
+    label: string;
+    rank: number;
+    default_permissions: string[];
+    scope_mode: RoleScopeMode;
+  } {
+    const name = existing?.name || this.normalizeRoleName(data?.name);
+    if (!name) {
+      throw new BadRequestException('กรุณากรอกรหัสกลุ่มผู้ใช้งาน');
+    }
+
+    if (!/^[A-Z][A-Z0-9_]{1,49}$/.test(name)) {
+      throw new BadRequestException(
+        'รหัสกลุ่มผู้ใช้งานต้องเป็นตัวพิมพ์ใหญ่ ภาษาอังกฤษ ตัวเลข หรือ _ และขึ้นต้นด้วยตัวอักษร',
+      );
+    }
+
+    const label = typeof data?.label === 'string' ? data.label.trim() : '';
+    if (!label) {
+      throw new BadRequestException('กรุณากรอกชื่อกลุ่มผู้ใช้งาน');
+    }
+
+    const rank = Number(data?.rank);
+    if (!Number.isInteger(rank) || rank < 1) {
+      throw new BadRequestException('ลำดับสิทธิ์ต้องเป็นตัวเลขจำนวนเต็มที่มากกว่าศูนย์');
+    }
+
+    const defaultPermissions = this.normalizePermissionList(
+      data?.default_permissions ?? data?.permissions,
+    );
+    this.assertValidPermissionList(defaultPermissions);
+    if (defaultPermissions.length === 0) {
+      throw new BadRequestException('กรุณาเลือกสิทธิ์เริ่มต้นอย่างน้อย 1 รายการ');
+    }
+
+    return {
+      name,
+      label,
+      rank,
+      default_permissions: defaultPermissions,
+      scope_mode: this.normalizeScopeMode(data?.scope_mode),
+    };
+  }
+
+  async getAllUsers(actor?: ActorContext) {
+    const roleMap = await this.getRoleMap();
+    const sql = `
+      SELECT
+        u.id,
+        u.username,
+        u."FirstName",
+        u."LastName",
+        u."PersonID_Onec",
+        u.phone,
+        u.email,
+        u.affiliation,
+        u.status,
+        u.permissions,
+        u.role,
+        u.data_scope,
+        u.created_at,
+        CASE WHEN u.role IS NOT NULL THEN ARRAY[u.role]::text[] ELSE ARRAY[]::text[] END AS roles,
+        CASE WHEN r.label IS NOT NULL THEN ARRAY[r.label]::text[] ELSE ARRAY[]::text[] END AS labels,
+        r.default_permissions AS role_default_permissions
+      FROM users u
+      LEFT JOIN roles r ON r.name = u.role
+      ORDER BY u.created_at DESC
+    `;
+    const result = await this.db.query(sql);
+    const hydratedUsers = result.rows.map((row: any) =>
+      this.hydrateUserPermissions(row, roleMap),
+    );
+
+    if (!actor) {
+      return hydratedUsers;
+    }
+
+    return hydratedUsers.filter((user: any) => this.canManageUser(actor, user, roleMap));
+  }
+
+  async getUserById(id: number, actor?: ActorContext) {
+    const roleMap = await this.getRoleMap();
+    const user = await this.getUserRecordById(id, roleMap);
 
     if (!user) {
       return null;
     }
 
-    if (actor && !this.canManageUser(actor, user)) {
+    if (actor && !this.canManageUser(actor, user, roleMap)) {
       throw new ForbiddenException('ไม่มีสิทธิ์เข้าถึงข้อมูลผู้ใช้งานนี้');
     }
 
@@ -337,18 +616,32 @@ export class UsersService {
   async createUser(actor: ActorContext | undefined, data: any) {
     try {
       const currentActor = this.ensureActor(actor);
-      this.assertAssignablePayload(currentActor, data, { allowEqualRole: false });
+      const roleMap = await this.getRoleMap();
+      await this.assertAssignablePayload(currentActor, data, { allowEqualRole: false }, roleMap);
 
       return await this.db.transaction(async (client) => {
         const hashedPassword = await this.passwordService.hash(data.password || '123456');
         const primaryRole = this.normalizeRole(data);
-        
+
         const userRes = await client.query(
           `
-          INSERT INTO users (username, password, "FirstName", "LastName", "PersonID_Onec", phone, email, affiliation, status, permissions, role, data_scope)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-          RETURNING id
-        `,
+            INSERT INTO users (
+              username,
+              password,
+              "FirstName",
+              "LastName",
+              "PersonID_Onec",
+              phone,
+              email,
+              affiliation,
+              status,
+              permissions,
+              role,
+              data_scope
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            RETURNING id
+          `,
           [
             data.username,
             hashedPassword,
@@ -376,12 +669,13 @@ export class UsersService {
   async updateUser(actor: ActorContext | undefined, id: number, data: any) {
     try {
       const currentActor = this.ensureActor(actor);
-      const existingUser = await this.getUserById(id);
+      const roleMap = await this.getRoleMap();
+      const existingUser = await this.getUserRecordById(id, roleMap);
       if (!existingUser) {
         throw new NotFoundException('ไม่พบผู้ใช้งาน');
       }
 
-      if (!this.canManageUser(currentActor, existingUser)) {
+      if (!this.canManageUser(currentActor, existingUser, roleMap)) {
         throw new ForbiddenException('ไม่มีสิทธิ์แก้ไขผู้ใช้งานนี้');
       }
 
@@ -393,7 +687,7 @@ export class UsersService {
         throw new ForbiddenException('ไม่สามารถเปลี่ยนตำแหน่งของบัญชีตัวเองได้');
       }
 
-      this.assertAssignablePayload(currentActor, data, { allowEqualRole: isSelf });
+      await this.assertAssignablePayload(currentActor, data, { allowEqualRole: isSelf }, roleMap);
 
       return await this.db.transaction(async (client) => {
         const primaryRole = this.normalizeRole(data);
@@ -435,10 +729,10 @@ export class UsersService {
 
         await client.query(
           `
-          UPDATE users
-          SET ${setClauses.join(', ')}
-          WHERE id = $${paramIndex}
-        `,
+            UPDATE users
+            SET ${setClauses.join(', ')}
+            WHERE id = $${paramIndex}
+          `,
           queryParams,
         );
 
@@ -453,7 +747,8 @@ export class UsersService {
   async deleteUser(actor: ActorContext | undefined, id: number) {
     try {
       const currentActor = this.ensureActor(actor);
-      const existingUser = await this.getUserById(id);
+      const roleMap = await this.getRoleMap();
+      const existingUser = await this.getUserRecordById(id, roleMap);
       if (!existingUser) {
         throw new NotFoundException('ไม่พบข้อมูลผู้ใช้งานที่ต้องการลบ');
       }
@@ -462,21 +757,17 @@ export class UsersService {
         throw new ForbiddenException('ไม่สามารถลบบัญชีของตัวเองได้');
       }
 
-      if (!this.canManageUser(currentActor, existingUser)) {
+      if (!this.canManageUser(currentActor, existingUser, roleMap)) {
         throw new ForbiddenException('ไม่มีสิทธิ์ลบผู้ใช้งานนี้');
       }
 
       return await this.db.transaction(async (client) => {
-        this.logger.log(`Attempting to delete user with ID: ${id}`);
-        const result = await client.query('DELETE FROM users WHERE id = $1', [
-          id,
-        ]);
+        const result = await client.query('DELETE FROM users WHERE id = $1', [id]);
 
         if (result.rowCount === 0) {
           throw new NotFoundException('ไม่พบข้อมูลผู้ใช้งานที่ต้องการลบ');
         }
 
-        this.logger.log(`Delete user result: ${result.rowCount} rows deleted`);
         return { success: true, rowCount: result.rowCount };
       });
     } catch (err) {
@@ -486,49 +777,218 @@ export class UsersService {
   }
 
   async getRoles(actor?: ActorContext) {
-    const res = await this.db.query('SELECT * FROM roles ORDER BY id');
+    const definitions = await this.getRoleDefinitions();
     if (!actor) {
-      return res.rows;
+      return definitions;
     }
 
+    const roleMap = new Map(definitions.map((definition) => [definition.name, definition]));
     const actorRole = this.getPrimaryRole({ roles: actor.roles });
-    return res.rows.filter((role: { name: string }) => this.canManageRole(actorRole, role.name));
+    return definitions.filter((role) => (
+      role.name === actorRole ||
+      (
+        this.canManageRole(actorRole, role.name, roleMap) &&
+        this.canGrantPermissions(actor.permissions || [], role.default_permissions || [])
+      )
+    ));
+  }
+
+  async getRoleGroups(actor?: ActorContext) {
+    const definitions = await this.getRoleDefinitions(true);
+    if (!actor) {
+      return definitions;
+    }
+
+    const roleMap = new Map(definitions.map((definition) => [definition.name, definition]));
+    const actorRole = this.getPrimaryRole({ roles: actor.roles });
+    return definitions.filter((role) => (
+      this.canManageRole(actorRole, role.name, roleMap) &&
+      this.canGrantPermissions(actor.permissions || [], role.default_permissions || [])
+    ));
+  }
+
+  async createRoleGroup(actor: ActorContext | undefined, data: any) {
+    const currentActor = this.ensureActor(actor);
+    const definitions = await this.getRoleDefinitions();
+    const roleMap = new Map(definitions.map((definition) => [definition.name, definition]));
+    const payload = this.normalizeRoleGroupPayload(data);
+
+    if (roleMap.has(payload.name)) {
+      throw new BadRequestException('มีกลุ่มผู้ใช้งานนี้อยู่แล้ว');
+    }
+
+    const actorRole = this.getPrimaryRole({ roles: currentActor.roles });
+    const actorRank = this.getRoleRank(actorRole, roleMap);
+    if (payload.rank > actorRank || (payload.rank === actorRank && actorRole !== 'ADMIN')) {
+      throw new ForbiddenException('ไม่สามารถสร้างกลุ่มผู้ใช้งานที่มีลำดับสิทธิ์สูงกว่าหรือเทียบเท่าตนเองได้');
+    }
+
+    if (!this.canGrantPermissions(currentActor.permissions || [], payload.default_permissions)) {
+      throw new ForbiddenException('ไม่สามารถกำหนดสิทธิ์เริ่มต้นที่ตนเองไม่มีได้');
+    }
+
+    const res = await this.db.query(
+      `
+        INSERT INTO roles (name, label, rank, default_permissions, scope_mode, is_system)
+        VALUES ($1, $2, $3, $4::jsonb, $5, FALSE)
+        RETURNING id, name, label, rank, default_permissions, scope_mode, is_system
+      `,
+      [
+        payload.name,
+        payload.label,
+        payload.rank,
+        JSON.stringify(payload.default_permissions),
+        payload.scope_mode,
+      ],
+    );
+
+    return {
+      success: true,
+      role: {
+        ...res.rows[0],
+        default_permissions: this.normalizePermissionList(res.rows[0].default_permissions),
+      },
+    };
+  }
+
+  async updateRoleGroup(actor: ActorContext | undefined, roleName: string, data: any) {
+    const currentActor = this.ensureActor(actor);
+    const normalizedRoleName = this.normalizeRoleName(roleName);
+    const definitions = await this.getRoleDefinitions(true);
+    const roleMap = new Map(definitions.map((definition) => [definition.name, definition]));
+    const existingRole = roleMap.get(normalizedRoleName);
+
+    if (!existingRole) {
+      throw new NotFoundException('ไม่พบกลุ่มผู้ใช้งาน');
+    }
+
+    const actorRole = this.getPrimaryRole({ roles: currentActor.roles });
+    if (!this.canManageRole(actorRole, existingRole.name, roleMap)) {
+      throw new ForbiddenException('ไม่มีสิทธิ์จัดการกลุ่มผู้ใช้งานนี้');
+    }
+
+    const payload = this.normalizeRoleGroupPayload(data, existingRole);
+    const actorRank = this.getRoleRank(actorRole, roleMap);
+    if (payload.rank > actorRank || (payload.rank === actorRank && actorRole !== 'ADMIN')) {
+      throw new ForbiddenException('ไม่สามารถกำหนดลำดับสิทธิ์สูงกว่าหรือเทียบเท่าตนเองได้');
+    }
+
+    if (!this.canGrantPermissions(currentActor.permissions || [], payload.default_permissions)) {
+      throw new ForbiddenException('ไม่สามารถกำหนดสิทธิ์เริ่มต้นที่ตนเองไม่มีได้');
+    }
+
+    const res = await this.db.query(
+      `
+        UPDATE roles
+        SET label = $2,
+            rank = $3,
+            default_permissions = $4::jsonb,
+            scope_mode = $5
+        WHERE name = $1
+        RETURNING id, name, label, rank, default_permissions, scope_mode, is_system
+      `,
+      [
+        existingRole.name,
+        payload.label,
+        payload.rank,
+        JSON.stringify(payload.default_permissions),
+        payload.scope_mode,
+      ],
+    );
+
+    return {
+      success: true,
+      role: {
+        ...res.rows[0],
+        default_permissions: this.normalizePermissionList(res.rows[0].default_permissions),
+      },
+    };
+  }
+
+  async deleteRoleGroup(actor: ActorContext | undefined, roleName: string) {
+    const currentActor = this.ensureActor(actor);
+    const normalizedRoleName = this.normalizeRoleName(roleName);
+    const definitions = await this.getRoleDefinitions(true);
+    const roleMap = new Map(definitions.map((definition) => [definition.name, definition]));
+    const existingRole = roleMap.get(normalizedRoleName);
+
+    if (!existingRole) {
+      throw new NotFoundException('ไม่พบกลุ่มผู้ใช้งาน');
+    }
+
+    const actorRole = this.getPrimaryRole({ roles: currentActor.roles });
+    if (!this.canManageRole(actorRole, existingRole.name, roleMap)) {
+      throw new ForbiddenException('ไม่มีสิทธิ์ลบกลุ่มผู้ใช้งานนี้');
+    }
+
+    if (existingRole.is_system) {
+      throw new ForbiddenException('ไม่สามารถลบบทบาทระบบได้');
+    }
+
+    if ((existingRole.user_count || 0) > 0) {
+      throw new ForbiddenException('ไม่สามารถลบบทบาทที่ยังมีผู้ใช้งานอยู่ได้');
+    }
+
+    if ((existingRole.login_link_count || 0) > 0) {
+      throw new ForbiddenException('ไม่สามารถลบบทบาทที่ยังถูกใช้งานในลิงก์เข้าสู่ระบบได้');
+    }
+
+    await this.db.query('DELETE FROM roles WHERE name = $1', [existingRole.name]);
+    return { success: true };
   }
 
   async validateUser(username: string, password: string) {
+    const roleMap = await this.getRoleMap();
     const sql = `
-      SELECT u.id, u.username, u.password, u."FirstName", u."LastName", u."PersonID_Onec", u.email, u.affiliation, 
-             u.status, u.permissions, u.role, u.data_scope,
-             CASE WHEN u.role IS NOT NULL THEN ARRAY[u.role]::text[] ELSE ARRAY[]::text[] END as roles,
-             CASE WHEN r.label IS NOT NULL THEN ARRAY[r.label]::text[] ELSE ARRAY[]::text[] END as labels
+      SELECT
+        u.id,
+        u.username,
+        u.password,
+        u."FirstName",
+        u."LastName",
+        u."PersonID_Onec",
+        u.email,
+        u.affiliation,
+        u.status,
+        u.permissions,
+        u.role,
+        u.data_scope,
+        CASE WHEN u.role IS NOT NULL THEN ARRAY[u.role]::text[] ELSE ARRAY[]::text[] END AS roles,
+        CASE WHEN r.label IS NOT NULL THEN ARRAY[r.label]::text[] ELSE ARRAY[]::text[] END AS labels,
+        r.default_permissions AS role_default_permissions
       FROM users u
       LEFT JOIN roles r ON r.name = u.role
       WHERE u.username = $1
     `;
     const result = await this.db.query(sql, [username]);
     const user = result.rows[0];
-    
+
     if (!user) return null;
-    
+
     const isPasswordValid = await this.passwordService.compare(password, user.password);
     if (!isPasswordValid) return null;
-    
+
     delete user.password;
-    return this.hydrateUserPermissions(user);
+    return this.hydrateUserPermissions(user, roleMap);
   }
 
   async hashExistingPasswords() {
     this.logger.log('Starting to hash existing plaintext passwords...');
-    
-    const result = await this.db.query(`SELECT id, password FROM users WHERE password NOT LIKE '$2%'`);
-    
+
+    const result = await this.db.query(
+      `SELECT id, password FROM users WHERE password NOT LIKE '$2%'`,
+    );
+
     let updated = 0;
     for (const row of result.rows) {
       const hashedPassword = await this.passwordService.hash(row.password);
-      await this.db.query('UPDATE users SET password = $1 WHERE id = $2', [hashedPassword, row.id]);
+      await this.db.query('UPDATE users SET password = $1 WHERE id = $2', [
+        hashedPassword,
+        row.id,
+      ]);
       updated++;
     }
-    
+
     this.logger.log(`Hashed ${updated} passwords`);
     return { updated };
   }

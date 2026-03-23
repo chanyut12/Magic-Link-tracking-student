@@ -45,6 +45,11 @@ const routes: RouteRecordRaw[] = [
         component: () => import('pages/ManageUserPage.vue'), 
         meta: { requiresAuth: true, permission: 'manage-users-list' } 
       },
+      {
+        path: 'manage-role-groups',
+        component: () => import('pages/RoleGroupsPage.vue'),
+        meta: { requiresAuth: true, permission: 'manage-role-groups' }
+      },
       { 
         path: 'login-links', 
         component: () => import('pages/LoginLinksPage.vue'), 
