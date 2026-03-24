@@ -30,7 +30,7 @@
           />
           <q-btn
             color="white"
-            text-color="indigo-9"
+            text-color="primary"
             icon="fa-solid fa-plus"
             label="สร้างลิงก์เข้าสู่ระบบใหม่"
             @click="openAddDialog"
@@ -453,7 +453,14 @@
             </q-card-section>
             <q-card-actions align="right" class="q-px-md q-pb-md">
               <q-btn flat label="ยกเลิก" color="grey-7" v-close-popup no-caps />
-              <q-btn unelevated label="สร้างลิงก์" color="primary" type="submit" :loading="submitLoading" no-caps />
+              <q-btn
+                unelevated
+                label="สร้างลิงก์"
+                color="primary"
+                type="submit"
+                :loading="submitLoading"
+                no-caps
+              />
             </q-card-actions>
           </q-form>
 
@@ -542,6 +549,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, watch, onMounted, nextTick } from 'vue';
+import { useRouter } from 'vue-router';
 import { api } from 'boot/axios';
 import { useQuasar } from 'quasar';
 import { useUserStore } from '../composables/useUserStore';
@@ -549,6 +557,7 @@ import {
   GRANT_EXEMPT_PERMISSION_IDS,
   PERMISSION_DELTA_LEGEND,
   PERMISSION_DELTA_META,
+  getEffectivePermissions,
   getRoleScopePreset,
   getPermissionDeltaState,
   getLeafMenuItems,
@@ -558,6 +567,7 @@ import {
 } from '../constants/permissions';
 
 const $q = useQuasar();
+const router = useRouter();
 const { user } = useUserStore();
 
 interface LoginLink {
@@ -723,6 +733,21 @@ const form = reactive({
 });
 const suppressRolePermissionSync = ref(false);
 
+const currentUserPermissions = computed(() => (
+  getEffectivePermissions(user.value?.roles || [], user.value?.permissions || [])
+));
+
+const canCreateLoginLinks = computed(() => {
+  return (
+    currentUserPermissions.value.includes('*') ||
+    currentUserPermissions.value.includes('ALL') ||
+    (
+      currentUserPermissions.value.includes('login-links') &&
+      currentUserPermissions.value.includes('create')
+    )
+  );
+});
+
 const normalizeScopeValueList = (value: unknown): string[] => {
   if (!Array.isArray(value)) {
     return [];
@@ -732,7 +757,13 @@ const normalizeScopeValueList = (value: unknown): string[] => {
 };
 
 const currentUserRole = computed(() => user.value?.roles?.[0] || null);
-const currentUserPermissionSet = computed(() => new Set(user.value?.permissions || []));
+const currentUserRoleMeta = computed(() => (
+  rolesCatalog.value.find((role) => role.name === (user.value?.roles?.[0] || null)) || null
+));
+const currentUserGrantablePermissionSet = computed(() => new Set([
+  ...(user.value?.permissions || []),
+  ...(currentUserRoleMeta.value?.default_permissions || []),
+]));
 const currentUserScope = computed(() => ({
   provinces: normalizeScopeValueList(user.value?.data_scope?.provinces),
   districts: normalizeScopeValueList(user.value?.data_scope?.districts),
@@ -1112,9 +1143,9 @@ const onAllProvincesToggle = (enabled: boolean | null) => {
 
 const canGrantPermission = (permissionId: string) => (
   GRANT_EXEMPT_PERMISSION_IDS.includes(permissionId) ||
-  currentUserPermissionSet.value.has('*') ||
-  currentUserPermissionSet.value.has('ALL') ||
-  currentUserPermissionSet.value.has(permissionId)
+  currentUserGrantablePermissionSet.value.has('*') ||
+  currentUserGrantablePermissionSet.value.has('ALL') ||
+  currentUserGrantablePermissionSet.value.has(permissionId)
 );
 
 const isPermissionLocked = (permissionId: string) => (
@@ -1172,6 +1203,11 @@ const resetScopeForm = () => {
 };
 
 const openAddDialog = async () => {
+  if (!canCreateLoginLinks.value) {
+    void router.push('/forbidden');
+    return;
+  }
+
   await ensureScopeOptionsLoaded();
   if (rolesCatalog.value.length === 0) {
     await fetchRolesCatalog();
@@ -1204,6 +1240,12 @@ watch(() => form.role, () => {
 });
 
 const submitAddLink = async () => {
+  if (!canCreateLoginLinks.value) {
+    addDialog.value = false;
+    void router.push('/forbidden');
+    return;
+  }
+
   if (!form.assigned_to_name.trim() || !form.assigned_to_email.trim()) {
     $q.notify({ message: 'กรุณากรอกชื่อและอีเมลให้ครบถ้วน', color: 'negative' });
     return;
@@ -1479,6 +1521,7 @@ onMounted(() => {
 
 .permission-item__label {
   flex: 1;
+  min-width: 0;
 }
 
 .permission-item--default {
@@ -1509,6 +1552,8 @@ onMounted(() => {
 .permission-state-badge {
   display: inline-flex;
   align-items: center;
+  margin-left: auto;
+  flex-shrink: 0;
   border-radius: 999px;
   padding: 4px 10px;
   font-size: 0.74rem;

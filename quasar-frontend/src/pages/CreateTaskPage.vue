@@ -243,72 +243,188 @@
         <!-- Login Form -->
         <div v-if="formData.type === 'LOGIN'" class="card q-mb-md">
           <div class="card-title">ตั้งค่าสิทธิ์การเข้าใช้งานผ่านลิงก์</div>
-          <div class="form-group">
-            <label>ชื่อ-นามสกุล ผู้ใช้งานลิงก์ *</label>
-            <input type="text" v-model="formData.assigned_to_name" placeholder="เช่น อาจารย์สมเกียรติติตรงนี้">
+          <div class="row q-col-gutter-md">
+            <div class="col-12 col-sm-6">
+              <div class="form-group">
+                <label>ชื่อผู้ใช้งานลิงก์ *</label>
+                <input type="text" v-model="formData.assigned_to_name" placeholder="เช่น อาจารย์สมเกียรติ">
+              </div>
+            </div>
+            <div class="col-12 col-sm-6">
+              <div class="form-group">
+                <label>อีเมลสำหรับ OTP / Login *</label>
+                <input type="email" v-model="formData.assigned_to_email" placeholder="เช่น teacher_temp@school.ac.th">
+              </div>
+            </div>
           </div>
-          <div class="form-group">
-            <label>อีเมล/Username (สวมสิทธิ์) *</label>
-            <input type="email" v-model="formData.assigned_to_email" placeholder="เช่น teacher_temp@school.ac.th">
+
+          <div class="row q-col-gutter-md">
+            <div class="col-12 col-sm-6">
+              <div class="form-group">
+                <label>บทบาท (Role) *</label>
+                <select v-model="formData.role" style="width: 100% !important; height: 48px;">
+                  <option value="">-- เลือกบทบาท --</option>
+                  <option v-for="role in roleOptions" :key="role.value" :value="role.value">{{ role.label }}</option>
+                </select>
+              </div>
+            </div>
+            <div class="col-12 col-sm-6">
+              <div class="form-group">
+                <label>อายุลิงก์</label>
+                <div class="expiry-row">
+                  <input type="number" v-model="formData.expires_value" min="1" max="90">
+                  <select v-model="formData.expires_unit">
+                    <option value="hours">ชั่วโมง</option>
+                    <option value="days">วัน</option>
+                    <option value="weeks">สัปดาห์</option>
+                  </select>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div class="form-group">
-            <label>บทบาท (Role) *</label>
-            <select v-model="formData.selected_role" style="width: 100% !important; height: 48px;">
-              <option value="ADMIN_SCHOOL">ผู้บริหารโรงเรียน</option>
-              <option value="TEACHER">ครูประจำชั้น</option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label>สิทธิ์การใช้งาน (Permissions) - ฟังก์ชันอนาคต</label>
-            <q-btn-dropdown
-              color="white"
-              text-color="grey-8"
-              flat
-              no-caps
-              class="full-width dropdown-btn-select"
-              label="-- เลือกสิทธิ์การใช้งาน --"
-              style="border: 1px solid #e2e8f0; border-radius: 8px; height: 48px; text-align: left !important; justify-content: space-between !important;"
-              align="left"
-            >
-              <q-list class="q-pa-sm" style="min-width: 250px;">
-                <q-item v-for="opt in permissionOptions" :key="opt.value" dense class="q-py-xs">
-                  <q-item-section side>
-                    <q-checkbox v-model="formData.mock_permissions" :val="opt.value" color="primary" />
-                  </q-item-section>
-                  <q-item-section>
-                    <q-item-label>{{ opt.label }}</q-item-label>
-                  </q-item-section>
-                </q-item>
-              </q-list>
-            </q-btn-dropdown>
-
-            <!-- Display Selected Permissions as Chips -->
-            <div class="q-mt-sm q-gutter-xs">
-              <q-chip 
-                v-for="val in formData.mock_permissions" 
-                :key="val" 
-                dense 
-                color="blue-1" 
-                text-color="primary"
-                removable
-                @remove="formData.mock_permissions = formData.mock_permissions.filter(p => p !== val)"
+            <div class="row items-start justify-between q-col-gutter-md q-mb-sm">
+              <div class="col-12 col-md">
+                <label class="q-mb-xs">สิทธิ์การใช้งาน</label>
+                <div class="permission-help-text">
+                  ค่าเริ่มต้นของ {{ selectedRoleMeta?.label || formData.role || 'role ที่เลือก' }} จะขึ้นเป็นสีน้ำเงิน ส่วนสิทธิ์ที่เพิ่มหรือปิดจาก default จะมีสีแยกให้เห็นทันที
+                </div>
+              </div>
+            </div>
+            <div class="permission-legend q-mb-sm">
+              <div
+                v-for="item in permissionLegendItems"
+                :key="item.state"
+                class="permission-legend-item"
+                :class="`permission-legend-item--${item.state}`"
               >
-                {{ permissionOptions.find(o => o.value === val)?.label }}
+                <span class="permission-legend-swatch"></span>
+                <div>
+                  <div class="text-caption text-weight-bold">{{ item.shortLabel }}</div>
+                  <div class="text-caption text-blue-grey-7">{{ item.description }}</div>
+                </div>
+              </div>
+            </div>
+            <div class="permission-grid">
+              <label
+                v-for="opt in permissionOptions"
+                :key="opt.value"
+                class="permission-item"
+                :class="[
+                  `permission-item--${getPermissionVisualState(opt.value)}`,
+                  { 'permission-item--disabled': isPermissionLocked(opt.value) },
+                ]"
+              >
+                <q-checkbox
+                  :model-value="formData.permissions.includes(opt.value)"
+                  :disable="isPermissionLocked(opt.value)"
+                  dense
+                  size="sm"
+                  class="permission-item__checkbox"
+                  @update:model-value="togglePermission(opt.value, $event)"
+                />
+                <span class="permission-item__label">{{ opt.label }}</span>
+                <span
+                  v-if="shouldShowPermissionBadge(opt.value)"
+                  class="permission-state-badge"
+                  :class="`permission-state-badge--${getPermissionVisualState(opt.value)}`"
+                >
+                  {{ getPermissionBadgeLabel(opt.value) }}
+                </span>
+              </label>
+            </div>
+            <div class="q-mt-xs row q-gutter-xs">
+              <q-chip
+                v-for="permissionId in formData.permissions"
+                :key="permissionId"
+                dense
+                removable
+                color="blue-1"
+                text-color="primary"
+                class="selected-permission-chip"
+                :class="`selected-permission-chip--${getPermissionVisualState(permissionId)}`"
+                @remove="removePermission(permissionId)"
+              >
+                {{ permissionLabelMap[permissionId] || permissionId }}
               </q-chip>
             </div>
           </div>
-          
+
           <div class="form-group">
-            <label>อายุลิงก์</label>
-            <div class="expiry-row">
-              <input type="number" v-model="formData.expires_value" min="1" max="90">
-              <select v-model="formData.expires_unit">
-                <option value="hours">ชั่วโมง</option>
-                <option value="days">วัน</option>
-                <option value="weeks">สัปดาห์</option>
-              </select>
+            <div class="row items-center justify-between q-mb-sm">
+              <div>
+                <label class="q-mb-xs">Data Scope</label>
+                <div class="permission-help-text">{{ roleScopePreset.hint }}</div>
+              </div>
+              <q-toggle
+                v-model="scopeForm.allProvinces"
+                :disable="isNationwideToggleDisabled"
+                label="ดูข้อมูลทุกจังหวัด"
+                size="sm"
+                class="scope-toggle-inline"
+                @update:model-value="onAllProvincesToggle"
+              />
+            </div>
+            <div class="row q-col-gutter-md">
+              <div class="col-12 col-sm-6">
+                <select
+                  v-model="scopeForm.province"
+                  :disabled="scopeForm.allProvinces || isScopeFieldLocked('province')"
+                  @change="onLoginScopeProvinceChange"
+                >
+                  <option :value="null">-- เลือกจังหวัด --</option>
+                  <option v-for="province in availableProvinceOptions" :key="province" :value="province">{{ province }}</option>
+                </select>
+              </div>
+              <div class="col-12 col-sm-6">
+                <select
+                  v-model="scopeForm.district"
+                  :disabled="scopeForm.allProvinces || !scopeForm.province || isScopeFieldLocked('district')"
+                  @change="onLoginScopeDistrictChange"
+                >
+                  <option :value="null">-- เลือกอำเภอ --</option>
+                  <option v-for="district in availableDistrictOptions" :key="district" :value="district">{{ district }}</option>
+                </select>
+              </div>
+              <div class="col-12 col-sm-6">
+                <select
+                  v-model="scopeForm.sub_district"
+                  :disabled="scopeForm.allProvinces || !scopeForm.district || isScopeFieldLocked('sub_district')"
+                  @change="onLoginScopeSubDistrictChange"
+                >
+                  <option :value="null">-- เลือกตำบล --</option>
+                  <option v-for="subDistrict in availableSubDistrictOptions" :key="subDistrict" :value="subDistrict">{{ subDistrict }}</option>
+                </select>
+              </div>
+              <div class="col-12 col-sm-6">
+                <select
+                  v-model.number="scopeForm.school_id"
+                  :disabled="scopeForm.allProvinces || isScopeFieldLocked('school_id')"
+                  @change="onLoginScopeSchoolChange"
+                >
+                  <option :value="null">-- เลือกโรงเรียน --</option>
+                  <option v-for="school in filteredSchools" :key="school.value" :value="school.value">{{ school.label }}</option>
+                </select>
+              </div>
+              <div class="col-12 col-sm-6">
+                <select
+                  v-model.number="scopeForm.grade_level"
+                  :disabled="isScopeFieldLocked('grade_level')"
+                >
+                  <option :value="null">-- เลือกระดับชั้น --</option>
+                  <option v-for="grade in availableGradeOptions" :key="grade.id" :value="grade.id">{{ grade.label }}</option>
+                </select>
+              </div>
+              <div class="col-12 col-sm-6">
+                <select
+                  v-model="scopeForm.room"
+                  :disabled="isScopeFieldLocked('room') || !scopeForm.grade_level || !scopeForm.school_id"
+                >
+                  <option :value="null">-- เลือกห้อง --</option>
+                  <option v-for="room in availableRoomOptions" :key="room" :value="room">{{ room }}</option>
+                </select>
+              </div>
             </div>
           </div>
         </div>
@@ -338,12 +454,12 @@
         </div>
 
         <!-- Actions -->
-        <div class="row q-col-gutter-md">
+        <div class="row q-col-gutter-md task-form-actions">
           <div class="col-4">
-            <q-btn flat color="grey-7" label="ย้อนกลับ" class="full-width" @click="currentStep = 1" no-caps />
+            <q-btn flat color="grey-7" label="ย้อนกลับ" class="full-width task-form-actions__btn" @click="currentStep = 1" no-caps />
           </div>
           <div class="col-8">
-            <q-btn color="primary" label="สร้างภารกิจ" class="full-width" unelevated padding="12px" :loading="loading" @click="submitForm" />
+            <q-btn color="primary" :label="submitButtonLabel" class="full-width task-form-actions__btn" unelevated padding="12px" :loading="loading" @click="submitForm" />
           </div>
         </div>
       </div>
@@ -382,15 +498,27 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue';
+import { useRoute } from 'vue-router';
 import { api } from 'boot/axios';
 import type { AxiosError } from 'axios';
 import { useQuasar } from 'quasar';
+import { useUserStore } from '../composables/useUserStore';
+import {
+  GRANT_EXEMPT_PERMISSION_IDS,
+  PERMISSION_DELTA_LEGEND,
+  PERMISSION_DELTA_META,
+  getLeafMenuItems,
+  getPermissionDeltaState,
+  getRoleScopePreset,
+  type DataScope,
+  type RoleDefinition,
+  type ScopeFormField,
+} from '../constants/permissions';
 
 const $q = useQuasar();
 const route = useRoute();
-const router = useRouter();
+const { user } = useUserStore();
 const currentStep = ref(1);
 const loading = ref(false);
 const showResult = ref(false);
@@ -398,12 +526,22 @@ const resultLink = ref('');
 const qrCodeUrl = ref('');
 const mapPickerInput = ref('');
 
-const permissionOptions = [
-  { label: 'ดูแดชบอร์ดรายงาน', value: 'VIEW_DASHBOARD' },
-  { label: 'จัดการรายชื่อนักเรียน', value: 'MANAGE_STUDENTS' },
-  { label: 'เช็คชื่อขาด/มา', value: 'CHECK_ATTENDANCE' },
-  { label: 'สร้างลิงก์/มอบหมายงาน', value: 'MANAGE_TASKS' }
-];
+const rolesCatalog = ref<RoleDefinition[]>([]);
+const schoolOptions = ref<Array<{
+  label: string;
+  value: number;
+  province?: string;
+  district?: string;
+  sub_district?: string;
+}>>([]);
+const roomOptions = ref<string[]>([]);
+const suppressRolePermissionSync = ref(false);
+
+const permissionOptions = getLeafMenuItems().map((item) => ({
+  label: item.label,
+  value: item.id,
+}));
+const permissionLegendItems = PERMISSION_DELTA_LEGEND;
 
 const formData = reactive({
   type: '',
@@ -432,8 +570,8 @@ const formData = reactive({
   expires_unit: 'days',
   target_school_id: '', // Added for attendance scoping
   selected_user_id: '', // For magic login lookup
-  selected_role: 'TEACHER', // For UI placeholder roles
-  mock_permissions: ['VIEW_DASHBOARD'], // For UI placeholder checklist
+  role: 'TEACHER',
+  permissions: [] as string[],
   existing_case_id: '', // Pre-linked case when coming from dashboard
 });
 
@@ -457,6 +595,16 @@ const tempFilters = reactive({
   subDistrict: '',
 });
 
+const scopeForm = reactive({
+  allProvinces: true,
+  province: null as string | null,
+  district: null as string | null,
+  sub_district: null as string | null,
+  school_id: null as number | null,
+  grade_level: null as number | null,
+  room: null as string | null,
+});
+
 const tempSchools = ref<School[]>([]);
 
 const filteredDistricts = computed(() => {
@@ -476,6 +624,139 @@ const filteredSubDistricts = computed(() => {
       .map((sd: SubDistrict) => sd.sub_district)
   ));
 });
+
+const permissionLabelMap = computed<Record<string, string>>(() => (
+  Object.fromEntries(permissionOptions.map((item) => [item.value, item.label]))
+));
+
+const normalizeScopeValueList = (value: unknown): string[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return Array.from(new Set(value.map((item) => String(item).trim()).filter(Boolean)));
+};
+
+const currentUserRole = computed(() => user.value?.roles?.[0] || null);
+const currentUserRoleMeta = computed(() => (
+  rolesCatalog.value.find((role) => role.name === (user.value?.roles?.[0] || null)) || null
+));
+const currentUserGrantablePermissionSet = computed(() => new Set([
+  ...(user.value?.permissions || []),
+  ...(currentUserRoleMeta.value?.default_permissions || []),
+]));
+const currentUserScope = computed(() => ({
+  provinces: normalizeScopeValueList(user.value?.data_scope?.provinces),
+  districts: normalizeScopeValueList(user.value?.data_scope?.districts),
+  sub_districts: normalizeScopeValueList(user.value?.data_scope?.sub_districts),
+  school_ids: normalizeScopeValueList(user.value?.data_scope?.school_ids),
+  grade_levels: normalizeScopeValueList(user.value?.data_scope?.grade_levels),
+  room_ids: normalizeScopeValueList(user.value?.data_scope?.room_ids),
+}));
+const selectedRoleMeta = computed(() => (
+  rolesCatalog.value.find((role) => role.name === formData.role) || null
+));
+const roleDefaultPermissions = computed(() => selectedRoleMeta.value?.default_permissions || []);
+const roleScopePreset = computed(() => (
+  getRoleScopePreset(formData.role, selectedRoleMeta.value?.scope_mode)
+));
+const canUseNationwideScope = computed(() => (
+  currentUserScope.value.provinces.length === 0 &&
+  currentUserScope.value.districts.length === 0 &&
+  currentUserScope.value.sub_districts.length === 0 &&
+  currentUserScope.value.school_ids.length === 0
+));
+const isNationwideToggleDisabled = computed(() => (
+  roleScopePreset.value.mode !== 'flexible' || !canUseNationwideScope.value
+));
+const roleOptions = computed(() => {
+  const actorRole = currentUserRole.value;
+  const actorRank = rolesCatalog.value.find((role) => role.name === actorRole)?.rank || 0;
+
+  return rolesCatalog.value
+    .filter((role) => {
+      const targetRank = role.rank || 0;
+      if (targetRank > actorRank) {
+        return false;
+      }
+
+      if (targetRank === actorRank && actorRole !== 'ADMIN') {
+        return false;
+      }
+
+      return true;
+    })
+    .sort((a, b) => (b.rank || 0) - (a.rank || 0))
+    .map((role) => ({ value: role.name, label: role.label }));
+});
+const availableProvinceOptions = computed(() => (
+  currentUserScope.value.provinces.length > 0
+    ? locationData.provinces.filter((province) => currentUserScope.value.provinces.includes(province))
+    : locationData.provinces
+));
+const availableDistrictOptions = computed(() => {
+  if (!scopeForm.province) return [];
+  let options = Array.from(new Set(
+    locationData.districts
+      .filter((item) => item.province === scopeForm.province)
+      .map((item) => item.district),
+  ));
+
+  if (currentUserScope.value.districts.length > 0) {
+    options = options.filter((district) => currentUserScope.value.districts.includes(district));
+  }
+
+  return options;
+});
+const availableSubDistrictOptions = computed(() => {
+  if (!scopeForm.province || !scopeForm.district) return [];
+  let options = Array.from(new Set(
+    locationData.subDistricts
+      .filter((item) => item.province === scopeForm.province && item.district === scopeForm.district)
+      .map((item) => item.sub_district),
+  ));
+
+  if (currentUserScope.value.sub_districts.length > 0) {
+    options = options.filter((subDistrict) => currentUserScope.value.sub_districts.includes(subDistrict));
+  }
+
+  return options;
+});
+const filteredSchools = computed(() => {
+  let list = schoolOptions.value;
+  if (currentUserScope.value.provinces.length > 0) {
+    list = list.filter((school) => currentUserScope.value.provinces.includes(String(school.province || '')));
+  }
+  if (currentUserScope.value.districts.length > 0) {
+    list = list.filter((school) => currentUserScope.value.districts.includes(String(school.district || '')));
+  }
+  if (currentUserScope.value.sub_districts.length > 0) {
+    list = list.filter((school) => currentUserScope.value.sub_districts.includes(String(school.sub_district || '')));
+  }
+  if (currentUserScope.value.school_ids.length > 0) {
+    list = list.filter((school) => currentUserScope.value.school_ids.includes(String(school.value)));
+  }
+  if (scopeForm.allProvinces) {
+    return list;
+  }
+  if (scopeForm.province) list = list.filter((school) => school.province === scopeForm.province);
+  if (scopeForm.district) list = list.filter((school) => school.district === scopeForm.district);
+  if (scopeForm.sub_district) list = list.filter((school) => school.sub_district === scopeForm.sub_district);
+  return list;
+});
+const availableGradeOptions = computed(() => (
+  currentUserScope.value.grade_levels.length > 0
+    ? gradeLevels.value.filter((grade) => currentUserScope.value.grade_levels.includes(String(grade.id)))
+    : gradeLevels.value
+));
+const availableRoomOptions = computed(() => (
+  currentUserScope.value.room_ids.length > 0
+    ? roomOptions.value.filter((room) => currentUserScope.value.room_ids.includes(String(room)))
+    : roomOptions.value
+));
+const submitButtonLabel = computed(() => (
+  formData.type === 'LOGIN' ? 'สร้างลิงก์เข้าสู่ระบบ' : 'สร้างภารกิจ'
+));
 
 const fetchLocations = async () => {
   try {
@@ -525,6 +806,78 @@ const fetchGradeLevels = async () => {
   }
 };
 
+const fetchSchools = async () => {
+  try {
+    const res = await api.get('/api/attendance/schools');
+    schoolOptions.value = (res.data?.data || []).map((school: {
+      id: number;
+      name: string;
+      province?: string;
+      district?: string;
+      sub_district?: string;
+      subDistrict?: string;
+    }) => ({
+      label: school.name,
+      value: school.id,
+      province: school.province,
+      district: school.district,
+      sub_district: school.sub_district || school.subDistrict,
+    }));
+  } catch (err) {
+    console.error('Fetch schools error:', err);
+  }
+};
+
+const fetchRolesCatalog = async () => {
+  try {
+    const res = await api.get<RoleDefinition[]>('/api/users/roles');
+    rolesCatalog.value = res.data;
+  } catch (err) {
+    console.error('Fetch roles error:', err);
+  }
+};
+
+const fetchLoginScopeRooms = async () => {
+  if (!scopeForm.grade_level || !scopeForm.school_id) {
+    roomOptions.value = [];
+    scopeForm.room = null;
+    return;
+  }
+
+  try {
+    const selectedGrade = gradeLevels.value.find((grade) => grade.id === scopeForm.grade_level);
+    if (!selectedGrade) {
+      roomOptions.value = [];
+      scopeForm.room = null;
+      return;
+    }
+
+    const res = await api.get('/api/attendance/rooms', {
+      params: {
+        grade: selectedGrade.label,
+        schoolId: scopeForm.school_id,
+      },
+    });
+    roomOptions.value = (res.data?.data || []).map(String);
+    if (scopeForm.room && !roomOptions.value.includes(String(scopeForm.room))) {
+      scopeForm.room = null;
+    }
+  } catch (err) {
+    console.error('Fetch login scope rooms error:', err);
+  }
+};
+
+const ensureLoginOptionsLoaded = async () => {
+  const tasks: Promise<void>[] = [];
+  if (locationData.provinces.length === 0) tasks.push(fetchLocations());
+  if (gradeLevels.value.length === 0) tasks.push(fetchGradeLevels());
+  if (schoolOptions.value.length === 0) tasks.push(fetchSchools());
+  if (rolesCatalog.value.length === 0) tasks.push(fetchRolesCatalog());
+  if (tasks.length > 0) {
+    await Promise.all(tasks);
+  }
+};
+
 onMounted(async () => {
   await fetchGradeLevels();
   void fetchLocations();
@@ -561,14 +914,231 @@ const hasValidCoordinates = computed(() => {
 });
 
 const selectType = (type: string) => {
+  formData.type = type;
   if (type === 'LOGIN') {
-    void router.push('/login-links');
+    void initializeLoginTaskForm();
+  }
+  currentStep.value = 2;
+};
+
+const scopeFieldLabels: Record<ScopeFormField, string> = {
+  province: 'จังหวัด',
+  district: 'อำเภอ',
+  sub_district: 'ตำบล',
+  school_id: 'โรงเรียน',
+  grade_level: 'ระดับชั้น',
+  room: 'ห้องเรียน',
+};
+
+const isScopeFieldLocked = (field: ScopeFormField) => (
+  !roleScopePreset.value.allowedFields.includes(field)
+);
+
+const resetScopeForm = () => {
+  scopeForm.allProvinces = canUseNationwideScope.value;
+  scopeForm.province = null;
+  scopeForm.district = null;
+  scopeForm.sub_district = null;
+  scopeForm.school_id = null;
+  scopeForm.grade_level = null;
+  scopeForm.room = null;
+  roomOptions.value = [];
+};
+
+const applyRoleScopePreset = () => {
+  const preset = roleScopePreset.value;
+
+  if (preset.mode === 'flexible') {
     return;
   }
 
-  formData.type = type;
-  currentStep.value = 2;
+  if (preset.mode === 'global') {
+    resetScopeForm();
+    scopeForm.allProvinces = true;
+    return;
+  }
+
+  scopeForm.allProvinces = false;
+
+  if (!preset.allowedFields.includes('province')) scopeForm.province = null;
+  if (!preset.allowedFields.includes('district')) scopeForm.district = null;
+  if (!preset.allowedFields.includes('sub_district')) scopeForm.sub_district = null;
+  if (!preset.allowedFields.includes('school_id')) scopeForm.school_id = null;
+  if (!preset.allowedFields.includes('grade_level')) scopeForm.grade_level = null;
+  if (!preset.allowedFields.includes('room')) scopeForm.room = null;
+
+  if (preset.requiredFields.includes('province') && !scopeForm.province && availableProvinceOptions.value.length === 1) {
+    scopeForm.province = availableProvinceOptions.value[0] || null;
+  }
+  if (preset.requiredFields.includes('district') && !scopeForm.district && availableDistrictOptions.value.length === 1) {
+    scopeForm.district = availableDistrictOptions.value[0] || null;
+  }
+  if (preset.requiredFields.includes('sub_district') && !scopeForm.sub_district && availableSubDistrictOptions.value.length === 1) {
+    scopeForm.sub_district = availableSubDistrictOptions.value[0] || null;
+  }
+  if (preset.requiredFields.includes('school_id') && !scopeForm.school_id && filteredSchools.value.length === 1) {
+    scopeForm.school_id = filteredSchools.value[0]?.value || null;
+  }
+  if (isScopeFieldLocked('room')) {
+    roomOptions.value = [];
+  }
 };
+
+const onAllProvincesToggle = (enabled: boolean | null) => {
+  if (!canUseNationwideScope.value) {
+    scopeForm.allProvinces = false;
+    return;
+  }
+
+  if (!enabled) {
+    return;
+  }
+
+  resetScopeForm();
+  scopeForm.allProvinces = true;
+};
+
+const onLoginScopeProvinceChange = () => {
+  scopeForm.allProvinces = false;
+  scopeForm.district = null;
+  scopeForm.sub_district = null;
+  scopeForm.school_id = null;
+  scopeForm.grade_level = null;
+  scopeForm.room = null;
+  roomOptions.value = [];
+};
+
+const onLoginScopeDistrictChange = () => {
+  scopeForm.sub_district = null;
+  scopeForm.school_id = null;
+  scopeForm.grade_level = null;
+  scopeForm.room = null;
+  roomOptions.value = [];
+};
+
+const onLoginScopeSubDistrictChange = () => {
+  scopeForm.school_id = null;
+  scopeForm.grade_level = null;
+  scopeForm.room = null;
+  roomOptions.value = [];
+};
+
+const onLoginScopeSchoolChange = () => {
+  scopeForm.grade_level = null;
+  scopeForm.room = null;
+  roomOptions.value = [];
+};
+
+const canGrantPermission = (permissionId: string) => (
+  GRANT_EXEMPT_PERMISSION_IDS.includes(permissionId) ||
+  currentUserGrantablePermissionSet.value.has('*') ||
+  currentUserGrantablePermissionSet.value.has('ALL') ||
+  currentUserGrantablePermissionSet.value.has(permissionId)
+);
+
+const isPermissionLocked = (permissionId: string) => (
+  !formData.permissions.includes(permissionId) && !canGrantPermission(permissionId)
+);
+
+const getPermissionVisualState = (permissionId: string) => (
+  getPermissionDeltaState(
+    permissionId,
+    formData.permissions,
+    roleDefaultPermissions.value,
+    isPermissionLocked(permissionId),
+  )
+);
+
+const getPermissionVisualMeta = (permissionId: string) => (
+  PERMISSION_DELTA_META[getPermissionVisualState(permissionId)]
+);
+
+const shouldShowPermissionBadge = (permissionId: string) => {
+  const state = getPermissionVisualState(permissionId);
+  return state === 'added' || state === 'removed' || state === 'locked';
+};
+
+const getPermissionBadgeLabel = (permissionId: string) => {
+  const state = getPermissionVisualState(permissionId);
+  if (state === 'added') return 'เพิ่ม';
+  if (state === 'removed') return 'ปิด';
+  if (state === 'locked') return 'ล็อก';
+  return getPermissionVisualMeta(permissionId).shortLabel;
+};
+
+const togglePermission = (permissionId: string, checked: boolean) => {
+  if (checked) {
+    if (!formData.permissions.includes(permissionId) && canGrantPermission(permissionId)) {
+      formData.permissions = [...formData.permissions, permissionId];
+    }
+    return;
+  }
+
+  formData.permissions = formData.permissions.filter((item) => item !== permissionId);
+};
+
+const removePermission = (permissionId: string) => {
+  formData.permissions = formData.permissions.filter((item) => item !== permissionId);
+};
+
+const buildLoginDataScope = (): DataScope => {
+  const dataScope: DataScope = {};
+  if (!scopeForm.allProvinces && scopeForm.province) dataScope.provinces = [scopeForm.province];
+  if (!scopeForm.allProvinces && scopeForm.district) dataScope.districts = [scopeForm.district];
+  if (!scopeForm.allProvinces && scopeForm.sub_district) dataScope.sub_districts = [scopeForm.sub_district];
+  if (!scopeForm.allProvinces && scopeForm.school_id) dataScope.school_ids = [scopeForm.school_id];
+  if (scopeForm.grade_level) dataScope.grade_levels = [scopeForm.grade_level];
+  if (scopeForm.room) dataScope.room_ids = [scopeForm.room];
+  return dataScope;
+};
+
+const initializeLoginTaskForm = async () => {
+  await ensureLoginOptionsLoaded();
+  suppressRolePermissionSync.value = true;
+  formData.role = roleOptions.value.find((item) => item.value === 'TEACHER')?.value || roleOptions.value[0]?.value || 'TEACHER';
+  formData.permissions = [];
+  resetScopeForm();
+  await nextTick();
+  suppressRolePermissionSync.value = false;
+  formData.permissions = Array.from(
+    new Set(
+      (selectedRoleMeta.value?.default_permissions || []).filter((permissionId) => canGrantPermission(permissionId)),
+    ),
+  );
+  applyRoleScopePreset();
+};
+
+watch(() => formData.role, () => {
+  if (formData.type !== 'LOGIN') {
+    return;
+  }
+
+  if (!suppressRolePermissionSync.value) {
+    formData.permissions = Array.from(
+      new Set(
+        (selectedRoleMeta.value?.default_permissions || []).filter((permissionId) => canGrantPermission(permissionId)),
+      ),
+    );
+  }
+
+  applyRoleScopePreset();
+});
+
+watch(
+  () => [scopeForm.grade_level, scopeForm.school_id],
+  () => {
+    if (formData.type !== 'LOGIN') {
+      return;
+    }
+
+    if (scopeForm.grade_level && scopeForm.school_id) {
+      void fetchLoginScopeRooms();
+    } else {
+      roomOptions.value = [];
+      scopeForm.room = null;
+    }
+  },
+);
 
 const normalizeAddressPart = (value: string) => value.trim().replace(/\s+/g, ' ');
 
@@ -641,11 +1211,37 @@ const submitForm = async () => {
       return;
     }
   }
+  if (formData.type === 'LOGIN') {
+    if (!formData.role) {
+      $q.notify({ message: 'กรุณาเลือกบทบาท', color: 'negative' });
+      return;
+    }
+
+    if (formData.permissions.length === 0) {
+      $q.notify({ message: 'กรุณาเลือกสิทธิ์อย่างน้อย 1 รายการ', color: 'negative' });
+      return;
+    }
+
+    const missingScopeFields = roleScopePreset.value.requiredFields
+      .filter((field) => !scopeForm[field])
+      .map((field) => scopeFieldLabels[field]);
+
+    if (missingScopeFields.length > 0) {
+      $q.notify({
+        message: `กรุณาเลือก ${missingScopeFields.join(', ')} ให้ครบ`,
+        color: 'negative',
+      });
+      return;
+    }
+  }
 
   loading.value = true;
   try {
     const payload: Record<string, unknown> = {
       ...formData,
+      role: formData.type === 'LOGIN' ? formData.role : undefined,
+      permissions: formData.type === 'LOGIN' ? [...formData.permissions] : undefined,
+      data_scope: formData.type === 'LOGIN' ? buildLoginDataScope() : undefined,
       student_address: formData.type === 'VISIT' ? buildDetailedAddress(formData) : formData.student_address,
       task_type: formData.type,
       subject: formData.target_subject || null,
@@ -881,8 +1477,183 @@ const normalizePublicLink = (rawLink: string) => {
             box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
         }
     }
-    
+
     textarea { min-height: 100px; resize: vertical; }
+}
+
+.permission-help-text {
+  color: #64748b;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.permission-legend {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.permission-legend-item {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.permission-legend-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  margin-top: 3px;
+  flex-shrink: 0;
+}
+
+.permission-legend-item--default .permission-legend-swatch,
+.permission-state-badge--default {
+  background: #2563eb;
+  color: white;
+}
+
+.permission-legend-item--added .permission-legend-swatch,
+.permission-state-badge--added {
+  background: #16a34a;
+  color: white;
+}
+
+.permission-legend-item--removed .permission-legend-swatch,
+.permission-state-badge--removed {
+  background: #ea580c;
+  color: white;
+}
+
+.permission-legend-item--locked .permission-legend-swatch,
+.permission-state-badge--locked {
+  background: #64748b;
+  color: white;
+}
+
+.permission-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 10px;
+}
+
+.permission-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 12px;
+  background: white;
+  padding: 9px 72px 9px 12px;
+  transition: all 0.2s ease;
+  min-height: 52px;
+}
+
+.permission-item--default {
+  border-color: rgba(37, 99, 235, 0.35);
+  background: rgba(219, 234, 254, 0.45);
+}
+
+.permission-item--added {
+  border-color: rgba(22, 163, 74, 0.35);
+  background: rgba(220, 252, 231, 0.55);
+}
+
+.permission-item--removed {
+  border-color: rgba(234, 88, 12, 0.35);
+  background: rgba(255, 237, 213, 0.6);
+}
+
+.permission-item--disabled,
+.permission-item--locked {
+  border-color: rgba(100, 116, 139, 0.25);
+  background: rgba(241, 245, 249, 0.8);
+  color: #64748b;
+}
+
+.permission-item__label {
+  flex: 1;
+  min-width: 0;
+  color: #334155;
+  font-size: 0.88rem;
+  line-height: 1.35;
+}
+
+.permission-state-badge {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  border-radius: 999px;
+  padding: 2px 7px;
+  font-size: 0.66rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.selected-permission-chip {
+  border: 1px solid transparent;
+  font-size: 0.78rem;
+}
+
+.selected-permission-chip--default {
+  border-color: rgba(37, 99, 235, 0.24);
+  background: rgba(219, 234, 254, 0.85);
+}
+
+.selected-permission-chip--added {
+  border-color: rgba(22, 163, 74, 0.24);
+  background: rgba(220, 252, 231, 0.85);
+}
+
+.selected-permission-chip--removed {
+  border-color: rgba(234, 88, 12, 0.24);
+  background: rgba(255, 237, 213, 0.85);
+}
+
+.selected-permission-chip--locked {
+  border-color: rgba(100, 116, 139, 0.24);
+  background: rgba(241, 245, 249, 0.85);
+}
+
+.permission-item__checkbox {
+  flex-shrink: 0;
+}
+
+.permission-item__checkbox :deep(.q-checkbox) {
+  min-height: auto;
+}
+
+.permission-item__checkbox :deep(.q-checkbox__inner) {
+  font-size: 2rem;
+}
+
+.scope-toggle-inline {
+  border-radius: 999px;
+  border: 1px solid #dbe3f0;
+  background: #f8fafc;
+  padding: 4px 12px;
+}
+
+.scope-toggle-inline :deep(.q-toggle__label) {
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: #475569;
+}
+
+.scope-toggle-inline :deep(.q-toggle__inner) {
+  font-size: 2.1rem;
+}
+
+.task-form-actions__btn {
+  min-height: 46px;
+  border-radius: 12px;
+  font-weight: 700;
 }
 
 .expiry-row {

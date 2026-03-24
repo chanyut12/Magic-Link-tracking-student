@@ -318,14 +318,24 @@ export class UsersService {
     return true;
   }
 
-  private canGrantPermissions(actorPermissions: string[], targetPermissions: string[]): boolean {
-    if (actorPermissions.includes('*') || actorPermissions.includes('ALL')) {
+  private canGrantPermissions(
+    actorPermissions: string[],
+    targetPermissions: string[],
+    actorRole?: string | null,
+    roleMap?: Map<string, RoleDefinition>,
+  ): boolean {
+    const grantablePermissions = Array.from(new Set([
+      ...actorPermissions,
+      ...this.getRoleDefaultPermissions(actorRole, roleMap),
+    ]));
+
+    if (grantablePermissions.includes('*') || grantablePermissions.includes('ALL')) {
       return true;
     }
 
     return targetPermissions
       .filter((permission) => !GRANT_EXEMPT_PERMISSION_IDS.includes(permission))
-      .every((permission) => actorPermissions.includes(permission));
+      .every((permission) => grantablePermissions.includes(permission));
   }
 
   private resolveDisplayPermissions(
@@ -465,7 +475,7 @@ export class UsersService {
     const requestedPermissions = this.normalizePermissionList(data?.permissions);
     this.assertValidPermissionList(requestedPermissions);
 
-    if (!this.canGrantPermissions(actor.permissions || [], requestedPermissions)) {
+    if (!this.canGrantPermissions(actor.permissions || [], requestedPermissions, actorRole, currentRoleMap)) {
       throw new ForbiddenException('ไม่สามารถกำหนดสิทธิ์ที่ตนเองไม่มีได้');
     }
 
@@ -788,7 +798,7 @@ export class UsersService {
       role.name === actorRole ||
       (
         this.canManageRole(actorRole, role.name, roleMap) &&
-        this.canGrantPermissions(actor.permissions || [], role.default_permissions || [])
+        this.canGrantPermissions(actor.permissions || [], role.default_permissions || [], actorRole, roleMap)
       )
     ));
   }
@@ -803,7 +813,7 @@ export class UsersService {
     const actorRole = this.getPrimaryRole({ roles: actor.roles });
     return definitions.filter((role) => (
       this.canManageRole(actorRole, role.name, roleMap) &&
-      this.canGrantPermissions(actor.permissions || [], role.default_permissions || [])
+      this.canGrantPermissions(actor.permissions || [], role.default_permissions || [], actorRole, roleMap)
     ));
   }
 
@@ -823,7 +833,7 @@ export class UsersService {
       throw new ForbiddenException('ไม่สามารถสร้างกลุ่มผู้ใช้งานที่มีลำดับสิทธิ์สูงกว่าหรือเทียบเท่าตนเองได้');
     }
 
-    if (!this.canGrantPermissions(currentActor.permissions || [], payload.default_permissions)) {
+    if (!this.canGrantPermissions(currentActor.permissions || [], payload.default_permissions, actorRole, roleMap)) {
       throw new ForbiddenException('ไม่สามารถกำหนดสิทธิ์เริ่มต้นที่ตนเองไม่มีได้');
     }
 
@@ -873,7 +883,7 @@ export class UsersService {
       throw new ForbiddenException('ไม่สามารถกำหนดลำดับสิทธิ์สูงกว่าหรือเทียบเท่าตนเองได้');
     }
 
-    if (!this.canGrantPermissions(currentActor.permissions || [], payload.default_permissions)) {
+    if (!this.canGrantPermissions(currentActor.permissions || [], payload.default_permissions, actorRole, roleMap)) {
       throw new ForbiddenException('ไม่สามารถกำหนดสิทธิ์เริ่มต้นที่ตนเองไม่มีได้');
     }
 

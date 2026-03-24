@@ -299,14 +299,24 @@ export class TaskService {
     return true;
   }
 
-  private canGrantPermissions(actorPermissions: string[], targetPermissions: string[]): boolean {
-    if (actorPermissions.includes('*') || actorPermissions.includes('ALL')) {
+  private canGrantPermissions(
+    actorPermissions: string[],
+    targetPermissions: string[],
+    actorRole?: string | null,
+    roleMap?: Map<string, RoleDefinition>,
+  ): boolean {
+    const grantablePermissions = Array.from(new Set([
+      ...actorPermissions,
+      ...this.getRoleDefaultPermissions(actorRole, roleMap),
+    ]));
+
+    if (grantablePermissions.includes('*') || grantablePermissions.includes('ALL')) {
       return true;
     }
 
     return targetPermissions
       .filter((permission) => !GRANT_EXEMPT_PERMISSION_IDS.includes(permission))
-      .every((permission) => actorPermissions.includes(permission));
+      .every((permission) => grantablePermissions.includes(permission));
   }
 
   private hasPermission(actor: ActorContext, permission: string): boolean {
@@ -339,8 +349,19 @@ export class TaskService {
   }
 
   private assertCanCreateTask(actor: ActorContext, taskType: string): void {
-    const requiredPermission = taskType === 'LOGIN' ? 'login-links' : 'create';
-    if (!this.hasPermission(actor, requiredPermission)) {
+    if (taskType === 'LOGIN') {
+      const canCreateLoginLink =
+        this.hasPermission(actor, 'login-links') &&
+        this.hasPermission(actor, 'create');
+
+      if (!canCreateLoginLink) {
+        throw new ForbiddenException('ไม่มีสิทธิ์สร้างลิงก์เข้าสู่ระบบ');
+      }
+
+      return;
+    }
+
+    if (!this.hasPermission(actor, 'create')) {
       throw new ForbiddenException('ไม่มีสิทธิ์สร้างรายการนี้');
     }
   }
@@ -368,7 +389,7 @@ export class TaskService {
       data?.permissions ?? data?.mock_permissions,
     );
     this.assertValidPermissionList(requestedPermissions);
-    if (!this.canGrantPermissions(actor.permissions || [], requestedPermissions)) {
+    if (!this.canGrantPermissions(actor.permissions || [], requestedPermissions, actorRole, currentRoleMap)) {
       throw new ForbiddenException('ไม่สามารถกำหนดสิทธิ์ที่ตนเองไม่มีได้');
     }
 
@@ -1305,6 +1326,7 @@ export class TaskService {
       const result = await this.db.query(`
         SELECT
           c.*,
+          student_match.student_id,
           t.id as task_id,
           tl.id as active_link_id,
           tl.magic_link as active_link,
@@ -1314,6 +1336,23 @@ export class TaskService {
           tl.assigned_to_name as active_link_assigned_to,
           tl.delegation_depth as active_link_depth
         FROM cases c
+        LEFT JOIN LATERAL (
+          SELECT
+            CASE
+              WHEN COUNT(*) = 1 THEN MAX(candidate."PersonID_Onec")
+              ELSE NULL
+            END AS student_id
+          FROM (
+            SELECT DISTINCT s."PersonID_Onec"
+            FROM student_term s
+            LEFT JOIN schools sc ON sc.id = s."SchoolID_Onec"
+            WHERE LOWER(TRIM(CONCAT_WS(' ', s."FirstName_Onec", s."LastName_Onec"))) = LOWER(TRIM(c.student_name))
+              AND (
+                NULLIF(TRIM(COALESCE(c.student_school, '')), '') IS NULL
+                OR LOWER(COALESCE(sc.name, '')) = LOWER(COALESCE(c.student_school, ''))
+              )
+          ) candidate
+        ) student_match ON true
         LEFT JOIN tasks t ON t.case_id = c.id
         LEFT JOIN LATERAL (
           SELECT * FROM task_links

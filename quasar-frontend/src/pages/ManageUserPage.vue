@@ -797,7 +797,13 @@ const normalizeScopeValueList = (value: unknown): string[] => {
   return Array.from(new Set(value.map((item) => String(item).trim()).filter(Boolean)));
 };
 
-const currentUserPermissionSet = computed(() => new Set(currentUser.value?.permissions || []));
+const currentUserRoleMeta = computed(() => (
+  roles.value.find((role) => role.name === (currentUser.value?.roles?.[0] || null)) || null
+));
+const currentUserGrantablePermissionSet = computed(() => new Set([
+  ...(currentUser.value?.permissions || []),
+  ...(currentUserRoleMeta.value?.default_permissions || []),
+]));
 const currentUserScope = computed(() => ({
   provinces: normalizeScopeValueList(currentUser.value?.data_scope?.provinces),
   districts: normalizeScopeValueList(currentUser.value?.data_scope?.districts),
@@ -1537,9 +1543,9 @@ const setCustomPermissionsFromStored = (permissions: string[]) => {
 
 const canGrantPermission = (permissionId: string) => (
   GRANT_EXEMPT_PERMISSION_IDS.includes(permissionId) ||
-  currentUserPermissionSet.value.has('*') ||
-  currentUserPermissionSet.value.has('ALL') ||
-  currentUserPermissionSet.value.has(permissionId)
+  currentUserGrantablePermissionSet.value.has('*') ||
+  currentUserGrantablePermissionSet.value.has('ALL') ||
+  currentUserGrantablePermissionSet.value.has(permissionId)
 );
 
 const isPermissionLocked = (permissionId: string) => (

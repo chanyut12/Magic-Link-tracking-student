@@ -522,7 +522,13 @@ const permissionLabelMap = computed<Record<string, string>>(() => {
   return Object.fromEntries(pairs);
 });
 
-const currentUserPermissionSet = computed(() => new Set(currentUser.value?.permissions || []));
+const currentUserRoleMeta = computed(() => (
+  roleGroups.value.find((role) => role.name === (currentUser.value?.roles?.[0] || null)) || null
+));
+const currentUserGrantablePermissionSet = computed(() => new Set([
+  ...(currentUser.value?.permissions || []),
+  ...(currentUserRoleMeta.value?.default_permissions || []),
+]));
 
 const scopeModeOptions = computed(() => (
   Object.entries(ROLE_SCOPE_MODE_LABELS).map(([value, label]) => ({ value, label }))
@@ -587,9 +593,9 @@ const collectLeafPermissionIds = (items: PermissionMenuItem[]): string[] => (
 
 const canGrantPermission = (permissionId: string) => (
   GRANT_EXEMPT_PERMISSION_IDS.includes(permissionId) ||
-  currentUserPermissionSet.value.has('*') ||
-  currentUserPermissionSet.value.has('ALL') ||
-  currentUserPermissionSet.value.has(permissionId)
+  currentUserGrantablePermissionSet.value.has('*') ||
+  currentUserGrantablePermissionSet.value.has('ALL') ||
+  currentUserGrantablePermissionSet.value.has(permissionId)
 );
 
 const isPermissionLocked = (permissionId: string) => (

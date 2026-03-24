@@ -251,7 +251,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { api } from 'boot/axios';
 
@@ -352,9 +352,14 @@ const fetchCases = async (name: string) => {
   }
 };
 
-const fetchStudent = async () => {
+const fetchStudent = async (id: string) => {
+  loading.value = true;
+  student.value = null;
+  cases.value = [];
+  attendanceRecords.value = {};
+  showAllCasesDialog.value = false;
+
   try {
-    const id = route.params.id as string;
     const res = await api.get(`/api/students/${id}`);
     student.value = res.data;
 
@@ -373,9 +378,21 @@ const fetchStudent = async () => {
   }
 };
 
-onMounted(() => {
-  void fetchStudent();
-});
+watch(
+  () => route.params.id as string | undefined,
+  (id) => {
+    if (!id) {
+      loading.value = false;
+      student.value = null;
+      cases.value = [];
+      attendanceRecords.value = {};
+      return;
+    }
+
+    void fetchStudent(id);
+  },
+  { immediate: true },
+);
 </script>
 
 <style scoped>

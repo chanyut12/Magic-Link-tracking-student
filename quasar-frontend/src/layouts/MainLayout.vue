@@ -26,13 +26,20 @@
                   <span>รายการแจ้งเตือน (เคสใหม่)</span>
                   <q-btn flat dense color="primary" label="อ่านทั้งหมด" size="sm" @click="markAsRead" v-if="unreadCount > 0" />
                 </q-item-label>
+                <q-item-label
+                  v-if="displayedUnreadNotifications.length > 0"
+                  header
+                  class="notification-section-label"
+                >
+                  ยังไม่อ่าน
+                </q-item-label>
                 <q-item
-                  v-for="notif in notifications"
+                  v-for="notif in displayedUnreadNotifications"
                   :key="notif.id"
                   clickable
                   v-close-popup
-                  @click="goToCase(notif.id)"
-                  :class="['q-py-md', { 'bg-blue-1': !readCaseIds.includes(notif.id) }]"
+                  @click="goToNotification(notif)"
+                  class="q-py-md notification-item notification-item--unread"
                 >
                   <q-item-section avatar>
                     <q-avatar color="red-1" text-color="negative" icon="warning" size="sm" />
@@ -40,10 +47,99 @@
                   <q-item-section>
                     <q-item-label class="text-weight-medium row items-center">
                       <span>แจ้งเตือนขาดเรียน</span>
-                      <q-badge color="red" v-if="!readCaseIds.includes(notif.id)" label="ใหม่" class="q-ml-xs" size="xs" />
+                      <q-badge color="red" label="ใหม่" class="q-ml-xs" size="xs" />
                     </q-item-label>
                     <q-item-label caption lines="2">{{ notif.reason || 'เด็กนักเรียนขาดเรียนติดต่อกัน' }} - {{ notif.student_name }}</q-item-label>
                     <q-item-label caption class="text-primary q-mt-xs">{{ formatDate(notif.created_at) }}</q-item-label>
+                  </q-item-section>
+                  <q-item-section side top>
+                    <q-btn
+                      flat
+                      round
+                      dense
+                      size="sm"
+                      color="grey-6"
+                      icon="close"
+                      class="notification-dismiss-btn"
+                      aria-label="ลบการแจ้งเตือน"
+                      @click.stop="dismissNotification(notif.id)"
+                    />
+                  </q-item-section>
+                </q-item>
+
+                <q-separator v-if="displayedUnreadNotifications.length > 0 && displayedReadNotifications.length > 0" spaced />
+
+                <q-item-label
+                  v-if="displayedReadNotifications.length > 0"
+                  header
+                  class="notification-section-label"
+                >
+                  อ่านแล้วล่าสุด
+                </q-item-label>
+                <q-item
+                  v-for="notif in displayedReadNotifications"
+                  :key="`read-${notif.id}`"
+                  clickable
+                  v-close-popup
+                  @click="goToNotification(notif)"
+                  class="q-py-md notification-item notification-item--read"
+                >
+                  <q-item-section avatar>
+                    <q-avatar color="grey-3" text-color="grey-7" icon="done" size="sm" />
+                  </q-item-section>
+                  <q-item-section>
+                    <q-item-label class="text-weight-medium row items-center">
+                      <span>แจ้งเตือนขาดเรียน</span>
+                    </q-item-label>
+                    <q-item-label caption lines="2">{{ notif.reason || 'เด็กนักเรียนขาดเรียนติดต่อกัน' }} - {{ notif.student_name }}</q-item-label>
+                    <q-item-label caption class="q-mt-xs text-grey-6">{{ formatDate(notif.created_at) }}</q-item-label>
+                  </q-item-section>
+                  <q-item-section side top>
+                    <q-btn
+                      flat
+                      round
+                      dense
+                      size="sm"
+                      color="grey-6"
+                      icon="close"
+                      class="notification-dismiss-btn"
+                      aria-label="ลบการแจ้งเตือน"
+                      @click.stop="dismissNotification(notif.id)"
+                    />
+                  </q-item-section>
+                </q-item>
+
+                <q-item
+                  v-if="hiddenNotificationsCount > 0 || dismissedNotificationsCount > 0 || canOpenNotificationReport"
+                  dense
+                  class="notification-meta-item"
+                >
+                  <q-item-section class="text-center">
+                    <div v-if="hiddenNotificationsCount > 0" class="text-grey-6">
+                      แสดงเฉพาะล่าสุด และซ่อนอีก {{ hiddenNotificationsCount }} รายการ
+                    </div>
+                    <div v-if="dismissedNotificationsCount > 0" class="text-grey-6 q-mt-xs">
+                      ซ่อนการแจ้งเตือนไว้ {{ dismissedNotificationsCount }} รายการ
+                    </div>
+                    <q-btn
+                      v-if="dismissedNotificationsCount > 0"
+                      flat
+                      dense
+                      color="grey-7"
+                      class="notification-report-btn q-mt-xs"
+                      label="กู้คืนที่ลบ"
+                      @click="restoreDismissedNotifications"
+                    />
+                    <q-btn
+                      v-if="canOpenNotificationReport"
+                      flat
+                      dense
+                      color="primary"
+                      class="notification-report-btn q-mt-xs"
+                      label="ดูรายงานนักเรียน"
+                      v-close-popup
+                      @click="openNotificationReport"
+                    />
                   </q-item-section>
                 </q-item>
 
@@ -183,6 +279,8 @@ const {
 interface CaseNotification {
   id: number;
   case_id?: number;
+  task_id?: string;
+  student_id?: string;
   title?: string;
   message?: string;
   student_name?: string;
@@ -192,6 +290,8 @@ interface CaseNotification {
 }
 
 const notifications = ref<CaseNotification[]>([]);
+const MAX_UNREAD_NOTIFICATIONS = 8;
+const MAX_READ_NOTIFICATIONS = 6;
 let notifInterval: number | null = null;
 
 const userPermissions = computed(() => {
@@ -244,15 +344,78 @@ async function fetchNotifications() {
   try {
     const res = await api.get('/api/cases');
     notifications.value = res.data.filter((c: CaseNotification) => c.status === 'OPEN');
+    cleanupDismissedNotifications();
   } catch (err) {
     console.warn('Failed to fetch notifications', err);
   }
 }
 
 const readCaseIds = ref<number[]>(JSON.parse(localStorage.getItem('read_case_ids') || '[]'));
+const dismissedNotificationIds = ref<number[]>(
+  JSON.parse(localStorage.getItem('dismissed_case_ids') || '[]'),
+);
+const readCaseIdSet = computed(() => new Set(readCaseIds.value));
+const activeNotificationIdSet = computed(
+  () => new Set(notifications.value.map((notification) => notification.id)),
+);
+const activeDismissedNotificationIds = computed(() => {
+  return dismissedNotificationIds.value.filter((notificationId) =>
+    activeNotificationIdSet.value.has(notificationId),
+  );
+});
+const dismissedNotificationIdSet = computed(
+  () => new Set(activeDismissedNotificationIds.value),
+);
+
+const sortedNotifications = computed(() => {
+  return [...notifications.value].sort((a, b) => {
+    const dateA = new Date(a.created_at).getTime();
+    const dateB = new Date(b.created_at).getTime();
+    return dateB - dateA;
+  });
+});
+
+const visibleNotifications = computed(() => {
+  return sortedNotifications.value.filter(
+    (notification) => !dismissedNotificationIdSet.value.has(notification.id),
+  );
+});
+
+const unreadNotifications = computed(() => {
+  return visibleNotifications.value.filter((notification) => !readCaseIdSet.value.has(notification.id));
+});
+
+const readNotifications = computed(() => {
+  return visibleNotifications.value.filter((notification) => readCaseIdSet.value.has(notification.id));
+});
+
+const displayedUnreadNotifications = computed(() => {
+  return unreadNotifications.value.slice(0, MAX_UNREAD_NOTIFICATIONS);
+});
+
+const displayedReadNotifications = computed(() => {
+  return readNotifications.value.slice(0, MAX_READ_NOTIFICATIONS);
+});
+
+const hiddenNotificationsCount = computed(() => {
+  return (
+    unreadNotifications.value.length -
+      displayedUnreadNotifications.value.length +
+    readNotifications.value.length -
+      displayedReadNotifications.value.length
+  );
+});
+
+const dismissedNotificationsCount = computed(() => {
+  return activeDismissedNotificationIds.value.length;
+});
 
 const unreadCount = computed(() => {
-  return notifications.value.filter(n => !readCaseIds.value.includes(n.id)).length;
+  return unreadNotifications.value.length;
+});
+
+const canOpenNotificationReport = computed(() => {
+  return userPermissions.value.includes('dashboard');
 });
 
 function markAsRead() {
@@ -273,12 +436,63 @@ function formatDate(dateStr: string) {
   });
 }
 
-function goToCase(caseId: number) {
-  if (!readCaseIds.value.includes(caseId)) {
-    readCaseIds.value.push(caseId);
+function goToNotification(notification: CaseNotification) {
+  if (!readCaseIds.value.includes(notification.id)) {
+    readCaseIds.value.push(notification.id);
     localStorage.setItem('read_case_ids', JSON.stringify(readCaseIds.value));
   }
-  void router.push(`/task-detail/${caseId}`);
+
+  if (notification.student_id) {
+    void router.push(`/students/${notification.student_id}`);
+    return;
+  }
+
+  if (notification.task_id) {
+    void router.push(`/task-detail/${notification.task_id}`);
+  }
+}
+
+function openNotificationReport() {
+  void router.push('/dashboard');
+}
+
+function dismissNotification(notificationId: number) {
+  if (dismissedNotificationIdSet.value.has(notificationId)) {
+    return;
+  }
+
+  dismissedNotificationIds.value = [...dismissedNotificationIds.value, notificationId];
+  localStorage.setItem(
+    'dismissed_case_ids',
+    JSON.stringify(dismissedNotificationIds.value),
+  );
+}
+
+function restoreDismissedNotifications() {
+  dismissedNotificationIds.value = [];
+  localStorage.removeItem('dismissed_case_ids');
+}
+
+function cleanupDismissedNotifications() {
+  const nextDismissedIds = dismissedNotificationIds.value.filter((notificationId) =>
+    activeNotificationIdSet.value.has(notificationId),
+  );
+
+  if (nextDismissedIds.length === dismissedNotificationIds.value.length) {
+    return;
+  }
+
+  dismissedNotificationIds.value = nextDismissedIds;
+
+  if (nextDismissedIds.length === 0) {
+    localStorage.removeItem('dismissed_case_ids');
+    return;
+  }
+
+  localStorage.setItem(
+    'dismissed_case_ids',
+    JSON.stringify(nextDismissedIds),
+  );
 }
 
 function isExpansionOpened(item: MenuItem): boolean {
@@ -377,5 +591,50 @@ async function logout() {
   align-items: center;
   gap: 12px;
   padding-right: 8px;
+}
+
+.notification-section-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #64748b;
+  text-transform: uppercase;
+  padding-top: 8px;
+  padding-bottom: 4px;
+}
+
+.notification-item {
+  transition: background-color 0.2s ease, opacity 0.2s ease;
+}
+
+.notification-item--unread {
+  background: #eff6ff;
+}
+
+.notification-item--read {
+  background: #f8fafc;
+  opacity: 0.82;
+}
+
+.notification-item--read:hover,
+.notification-item--unread:hover {
+  opacity: 1;
+}
+
+.notification-meta-item {
+  min-height: 36px;
+  font-size: 0.75rem;
+}
+
+.notification-report-btn {
+  align-self: center;
+}
+
+.notification-dismiss-btn {
+  opacity: 0.68;
+}
+
+.notification-dismiss-btn:hover {
+  opacity: 1;
 }
 </style>
