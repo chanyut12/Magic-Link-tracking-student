@@ -13,12 +13,12 @@
           <i class="fas fa-map-marker-alt"></i>
           <span>{{ gpsText }}</span>
         </div>
-        <q-btn 
-          v-if="gpsStatus !== 'ok'" 
-          flat 
-          color="primary" 
-          label="ลองดึง GPS อีกครั้ง" 
-          @click="fetchGPS" 
+        <q-btn
+          v-if="gpsStatus !== 'ok'"
+          flat
+          color="primary"
+          label="ลองดึง GPS อีกครั้ง"
+          @click="fetchGPS"
           class="q-mt-sm"
         />
       </div>
@@ -26,7 +26,7 @@
       <!-- Form -->
       <div class="card q-mb-md">
         <div class="card-title">ข้อมูลการลงพื้นที่</div>
-        
+
         <div class="form-group">
           <label>ประเภทสาเหตุ <span class="required">*</span></label>
           <select v-model="form.cause_category" class="form-select">
@@ -108,20 +108,20 @@
       <!-- Photo Upload -->
       <div class="card q-mb-md">
         <div class="card-title">รูปภาพ (สูงสุด 5 รูป)</div>
-        
+
         <div class="photo-upload">
-          <input 
+          <input
             ref="fileInput"
-            type="file" 
-            accept="image/*" 
-            multiple 
+            type="file"
+            accept="image/*"
+            multiple
             @change="handleFileChange"
             class="hidden-input"
           />
-          <q-btn 
-            outline 
-            color="primary" 
-            icon="camera_alt" 
+          <q-btn
+            outline
+            color="primary"
+            icon="camera_alt"
             :label="photos.length >= 5 ? 'ถ่ายรูปเต็มแล้ว' : 'ถ่ายรูป / เลือกรูป'"
             @click="triggerFileInput"
             :disable="photos.length >= 5"
@@ -131,12 +131,12 @@
         <div class="photo-preview" v-if="photos.length > 0">
           <div v-for="(photo, index) in photos" :key="index" class="photo-item">
             <img :src="photo.preview" />
-            <q-btn 
-              round 
-              dense 
-              color="negative" 
-              icon="close" 
-              size="sm" 
+            <q-btn
+              round
+              dense
+              color="negative"
+              icon="close"
+              size="sm"
               class="remove-btn"
               @click="removePhoto(index)"
             />
@@ -145,10 +145,10 @@
       </div>
 
       <!-- Submit -->
-      <q-btn 
-        unelevated 
-        color="positive" 
-        label="บันทึกและส่งรายงาน" 
+      <q-btn
+        unelevated
+        color="positive"
+        label="บันทึกและส่งรายงาน"
         icon="check"
         class="full-width q-py-md submit-btn"
         :loading="submitting"
@@ -167,11 +167,14 @@
 import { ref, reactive, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useQuasar } from 'quasar';
+import { useMagicTaskSession } from '../composables/useMagicTaskSession';
+import { taskAccessService } from '../services/taskAccessService';
 
 const $q = useQuasar();
 const route = useRoute();
 const router = useRouter();
 const token = route.params.token as string;
+const { sessionToken } = useMagicTaskSession(token);
 
 const fileInput = ref<HTMLInputElement | null>(null);
 const submitting = ref(false);
@@ -221,18 +224,9 @@ const fetchGPS = () => {
   );
 };
 
-const magicSession = sessionStorage.getItem(`magic_session_${token}`) || '';
-
 const loadTaskContext = async () => {
   try {
-    const headers: Record<string, string> = {};
-    if (magicSession) {
-      headers['x-magic-session'] = magicSession;
-    }
-    const response = await fetch(`/api/tasks/${token}`, { headers });
-    if (!response.ok) return;
-
-    const data = (await response.json()) as { student_address?: string };
+    const data = await taskAccessService.getTask(token, sessionToken.value || undefined);
     currentStudentAddress.value = data.student_address ?? '';
     if (currentStudentAddress.value && !addressUpdate.updated_student_address) {
       addressUpdate.updated_student_address = currentStudentAddress.value;
@@ -338,7 +332,7 @@ const submitReport = async () => {
     formData.append('cause_category', form.cause_category);
     formData.append('cause_detail', form.cause_detail);
     formData.append('recommendation', form.recommendation);
-    
+
     if (gpsCoords.value.lat != null) formData.append('visit_lat', gpsCoords.value.lat.toString());
     if (gpsCoords.value.lng != null) formData.append('visit_lng', gpsCoords.value.lng.toString());
 
@@ -358,12 +352,11 @@ const submitReport = async () => {
       formData.append('photos', p.file);
     });
 
-    const response = await fetch(`/api/tasks/${token}/submit`, {
-      method: 'POST',
-      body: formData,
-    });
-
-    const data = await response.json();
+    const data = await taskAccessService.submitTaskSubmission(
+      token,
+      formData,
+      sessionToken.value || undefined,
+    );
 
     if (data.success) {
       $q.notify({ message: 'บันทึกรายงานสำเร็จ', color: 'positive' });

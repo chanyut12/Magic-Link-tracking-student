@@ -293,49 +293,31 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { api } from 'boot/axios';
 import { useQuasar } from 'quasar';
+import { useMagicTaskSession } from '../composables/useMagicTaskSession';
+import { taskAccessService } from '../services/taskAccessService';
+import type {
+  TaskAccessTask,
+  TaskAttendancePayload,
+  TaskGuestStudent,
+  TaskHistoryEntry,
+  TaskVisitSubmitPayload,
+} from '../types/task';
 
-interface TaskData {
-  id: string;
-  type: string;
-  subject?: string;
-  target_grade?: string;
-  target_room?: string;
-  assigned_to_name: string;
-  expires_at: string;
-  student_name?: string;
-  student_school?: string;
-  student_address?: string;
-  reason_flagged?: string;
-  student_lat?: number;
-  student_lng?: number;
-  auth_required?: boolean;
-  can_delegate?: boolean;
-  delegation_depth?: number;
-  max_delegation_depth?: number;
-  school_name?: string;
-}
-
-interface Student {
-  id: string;
-  name: string;
-  grade: string;
-  room: string;
-}
+type Student = TaskGuestStudent;
 
 const $q = useQuasar();
 const route = useRoute();
 const router = useRouter();
 const token = route.params.token as string;
+const { saveSessionToken, sessionToken } = useMagicTaskSession(token);
 
 const loading = ref(true);
-const task = ref<TaskData | null>(null);
+const task = ref<TaskAccessTask | null>(null);
 const authRequired = ref(false);
 const otpSent = ref(false);
 const otpInput = ref('');
 const otpLoading = ref(false);
-const sessionToken = ref(sessionStorage.getItem(`magic_session_${token}`) || '');
 const students = ref<Student[]>([]);
 const attendanceSelections = reactive<Record<string, string>>({});
 const touchedSelections = reactive<Record<string, boolean>>({});
@@ -383,8 +365,10 @@ interface HistoryRecord {
   status: number;
 }
 
+const getTodayDate = (): string => new Date().toISOString().split('T')[0] ?? '';
+
 const currentTab = ref('today');
-const historyDate = ref(new Date().toISOString().split('T')[0]);
+const historyDate = ref(getTodayDate());
 const historyRecords = ref<HistoryRecord[]>([]);
 const saving = ref(false);
 const showVisitResults = ref(false);
@@ -392,9 +376,9 @@ const visitMode = ref(false);
 const isExpired = ref(false);
 const countdownText = ref('--:--');
 
-const visitData = reactive({
+const visitData = reactive<TaskVisitSubmitPayload>({
   notes: '',
-  status: 'IN_PROGRESS'
+  status: 'IN_PROGRESS',
 });
 
 let timer: ReturnType<typeof setInterval> | null = null;
@@ -402,27 +386,25 @@ let polling: ReturnType<typeof setInterval> | null = null;
 
 const fetchData = async () => {
   try {
-    const res = await api.get(`/api/tasks/${token}`, {
-      headers: sessionToken.value ? { 'x-magic-session': sessionToken.value } : {},
-    });
+    const taskData = await taskAccessService.getTask(token, sessionToken.value || undefined);
 
-    if (res.data.status === 'EXPIRED') {
+    if (taskData.status === 'EXPIRED') {
       void router.push(`/task/${token}/expired`);
       return;
     }
 
-    if (res.data.status === 'ADMIN_LOCKED') {
-      const reason = res.data.reason ? `?reason=${encodeURIComponent(res.data.reason)}` : '';
+    if (taskData.status === 'ADMIN_LOCKED') {
+      const reason = taskData.reason ? `?reason=${encodeURIComponent(taskData.reason)}` : '';
       void router.push(`/task/${token}/locked${reason}`);
       return;
     }
 
-    task.value = res.data;
-    authRequired.value = !!res.data.auth_required;
+    task.value = taskData;
+    authRequired.value = !!taskData.auth_required;
 
-    if (res.data.expires_at) {
-      console.log('[DEBUG] fetchData - expires_at raw:', res.data.expires_at);
-      startCountdown(new Date(res.data.expires_at));
+    if (taskData.expires_at) {
+      console.log('[DEBUG] fetchData - expires_at raw:', taskData.expires_at);
+      startCountdown(new Date(taskData.expires_at));
     }
 
     if (!authRequired.value) {
@@ -439,9 +421,9 @@ const fetchData = async () => {
 const loadTaskData = async () => {
   try {
     if (task.value?.type === 'ATTENDANCE') {
-      const res = await api.get(`/api/tasks/${token}/students`);
-      if (res.data.success) {
-        students.value = res.data.data.filter((s: Student) => {
+      const response = await taskAccessService.getTaskStudents(token);
+      if (response.success) {
+        students.value = response.data.filter((s: Student) => {
           const matchGrade = String(s.grade) === String(task.value?.target_grade);
           const matchRoom = String(s.room) === String(task.value?.target_room);
           return matchGrade && matchRoom;
@@ -463,23 +445,23 @@ const loadTaskData = async () => {
 
 const loadHistory = async () => {
   try {
-    const dateToFetch = currentTab.value === 'today' ? new Date().toISOString().split('T')[0] : historyDate.value;
-    const hRes = await api.get(`/api/tasks/${token}/history?date=${dateToFetch}`);
+    const dateToFetch = currentTab.value === 'today' ? getTodayDate() : historyDate.value;
+    const response = await taskAccessService.getTaskHistory(token, dateToFetch);
     const statusMap: Record<number, string> = { 1: 'P_PRESENT', 2: 'P_ABSENT', 3: 'P_LATE' };
     
-    if (hRes.data.success) {
+    if (response.success) {
       if (currentTab.value === 'history') {
-        historyRecords.value = hRes.data.data.map((r: { student_id: string, student_name: string, status: number }) => ({
-          id: r.student_id,
-          name: r.student_name,
-          status: r.status
+        historyRecords.value = response.data.map((record: TaskHistoryEntry) => ({
+          id: record.student_id,
+          name: record.student_name,
+          status: record.status,
         })).sort((a: HistoryRecord, b: HistoryRecord) => a.name.localeCompare(b.name));
       } else {
         // Feed into selections for today
-        hRes.data.data.forEach((r: { student_id: string, status: number }) => {
-          if (Object.prototype.hasOwnProperty.call(attendanceSelections, r.student_id)) {
-            if (!touchedSelections[r.student_id]) {
-              attendanceSelections[r.student_id] = statusMap[r.status] || 'P_PRESENT';
+        response.data.forEach((record: TaskHistoryEntry) => {
+          if (Object.prototype.hasOwnProperty.call(attendanceSelections, record.student_id)) {
+            if (!touchedSelections[record.student_id]) {
+              attendanceSelections[record.student_id] = statusMap[record.status] || 'P_PRESENT';
             }
           }
         });
@@ -493,7 +475,7 @@ const loadHistory = async () => {
 const requestOTP = async () => {
   otpLoading.value = true;
   try {
-    await api.post(`/api/tasks/${token}/otp`);
+    await taskAccessService.requestTaskOtp(token);
     otpSent.value = true;
     $q.notify({ message: 'ส่งรหัส OTP เรียบร้อยแล้ว', color: 'positive' });
   } catch (err: unknown) {
@@ -503,8 +485,7 @@ const requestOTP = async () => {
     const message = error.response?.data?.message;
     const normalizedMessage = Array.isArray(message) ? message[0] : message;
     if (normalizedMessage === 'No email found for this link') {
-      const taskRes = await api.get(`/api/tasks/${token}`);
-      task.value = taskRes.data;
+      task.value = await taskAccessService.getTask(token);
       authRequired.value = false;
       await loadTaskData();
       $q.notify({
@@ -526,18 +507,14 @@ const verifyOTP = async () => {
   if (otpInput.value.length !== 6) return;
   otpLoading.value = true;
   try {
-    const res = await api.post(`/api/tasks/${token}/verify`, { otp: otpInput.value });
-    if (res.data.success) {
+    const response = await taskAccessService.verifyTaskOtp(token, otpInput.value);
+    if (response.success) {
       // Save device-specific session token (persist for ReportPage access)
-      if (res.data.session_token) {
-        sessionToken.value = res.data.session_token;
-        sessionStorage.setItem(`magic_session_${token}`, res.data.session_token);
+      if (response.session_token) {
+        saveSessionToken(response.session_token);
       }
       // Re-fetch task to get unmasked student data
-      const taskRes = await api.get(`/api/tasks/${token}`, {
-        headers: sessionToken.value ? { 'x-magic-session': sessionToken.value } : {},
-      });
-      task.value = taskRes.data;
+      task.value = await taskAccessService.getTask(token, sessionToken.value || undefined);
       authRequired.value = false;
       visitMode.value = false;
       await loadTaskData();
@@ -560,13 +537,17 @@ const submitVisit = async (status: string) => {
   visitData.status = status;
   try {
     console.log('[DEBUG] Sending submission:', { token, visitData });
-    const res = await api.post(`/api/tasks/${token}/submit`, visitData);
-    console.log('[DEBUG] Submission response:', res.data);
-    if (res.data.success) {
+    const response = await taskAccessService.submitTaskSubmission(
+      token,
+      visitData,
+      sessionToken.value || undefined,
+    );
+    console.log('[DEBUG] Submission response:', response);
+    if (response.success) {
       $q.notify({ message: 'บันทึกข้อมูลการลงพื้นที่แล้ว', color: 'positive' });
       showVisitResults.value = true;
     } else {
-      $q.notify({ message: res.data.error || 'บันทึกไม่สำเร็จ', color: 'negative' });
+      $q.notify({ message: response.error || 'บันทึกไม่สำเร็จ', color: 'negative' });
     }
   } catch (err: unknown) {
     console.error('[DEBUG] Submission error:', err);
@@ -624,14 +605,14 @@ const canDelegate = computed(() => {
 
 const saveAttendance = async () => {
   saving.value = true;
-  const records = Object.entries(attendanceSelections).map(([id, status]) => ({
+  const records: TaskAttendancePayload[] = Object.entries(attendanceSelections).map(([id, status]) => ({
     student_id: id,
-    status
+    status,
   }));
 
   try {
-    const res = await api.post(`/api/tasks/${token}/attendance`, { records });
-    if (res.data.success) {
+    const response = await taskAccessService.submitTaskAttendance(token, records);
+    if (response.success) {
       $q.notify({ message: 'บันทึกข้อมูลสำเร็จ', color: 'positive' });
       // Clear touched state
       for (const key in touchedSelections) {

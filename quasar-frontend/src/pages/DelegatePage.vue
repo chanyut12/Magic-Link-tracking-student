@@ -111,8 +111,10 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { api } from 'boot/axios';
 import { useQuasar } from 'quasar';
+import { taskAccessService } from '../services/taskAccessService';
+import { copyText } from '../utils/clipboard';
+import { buildTaskLineShareUrl, computeDelegationExpiryHours } from '../utils/taskPresentation';
 
 const $q = useQuasar();
 const route = useRoute();
@@ -146,22 +148,21 @@ const expiryOptions = [
 
 const lineShareUrl = computed(() => {
   if (!result.value?.magic_link) return '#';
-  return `https://social-plugins.line.me/lineit/share?url=${encodeURIComponent(result.value.magic_link)}`;
+  return buildTaskLineShareUrl(result.value.magic_link);
 });
 
 const computeExpiryHours = () => {
-  const val = form.expires_value || 1;
-  const unit = form.expires_unit;
-  if (unit === 'days') return val * 24;
-  if (unit === 'weeks') return val * 168;
-  return val;
+  return computeDelegationExpiryHours(
+    form.expires_value || 1,
+    form.expires_unit as 'hours' | 'days' | 'weeks',
+  );
 };
 
 const fetchData = async () => {
   try {
-    const res = await api.get(`/api/tasks/${token}`);
+    const taskData = await taskAccessService.getTask(token);
     // Task data loaded, can be used for validation if needed
-    console.log('Task loaded:', res.data);
+    console.log('Task loaded:', taskData);
   } catch (err) {
     console.error(err);
     $q.notify({ message: 'ไม่สามารถโหลดข้อมูลภารกิจได้', color: 'negative' });
@@ -179,13 +180,13 @@ const submitDelegation = async () => {
 
   submitting.value = true;
   try {
-    const res = await api.post(`/api/tasks/${token}/delegate`, {
+    const delegationResult = await taskAccessService.delegateTask(token, {
       new_assignee_name: form.new_assignee_name.trim(),
       new_assignee_phone: form.new_assignee_phone.trim() || null,
-      expires_in_hours: computeExpiryHours()
+      expires_in_hours: computeExpiryHours(),
     });
-    
-    result.value = res.data;
+
+    result.value = delegationResult;
     showResult.value = true;
     $q.notify({ message: 'ส่งต่อภารกิจสำเร็จ!', color: 'positive' });
   } catch (err: unknown) {
@@ -201,12 +202,17 @@ const submitDelegation = async () => {
 
 const copyLink = async () => {
   if (!result.value?.magic_link) return;
-  
+
   try {
-    await navigator.clipboard.writeText(result.value.magic_link);
+    const method = await copyText(result.value.magic_link);
     copied.value = true;
     setTimeout(() => { copied.value = false; }, 2000);
-    $q.notify({ message: 'คัดลอกลิงก์แล้ว!', color: 'positive' });
+    $q.notify({
+      message: method === 'manual'
+        ? 'เบราว์เซอร์บล็อกการคัดลอกอัตโนมัติ กรุณาคัดลอกจากหน้าต่างที่เปิดขึ้นมา'
+        : 'คัดลอกลิงก์แล้ว!',
+      color: method === 'manual' ? 'warning' : 'positive'
+    });
   } catch {
     $q.notify({ message: 'ไม่สามารถคัดลอกได้', color: 'negative' });
   }

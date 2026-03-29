@@ -38,71 +38,10 @@
         </div>
       </section>
       
-      <!-- Summary Stats -->
-      <div class="row q-col-gutter-md q-mb-md">
-        <div class="col-6 col-md-3">
-          <div class="stat-card stat-card--total full-height">
-            <div class="stat-head">
-              <i class="fa-solid fa-layer-group"></i>
-              <div class="stat-label">เคสทั้งหมด</div>
-            </div>
-            <div class="stat-value text-h4">{{ stats.total }}</div>
-            <div class="stat-sub">รายการในระบบ</div>
-          </div>
-        </div>
-        <div class="col-6 col-md-3">
-          <div class="stat-card stat-card--progress full-height">
-            <div class="stat-head">
-              <i class="fa-solid fa-hourglass-half"></i>
-              <div class="stat-label">กำลังติดตาม</div>
-            </div>
-            <div class="stat-value text-h4">{{ stats.inProgress }}</div>
-            <div class="stat-sub">อยู่ระหว่างดำเนินการ</div>
-          </div>
-        </div>
-        <div class="col-6 col-md-3">
-          <div class="stat-card stat-card--resolved full-height">
-            <div class="stat-head">
-              <i class="fa-solid fa-circle-check"></i>
-              <div class="stat-label">ปิดเคสสำเร็จ</div>
-            </div>
-            <div class="stat-value text-h4">{{ stats.resolved }}</div>
-            <div class="stat-sub">พร้อมสรุปผล</div>
-          </div>
-        </div>
-        <div class="col-6 col-md-3">
-          <div class="stat-card stat-card--today full-height">
-            <div class="stat-head">
-              <i class="fa-solid fa-calendar-day"></i>
-              <div class="stat-label">เคสวันนี้</div>
-            </div>
-            <div class="stat-value text-h4">{{ stats.today }}</div>
-            <div class="stat-sub">สร้างล่าสุดวันนี้</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="stats-row-secondary q-mb-lg">
-        <div class="stat-pill border-1">
-          <span class="stat-pill-label">รอสร้างลิงค์</span>
-          <span class="stat-pill-value badge badge-open">{{ stats.open }}</span>
-        </div>
-        <div class="stat-pill border-1">
-          <span class="stat-pill-label">รอผอ.ประเมิน</span>
-          <span class="stat-pill-value badge badge-pending">{{ stats.pendingReview }}</span>
-        </div>
-        <div class="stat-pill border-1">
-          <span class="stat-pill-label">ลิงก์ที่ยังใช้งานอยู่</span>
-          <span class="stat-pill-value badge badge-active">{{ stats.activeLinks }}</span>
-        </div>
-        <div class="stat-pill border-1">
-          <span class="stat-pill-label">ส่งต่อแล้วทั้งหมด</span>
-          <span class="stat-pill-value badge badge-delegated">{{ stats.delegations }}</span>
-        </div>
-      </div>
+      <CaseDashboardSummaryCards :stats="stats" />
 
       <!-- Manage Toolbar -->
-      <div class="q-card q-pa-lg q-mb-md shadow-xs control-bar">
+      <div class="q-card q-mb-sm control-bar">
         <div class="row items-center justify-between q-col-gutter-sm">
           <div class="text-h6 text-weight-bold text-gray-700">จัดการระบบเคส</div>
           <div class="result-counter">
@@ -112,7 +51,7 @@
       </div>
 
       <!-- Filters -->
-      <div class="q-card q-pa-lg q-mb-lg shadow-xs filter-panel">
+      <div class="q-card q-mb-md filter-panel">
         <div class="row q-col-gutter-md items-center">
           <div class="col-12 col-sm-3">
             <div class="text-caption text-gray-500 q-mb-xs font-weight-bold">สถานะ</div>
@@ -189,16 +128,15 @@
               <span v-else class="mobile-card-name">{{ i + 1 }}. {{ row.student_name }}</span>
               <div class="mobile-card-meta">{{ row.student_school }}</div>
             </div>
-            <span :class="['badge', getBadgeClass(row.status)]">{{ getStatusLabel(row.status) }}</span>
+            <div class="mobile-card-statuses">
+              <span :class="['badge', getBadgeClass(row.status)]">{{ getStatusLabel(row.status) }}</span>
+              <span :class="['badge', getLinkBadgeClass(row)]">ลิงก์: {{ getLinkStatusLabel(row) }}</span>
+            </div>
           </div>
 
           <div class="mobile-card-info">
             <span v-if="row.reason_flagged">เหตุผล: {{ row.reason_flagged }}</span>
             <span>สร้างเมื่อ {{ formatDate(row.created_at) }}</span>
-          </div>
-
-          <div v-if="row.active_link_locked" class="mobile-card-locked">
-            ลิงก์ถูกปิดโดยผู้ดูแล
           </div>
 
           <div class="mobile-card-actions">
@@ -230,7 +168,7 @@
                 label="สร้างลิงค์"
                 icon="fa-solid fa-link"
                 class="action-btn action-btn--create"
-                :to="{ path: '/create', query: { case_id: row.id, student_name: row.student_name, student_school: row.student_school, reason: row.reason_flagged } }"
+                :to="{ path: '/create', query: { case_id: row.id, student_id: row.student_id, student_name: row.student_name, student_school: row.student_school, student_address: row.student_address, reason: row.reason_flagged } }"
               />
               <span v-else class="status-text status-text--muted">ยังไม่มีลิงก์ที่ใช้งานได้</span>
             </div>
@@ -309,10 +247,11 @@
           :columns="columns"
           row-key="id"
           flat
+          dense
           :loading="loading"
           :no-data-label="tableEmptyLabel"
           v-model:pagination="pagination"
-          :rows-per-page-options="[10, 15, 20, 50]"
+          :rows-per-page-options="[15, 20, 30, 50, 100]"
         >
           <template v-slot:body-cell-index="props">
             <q-td :props="props" class="text-gray-400">
@@ -337,6 +276,14 @@
             <q-td :props="props">
               <span :class="['badge', getBadgeClass(props.value)]">
                 {{ getStatusLabel(props.value) }}
+              </span>
+            </q-td>
+          </template>
+
+          <template v-slot:body-cell-link_status="props">
+            <q-td :props="props">
+              <span :class="['badge', getLinkBadgeClass(props.row)]">
+                {{ getLinkStatusLabel(props.row) }}
               </span>
             </q-td>
           </template>
@@ -371,7 +318,7 @@
                   label="สร้างลิงค์"
                   icon="fa-solid fa-link"
                   class="action-btn action-btn--create"
-                  :to="{ path: '/create', query: { case_id: props.row.id, student_name: props.row.student_name, student_school: props.row.student_school, reason: props.row.reason_flagged } }"
+                  :to="{ path: '/create', query: { case_id: props.row.id, student_id: props.row.student_id, student_name: props.row.student_name, student_school: props.row.student_school, student_address: props.row.student_address, reason: props.row.reason_flagged } }"
                 />
                 <span v-else class="status-text status-text--muted">ยังไม่มีลิงก์ที่ใช้งานได้</span>
 
@@ -451,110 +398,76 @@
       </div>
     </div>
 
-    <!-- Admin Action Dialog -->
-    <q-dialog v-model="adminActionDialog.show">
-      <q-card style="min-width: 360px; max-width: 92vw;">
-        <q-card-section>
-          <div class="text-h6">{{ adminDialogTitle }}</div>
-          <div class="text-caption text-grey-7 q-mt-xs">{{ adminDialogHint }}</div>
-        </q-card-section>
-        <q-card-section>
-          <q-input
-            v-model="adminActionDialog.reason"
-            :label="adminReasonLabel"
-            outlined
-            dense
-            autogrow
-            type="textarea"
-            :rules="[val => !!val || 'กรุณาระบุเหตุผล']"
-          />
-        </q-card-section>
-        <q-card-actions align="right">
-          <q-btn flat label="ยกเลิก" v-close-popup />
-          <q-btn
-            :color="adminActionDialog.action === 'lock' ? 'negative' : 'primary'"
-            :label="adminConfirmLabel"
-            @click="confirmAdminAction"
-            :loading="adminActionDialog.loading"
-          />
-        </q-card-actions>
-      </q-card>
-    </q-dialog>
+    <TaskLinkAdminDialog
+      v-model="adminActionDialog.show"
+      :reason="adminActionDialog.reason"
+      :title="adminDialogTitle"
+      :hint="adminDialogHint"
+      :reason-label="adminReasonLabel"
+      :confirm-label="adminConfirmLabel"
+      :action="adminActionDialog.action"
+      :loading="adminActionDialog.loading"
+      @update:reason="adminActionDialog.reason = $event"
+      @confirm="confirmAdminAction"
+    />
   </q-page>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue';
-import { api } from 'boot/axios';
 import { useQuasar } from 'quasar';
 import type { QTableColumn } from 'quasar';
+import CaseDashboardSummaryCards from '../components/dashboard/CaseDashboardSummaryCards.vue';
+import TaskLinkAdminDialog from '../components/task/TaskLinkAdminDialog.vue';
+import { useCaseDashboardData } from '../composables/useCaseDashboardData';
+import { useTaskLinkAdminDialog } from '../composables/useTaskLinkAdminDialog';
+import { copyText } from '../utils/clipboard';
+import type { CaseRecord } from '../types/case';
+import {
+  formatCaseDate,
+  getCaseCompletionRate,
+  getCaseLinkStatusBadgeClass,
+  getCaseLinkStatusLabel,
+  getCasePublicLink,
+  getCaseShareUrl,
+  getCaseStatusBadgeClass,
+  getCaseStatusLabel,
+  isCaseInDateRange,
+  isCaseLinkReady,
+  type CaseDateRangeFilter,
+} from '../utils/casePresentation';
 
 const $q = useQuasar();
-
-interface Case {
-  id: string;
-  task_id?: string;
-  student_name: string;
-  student_school: string;
-  reason_flagged: string;
-  status: string;
-  created_at: string;
-  active_link_id?: string;
-  active_link?: string;
-  active_link_locked?: boolean;
-  active_link_lock_reason?: string;
-  active_link_assigned_to?: string;
-  active_link_depth?: number;
-}
-
-interface Stats {
-  total: number;
-  open: number;
-  inProgress: number;
-  resolved: number;
-  today: number;
-  pendingReview: number;
-  activeLinks: number;
-  delegations: number;
-}
-
-const loading = ref(false);
-const rawCases = ref<Case[]>([]);
-const lastUpdated = ref('');
-const loadError = ref('');
-const pagination = ref({ page: 1, rowsPerPage: 20 });
-
-type AdminAction = 'lock' | 'unlock';
-
-const adminActionDialog = reactive<{
-  show: boolean;
-  action: AdminAction;
-  linkId: string;
-  reason: string;
-  loading: boolean;
-}>({
-  show: false,
-  action: 'lock',
-  linkId: '',
-  reason: '',
-  loading: false
-});
-
-
-const stats = reactive<Stats>({
-  total: 0,
-  open: 0,
-  inProgress: 0,
-  resolved: 0,
-  today: 0,
-  pendingReview: 0,
-  activeLinks: 0,
-  delegations: 0,
+const pagination = ref({ page: 1, rowsPerPage: 30 });
+const {
+  loading,
+  rawCases,
+  stats,
+  lastUpdated,
+  loadError,
+  fetchData,
+  refreshData,
+} = useCaseDashboardData();
+const {
+  adminActionDialog,
+  adminDialogTitle,
+  adminDialogHint,
+  adminReasonLabel,
+  adminConfirmLabel,
+  openAdminActionDialog,
+  confirmAdminAction,
+} = useTaskLinkAdminDialog({
+  lockSuccessMessage: 'ปิดลิงก์เรียบร้อยแล้ว',
+  unlockSuccessMessage: 'เปิดลิงก์เรียบร้อยแล้ว',
+  errorMessage: 'ไม่สามารถอัปเดตสถานะลิงก์ได้',
+  onSuccess: async () => {
+    await refreshData();
+  },
 });
 
 const filters = reactive({
   status: 'ALL',
-  dateRange: 'ALL',
+  dateRange: 'ALL' as CaseDateRangeFilter,
   school: 'ALL',
 });
 
@@ -574,57 +487,29 @@ const dateOptions = [
 ];
 
 const schoolOptions = computed(() => {
-  const schools = [...new Set(rawCases.value.map(c => c.student_school).filter(Boolean))].sort();
+  const schools = [...new Set(rawCases.value.map((c) => c.student_school).filter(Boolean))].sort();
   return [
     { label: 'ทุกโรงเรียน', value: 'ALL' },
-    ...schools.map(s => ({ label: s, value: s })),
+    ...schools.map((school) => ({ label: school, value: school })),
   ];
 });
 
-const columns: QTableColumn<Case>[] = [
-  { name: 'index', label: '#', field: (row: Case) => row.id, align: 'left' },
+const columns: QTableColumn<CaseRecord>[] = [
+  { name: 'index', label: '#', field: (row: CaseRecord) => row.id, align: 'left' },
   { name: 'student_name', label: 'ชื่อนักเรียน', field: 'student_name', align: 'left', sortable: true },
   { name: 'school', label: 'โรงเรียน', field: 'student_school', align: 'left', sortable: true },
   { name: 'reason', label: 'สาเหตุ', field: 'reason_flagged', align: 'left' },
   { name: 'status', label: 'สถานะ', field: 'status', align: 'center', sortable: true },
+  { name: 'link_status', label: 'สถานะลิงก์', field: 'link_state', align: 'center' },
   { name: 'link', label: 'การจัดการ', field: 'active_link', align: 'left' },
   { name: 'created_at', label: 'วันที่สร้าง', field: 'created_at', align: 'right', sortable: true },
 ];
 
-const fetchData = async (silent = false) => {
-  if (!silent) loading.value = true;
-  try {
-    const res = await api.get('/api/cases');
-    rawCases.value = res.data;
-    
-    const statsRes = await api.get('/api/stats');
-    Object.assign(stats, statsRes.data);
-    loadError.value = '';
-    if (!silent) {
-      lastUpdated.value = new Date().toLocaleString('th-TH', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-    }
-  } catch (err) {
-    console.error(err);
-    loadError.value = 'ตรวจสอบการเชื่อมต่อหรือสิทธิ์การเข้าถึง แล้วกดรีเฟรชอีกครั้ง';
-  } finally {
-    if (!silent) loading.value = false;
-  }
-};
-
-const refreshData = async () => {
-  await fetchData();
-};
-
-const filteredCases = computed<Case[]>(() => {
-  return rawCases.value.filter(c => {
-    if (filters.status !== 'ALL' && c.status !== filters.status) return false;
-    if (filters.school !== 'ALL' && c.student_school !== filters.school) return false;
+const filteredCases = computed<CaseRecord[]>(() => {
+  return rawCases.value.filter((caseRecord) => {
+    if (filters.status !== 'ALL' && caseRecord.status !== filters.status) return false;
+    if (!isCaseInDateRange(caseRecord.created_at, filters.dateRange)) return false;
+    if (filters.school !== 'ALL' && caseRecord.student_school !== filters.school) return false;
     return true;
   });
 });
@@ -646,122 +531,32 @@ const mobileEmptyMessage = computed(() => {
   return "ยังไม่มีเคส — กด 'สร้างภารกิจใหม่' เพื่อเริ่มต้น";
 });
 
-const completionRate = computed(() => {
-  if (!stats.total) return 0;
-  return Math.round((stats.resolved / stats.total) * 100);
-});
-
-const getBadgeClass = (status: string) => {
-  switch (status) {
-    case 'OPEN': return 'badge-open';
-    case 'PENDING_REVIEW': return 'badge-pending';
-    case 'IN_PROGRESS': return 'badge-progress';
-    case 'RESOLVED': return 'badge-completed';
-    default: return 'badge-active';
-  }
-};
-
-const getStatusLabel = (status: string) => {
-  switch (status) {
-    case 'OPEN': return 'รอสร้างลิงค์';
-    case 'PENDING_REVIEW': return 'รอผอ.ประเมิน';
-    case 'IN_PROGRESS': return 'กำลังติดตาม';
-    case 'RESOLVED': return 'ปิดเคสสำเร็จ';
-    default: return status;
-  }
-};
-
-const formatDate = (date: string) => {
-  if (!date) return '-';
-  return new Date(date).toLocaleDateString('th-TH', {
-    day: '2-digit',
-    month: 'short',
-    year: '2-digit'
-  });
-};
+const completionRate = computed(() => getCaseCompletionRate(stats.value));
+const getBadgeClass = getCaseStatusBadgeClass;
+const getStatusLabel = getCaseStatusLabel;
+const getLinkBadgeClass = getCaseLinkStatusBadgeClass;
+const getLinkStatusLabel = getCaseLinkStatusLabel;
+const formatDate = formatCaseDate;
 
 const copyLink = async (link: string) => {
   try {
-    await navigator.clipboard.writeText(link);
-    $q.notify({ message: 'คัดลอกลิงก์แล้ว', color: 'positive', timeout: 1500 });
+    const method = await copyText(link);
+    $q.notify({
+      message: method === 'manual'
+        ? 'เบราว์เซอร์บล็อกการคัดลอกอัตโนมัติ กรุณาคัดลอกจากหน้าต่างที่เปิดขึ้นมา'
+        : 'คัดลอกลิงก์แล้ว',
+      color: method === 'manual' ? 'warning' : 'positive',
+      timeout: 2000,
+    });
   } catch {
     $q.notify({ message: 'ไม่สามารถคัดลอกได้', color: 'negative' });
   }
 };
 
-const normalizePublicLink = (rawLink: string) => {
-  if (!rawLink) return rawLink;
-  try {
-    const url = new URL(rawLink, window.location.origin);
-    if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') {
-      url.protocol = window.location.protocol;
-      url.host = window.location.host;
-    }
-    return url.toString();
-  } catch {
-    return rawLink;
-  }
-};
-
-const getLineShareUrl = (link: string) => {
-  return `https://social-plugins.line.me/lineit/share?url=${encodeURIComponent(normalizePublicLink(link))}`;
-};
-
-const isLinkReady = (row: Case) => Boolean(row.active_link && !row.active_link_locked);
-
-const hasRowMenu = (row: Case) => Boolean(row.active_link || row.active_link_id || row.task_id);
-
-const openAdminActionDialog = (linkId: string, action: AdminAction) => {
-  adminActionDialog.linkId = linkId;
-  adminActionDialog.action = action;
-  adminActionDialog.reason = action === 'lock'
-    ? 'ปิดลิงก์โดยผู้ดูแลระบบ'
-    : 'เปิดลิงก์อีกครั้งโดยผู้ดูแลระบบ';
-  adminActionDialog.show = true;
-};
-
-const adminDialogTitle = computed(() =>
-  adminActionDialog.action === 'lock' ? 'ยืนยันปิดลิงก์' : 'ยืนยันเปิดลิงก์อีกครั้ง'
-);
-
-const adminDialogHint = computed(() =>
-  adminActionDialog.action === 'lock'
-    ? 'ระบบจะปิดการเข้าถึงลิงก์นี้ทันที และบันทึกเหตุผลในประวัติ'
-    : 'ระบบจะเปิดให้ใช้งานลิงก์นี้อีกครั้ง และบันทึกเหตุผลในประวัติ'
-);
-
-const adminReasonLabel = computed(() =>
-  adminActionDialog.action === 'lock' ? 'เหตุผลที่ปิดลิงก์' : 'เหตุผลที่เปิดลิงก์'
-);
-
-const adminConfirmLabel = computed(() =>
-  adminActionDialog.action === 'lock' ? 'ยืนยันปิดลิงก์' : 'ยืนยันเปิดลิงก์'
-);
-
-const confirmAdminAction = async () => {
-  if (!adminActionDialog.reason.trim()) {
-    $q.notify({ message: 'กรุณาระบุเหตุผล', color: 'warning' });
-    return;
-  }
-  
-  adminActionDialog.loading = true;
-  try {
-    await api.post(`/api/task-links/${adminActionDialog.linkId}/admin-lock`, {
-      action: adminActionDialog.action,
-      reason: adminActionDialog.reason.trim()
-    });
-    $q.notify({
-      message: adminActionDialog.action === 'lock' ? 'ปิดลิงก์เรียบร้อยแล้ว' : 'เปิดลิงก์เรียบร้อยแล้ว',
-      color: 'positive'
-    });
-    adminActionDialog.show = false;
-    await fetchData();
-  } catch {
-    $q.notify({ message: 'ไม่สามารถอัปเดตสถานะลิงก์ได้', color: 'negative' });
-  } finally {
-    adminActionDialog.loading = false;
-  }
-};
+const normalizePublicLink = getCasePublicLink;
+const getLineShareUrl = getCaseShareUrl;
+const isLinkReady = isCaseLinkReady;
+const hasRowMenu = (row: CaseRecord) => Boolean(row.active_link || row.active_link_id || row.task_id);
 
 
 const resetFilters = () => {
@@ -805,7 +600,7 @@ onUnmounted(() => {
 }
 
 :deep(.q-table__container) {
-  min-width: 1000px;
+  min-width: 880px;
 }
 
 @media (max-width: 767px) {

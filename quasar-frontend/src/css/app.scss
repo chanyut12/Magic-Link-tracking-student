@@ -174,12 +174,12 @@ body {
 // Badges (Original Design)
 .badge {
   display: inline-block;
-  padding: 4px 12px;
+  padding: 2px 8px;
   border-radius: 99px;
-  font-size: 0.75rem;
+  font-size: 0.68rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.02em;
   
   &-open { background: #f0fdfa; color: #0f766e; }
   &-pending { background: #fef3c7; color: #92400e; }
@@ -187,7 +187,9 @@ body {
   &-progress { background: #e0e7ff; color: #3730a3; }
   &-delegated { background: #fce7f3; color: #9d174d; }
   &-completed { background: #d1fae5; color: #065f46; }
+  &-locked { background: #fef3c7; color: #92400e; }
   &-expired { background: #fee2e2; color: #991b1b; }
+  &-none { background: #f1f5f9; color: #64748b; }
 }
 
 // Tables (Original Design)
@@ -362,12 +364,32 @@ body {
 
   .control-bar,
   .filter-panel {
-    border-radius: var(--dashboard-radius-lg) !important;
+    border-radius: var(--dashboard-radius-md) !important;
+    border: 1px solid #e2e8f0;
+    box-shadow: none !important;
+  }
+
+  .control-bar {
+    padding: 10px 16px !important;
+
+    .text-h6 {
+      font-size: 0.92rem !important;
+      line-height: 1.3;
+    }
+  }
+
+  .filter-panel {
+    padding: 12px 16px !important;
+
+    .text-caption {
+      font-size: 0.68rem;
+      margin-bottom: 2px !important;
+    }
   }
 
   .result-counter {
     color: var(--dashboard-muted);
-    font-size: 0.9rem;
+    font-size: 0.78rem;
   }
 
   .state-banner {
@@ -393,7 +415,7 @@ body {
   .mobile-card {
     background: #fff;
     border-radius: var(--dashboard-radius-md);
-    padding: 14px;
+    padding: 10px;
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.07);
     border: 1px solid #f1f5f9;
   }
@@ -408,7 +430,7 @@ body {
 
   .mobile-card-name {
     font-weight: 700;
-    font-size: 0.95rem;
+    font-size: 0.88rem;
     color: #1e293b;
     text-decoration: none;
   }
@@ -419,23 +441,21 @@ body {
     margin-top: 2px;
   }
 
+  .mobile-card-statuses {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+
   .mobile-card-info {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
-    font-size: 0.8rem;
+    font-size: 0.75rem;
     color: #6b7280;
-    margin-bottom: 10px;
-  }
-
-  .mobile-card-locked {
-    font-size: 0.82rem;
-    color: #991b1b;
-    background: #fee2e2;
-    border-radius: 6px;
-    padding: 4px 8px;
-    margin-bottom: 8px;
-    display: inline-block;
+    margin-bottom: 6px;
   }
 
   .mobile-card-actions {
@@ -459,18 +479,25 @@ body {
       color: #64748b;
       font-weight: 700;
       text-transform: uppercase;
-      font-size: 0.75rem;
+      font-size: 0.7rem;
       letter-spacing: 0.05em;
-      padding: 16px;
+      padding: 6px 10px;
+      line-height: 1.2;
     }
 
     tbody tr td {
-      padding: 12px 16px;
+      padding: 5px 10px;
+      font-size: 0.82rem;
+      line-height: 1.35;
       border-color: #f1f5f9;
     }
 
+    tbody tr:nth-child(even) td {
+      background: #f8fafc;
+    }
+
     tbody tr:hover td {
-      background: #f8fbff;
+      background: #eff6ff;
     }
   }
 
@@ -504,11 +531,12 @@ body {
   }
 
   .action-btn {
-    font-size: 0.75rem;
+    font-size: 0.72rem;
     font-weight: 700 !important;
     border: 1px solid #e2e8f0;
     border-radius: 6px;
-    padding: 4px 8px;
+    padding: 2px 6px;
+    min-height: 26px;
     margin-right: 0;
     transition: all 0.18s ease;
   }
@@ -646,7 +674,7 @@ body {
 
     .mobile-list {
       display: grid;
-      gap: 12px;
+      gap: 8px;
     }
 
     .table-wrap {

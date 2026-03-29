@@ -394,379 +394,86 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
-import { api } from 'boot/axios';
 import { useQuasar } from 'quasar';
 import StatusBadge from 'components/StatusBadge.vue';
-
-interface ChainLink {
-  id: string;
-  assigned_to_name: string;
-  delegation_depth: number;
-  status: string;
-  created_at: string;
-  admin_locked?: number;
-  submission?: Submission | null;
-}
-
-interface Submission {
-  cause_category: string;
-  cause_detail: string;
-  recommendation: string;
-  visit_lat: number | null;
-  visit_lng: number | null;
-  photo_paths: string;
-  submitted_at: string;
-}
-
-interface Review {
-  id: string;
-  review_action: string;
-  reviewed_by: string;
-  reviewed_at: string;
-  review_note: string;
-}
-
-interface CaseTask {
-  task_id: string;
-  created_at: string;
-  initial_assignee: string;
-  link_count: number;
-  has_submission: boolean;
-}
-
-interface TaskChainData {
-  task_id: string;
-  case_id: number | null;
-  task_type: string;
-  target_grade: string;
-  target_room: string;
-  student_name: string;
-  student_school: string;
-  reason_flagged: string;
-  task_status: string;
-  case_status: string;
-  chain: ChainLink[];
-  reviews: Review[];
-}
+import { useCaseTaskDetail } from '../composables/useCaseTaskDetail';
+import { copyText } from '../utils/clipboard';
+import {
+  formatCaseDateTime,
+  getCaseCauseLabel,
+  getCasePhotoUrl,
+  getCaseReviewActionLabel,
+  getCaseStatusSummaryLabel,
+  getCaseTimelineActionText,
+  getCaseTimelineDotClass,
+  getCaseTimelineStatusText,
+  parseCasePhotoPaths,
+  toCaseLocationNumber,
+} from '../utils/casePresentation';
 
 const $q = useQuasar();
 const route = useRoute();
 const taskId = route.params.taskId as string;
-
-const loading = ref(true);
-const data = ref<TaskChainData | null>(null);
+const {
+  loading,
+  data,
+  reviews,
+  caseTasks,
+  reviewSaving,
+  newLinkSaving,
+  closeAwaitingSaving,
+  reviewForm,
+  newLinkForm,
+  closeAwaitingForm,
+  newLinkDialog,
+  newMagicLink,
+  reviewActionOptions,
+  chain,
+  submission,
+  canReview,
+  hasReviewCase,
+  canCreateNewLink,
+  canCloseAwaiting,
+  headerInfo,
+  fetchData,
+  submitNewLink,
+  submitCloseAwaiting,
+  submitReview,
+} = useCaseTaskDetail(taskId);
 const photoDialog = ref(false);
 const selectedPhoto = ref('');
-const reviewSaving = ref(false);
-
-const reviewForm = reactive({
-  review_action: 'ASSIST',
-  review_note: '',
-  reviewed_by: '',
-});
-
-const newLinkForm = reactive({
-  assigned_to_name: '',
-  assigned_to_phone: '',
-  assigned_to_email: '',
-  expires_value: '24',
-});
-
-const closeAwaitingForm = reactive({
-  reviewed_by: '',
-  review_note: '',
-});
-
-const newLinkSaving = ref(false);
-const closeAwaitingSaving = ref(false);
-const newLinkDialog = ref(false);
-const newMagicLink = ref('');
-
-const reviewActionOptions = [
-  { label: 'ให้ความช่วยเหลือ', value: 'ASSIST' },
-  { label: 'ส่งต่อหน่วยงาน/ผู้เกี่ยวข้อง', value: 'FORWARD' },
-  { label: 'ปิดเคส', value: 'CLOSE' },
-];
-
-const chain = computed(() => data.value?.chain || []);
-
-const submission = computed(() => {
-  const chainLinks = data.value?.chain || [];
-  const submissions = chainLinks
-    .map((link) => link.submission)
-    .filter((item): item is Submission => !!item);
-
-  if (!submissions.length) return null;
-
-  return submissions.sort((a, b) => {
-    const timeA = new Date(String(a.submitted_at)).getTime();
-    const timeB = new Date(String(b.submitted_at)).getTime();
-    return timeB - timeA;
-  })[0];
-});
-
-const reviews = ref<Review[]>([]);
-const caseTasks = ref<CaseTask[]>([]);
-
-const toFiniteNumber = (value: unknown): number | null => {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : null;
-};
-const canReview = computed(
-  () => data.value?.task_type === 'VISIT' && !!data.value?.case_id && data.value?.case_status === 'PENDING_REVIEW',
-);
-const hasReviewCase = computed(
-  () => data.value?.task_type === 'VISIT' && !!data.value?.case_id && data.value?.case_status === 'RESOLVED',
-);
-const canCreateNewLink = computed(
-  () => data.value?.task_type === 'VISIT' && !!data.value?.case_id && data.value?.case_status === 'IN_PROGRESS',
-);
-const canCloseAwaiting = computed(
-  () => data.value?.task_type === 'VISIT' && !!data.value?.case_id && data.value?.case_status === 'AWAITING_HELP',
-);
-
-const visitLat = computed(() => toFiniteNumber(submission.value?.visit_lat));
-const visitLng = computed(() => toFiniteNumber(submission.value?.visit_lng));
+const visitLat = computed(() => toCaseLocationNumber(submission.value?.visit_lat));
+const visitLng = computed(() => toCaseLocationNumber(submission.value?.visit_lng));
 const hasVisitLocation = computed(
   () => visitLat.value !== null && visitLng.value !== null,
 );
 const photos = computed(() =>
-  parsePhotos(String(submission.value?.photo_paths || '')),
+  parseCasePhotoPaths(String(submission.value?.photo_paths || '')),
 );
-
-const headerInfo = computed(() => {
-  if (!data.value) return '';
-  if (data.value.task_type === 'ATTENDANCE') {
-    return `ภารกิจเช็คชื่อ ${data.value.target_grade}/${data.value.target_room}`;
-  }
-  return `${data.value.student_name || ''} — ${data.value.student_school || ''}`;
-});
-
-const fetchData = async () => {
-  try {
-    const res = await api.get(`/api/tasks/${taskId}/chain`);
-    data.value = res.data;
-    if (data.value?.case_id) {
-      await Promise.all([
-        fetchCaseReviews(Number(data.value.case_id)),
-        fetchCaseTasks(Number(data.value.case_id)),
-      ]);
-    } else {
-      reviews.value = Array.isArray(data.value?.reviews) ? data.value.reviews : [];
-    }
-  } catch (err) {
-    console.error(err);
-    $q.notify({ message: 'ไม่สามารถโหลดข้อมูลได้', color: 'negative' });
-  } finally {
-    loading.value = false;
-  }
-};
-
-const fetchCaseTasks = async (caseId: number) => {
-  try {
-    const res = await api.get(`/api/cases/${caseId}/tasks`);
-    caseTasks.value = Array.isArray(res.data?.data) ? res.data.data : [];
-  } catch {
-    caseTasks.value = [];
-  }
-};
-
-const submitNewLink = async () => {
-  if (!data.value?.case_id || !canCreateNewLink.value) return;
-  if (!newLinkForm.assigned_to_name.trim()) {
-    $q.notify({ message: 'กรุณากรอกชื่อผู้รับมอบหมาย', color: 'warning' });
-    return;
-  }
-  newLinkSaving.value = true;
-  try {
-    const res = await api.post('/api/tasks', {
-      existing_case_id: data.value.case_id,
-      task_type: 'VISIT',
-      assigned_to_name: newLinkForm.assigned_to_name,
-      assigned_to_phone: newLinkForm.assigned_to_phone,
-      assigned_to_email: newLinkForm.assigned_to_email || undefined,
-      expires_value: newLinkForm.expires_value,
-      expires_unit: 'hours',
-    });
-    newMagicLink.value = res.data.magic_link;
-    newLinkDialog.value = true;
-    newLinkForm.assigned_to_name = '';
-    newLinkForm.assigned_to_phone = '';
-    newLinkForm.assigned_to_email = '';
-    $q.notify({ message: 'สร้าง Link มอบหมายใหม่สำเร็จ', color: 'positive' });
-    await fetchData();
-  } catch (err: unknown) {
-    const error = err as { response?: { data?: { message?: string } } };
-    $q.notify({ message: error.response?.data?.message || 'ไม่สามารถสร้าง Link ได้', color: 'negative' });
-  } finally {
-    newLinkSaving.value = false;
-  }
-};
-
-const submitCloseAwaiting = async () => {
-  if (!data.value?.case_id || !canCloseAwaiting.value) return;
-  closeAwaitingSaving.value = true;
-  try {
-    await api.post(`/api/cases/${data.value.case_id}/review`, {
-      review_action: 'CLOSE',
-      review_note: closeAwaitingForm.review_note,
-      reviewed_by: closeAwaitingForm.reviewed_by || 'ผอ.',
-    });
-    $q.notify({ message: 'ปิดเคสสำเร็จ', color: 'positive' });
-    await fetchData();
-  } catch (err: unknown) {
-    const error = err as { response?: { data?: { message?: string } } };
-    $q.notify({ message: error.response?.data?.message || 'ไม่สามารถปิดเคสได้', color: 'negative' });
-  } finally {
-    closeAwaitingSaving.value = false;
-  }
-};
 
 const copyLink = async () => {
   try {
-    await navigator.clipboard.writeText(newMagicLink.value);
-    $q.notify({ message: 'คัดลอก Link แล้ว', color: 'positive' });
+    const method = await copyText(newMagicLink.value);
+    $q.notify({
+      message: method === 'manual'
+        ? 'เบราว์เซอร์บล็อกการคัดลอกอัตโนมัติ กรุณาคัดลอกจากหน้าต่างที่เปิดขึ้นมา'
+        : 'คัดลอก Link แล้ว',
+      color: method === 'manual' ? 'warning' : 'positive',
+    });
   } catch {
     $q.notify({ message: 'ไม่สามารถคัดลอกได้', color: 'warning' });
   }
 };
-
-const fetchCaseReviews = async (caseId: number) => {
-  try {
-    const res = await api.get(`/api/cases/${caseId}/reviews`);
-    if (Array.isArray(res.data?.data)) {
-      reviews.value = res.data.data;
-      return;
-    }
-    reviews.value = Array.isArray(data.value?.reviews) ? data.value.reviews : [];
-  } catch {
-    reviews.value = Array.isArray(data.value?.reviews) ? data.value.reviews : [];
-  }
-};
-
-const getDotClass = (status: string) => {
-  const map: Record<string, string> = {
-    ACTIVE: 'dot-active',
-    DELEGATED: 'dot-delegated',
-    COMPLETED: 'dot-completed',
-    EXPIRED: 'dot-expired',
-  };
-  return map[status] || 'dot-active';
-};
-
-const getActionText = (index: number, depth: number) => {
-  if (index === 0) return 'ได้รับมอบหมายจากต้นทาง';
-  return `ได้รับการส่งต่อ (ทอดที่ ${depth})`;
-};
-
-const getStatusText = (link: ChainLink) => {
-  if (link.status === 'DELEGATED') return ' — ส่งต่อให้คนอื่นแล้ว';
-  if (link.status === 'COMPLETED') return ' — ลงพื้นที่สำเร็จ';
-  if (link.status === 'ACTIVE') return ' — รอดำเนินการ';
-  if (link.admin_locked) return ' — ถูกผู้ดูแลปิดลิงก์';
-  return '';
-};
-
-const formatDateTime = (d: string) => {
-  if (!d) return '-';
-  return new Date(d).toLocaleString('th-TH', {
-    day: 'numeric', month: 'short', year: 'numeric',
-    hour: '2-digit', minute: '2-digit'
-  });
-};
-
-const getCauseLabel = (category: string) => {
-  const labels: Record<string, string> = {
-    ECONOMIC: 'ปัญหาทางเศรษฐกิจ',
-    FAMILY: 'ปัญหาครอบครัว',
-    HEALTH: 'ปัญหาสุขภาพ',
-    MIGRATION: 'ย้ายถิ่นฐาน',
-    DISABILITY: 'ความพิการ',
-    BEHAVIOR: 'ปัญหาพฤติกรรม',
-    OTHER: 'อื่นๆ',
-  };
-  return labels[category] || category || '-';
-};
-
-const getReviewAction = (action: string) => {
-  const map: Record<string, string> = {
-    ASSIST: 'ให้ความช่วยเหลือ',
-    FORWARD: 'ส่งต่อหน่วยงาน/ผู้เกี่ยวข้อง',
-    CLOSE: 'ปิดเคส',
-  };
-  return map[action] || action;
-};
-
-const getCaseStatusLabel = (status: string) => {
-  const map: Record<string, string> = {
-    PENDING_REVIEW: 'รอผอ.ประเมิน',
-    IN_PROGRESS: 'กำลังดำเนินการ',
-    AWAITING_HELP: 'รอรับความช่วยเหลือจากหน่วยงาน',
-    RESOLVED: 'ปิดเคสแล้ว',
-  };
-  return map[status] || status || '-';
-};
-
-const submitReview = async () => {
-  if (!data.value?.case_id || !canReview.value) return;
-  if (!reviewForm.review_action) {
-    $q.notify({ message: 'กรุณาเลือกการตัดสินใจ', color: 'warning' });
-    return;
-  }
-
-  reviewSaving.value = true;
-  try {
-    await api.post(`/api/cases/${data.value.case_id}/review`, {
-      review_action: reviewForm.review_action,
-      review_note: reviewForm.review_note,
-      reviewed_by: reviewForm.reviewed_by,
-    });
-    reviewForm.review_note = '';
-    $q.notify({ message: 'บันทึกผลการประเมินสำเร็จ', color: 'positive' });
-    await fetchData();
-  } catch (err: unknown) {
-    console.error(err);
-    const error = err as { response?: { data?: { message?: string } } };
-    $q.notify({
-      message: error.response?.data?.message || 'ไม่สามารถบันทึกผลการประเมินได้',
-      color: 'negative',
-    });
-  } finally {
-    reviewSaving.value = false;
-  }
-};
-
-const parsePhotos = (paths: string) => {
-  const normalized = (paths || '').trim();
-  if (!normalized) return [];
-  if (normalized.startsWith('[')) {
-    try {
-      const parsed = JSON.parse(normalized);
-      return Array.isArray(parsed) ? parsed.map(String).filter(Boolean) : [];
-    } catch {
-      return [];
-    }
-  }
-  return normalized
-    .split(',')
-    .map((item) => item.trim())
-    .filter(Boolean);
-};
-
-const getPhotoUrl = (filename: string) => {
-  const normalized = (filename || '').trim();
-  if (!normalized) return '';
-  if (
-    normalized.startsWith('data:') ||
-    normalized.startsWith('http') ||
-    normalized.startsWith('/uploads/')
-  ) {
-    return normalized;
-  }
-  return `/uploads/${normalized}`;
-};
+const getDotClass = getCaseTimelineDotClass;
+const getActionText = getCaseTimelineActionText;
+const getStatusText = getCaseTimelineStatusText;
+const formatDateTime = formatCaseDateTime;
+const getCauseLabel = getCaseCauseLabel;
+const getReviewAction = getCaseReviewActionLabel;
+const getCaseStatusLabel = getCaseStatusSummaryLabel;
+const getPhotoUrl = getCasePhotoUrl;
 
 const openPhoto = (photo: string) => {
   selectedPhoto.value = getPhotoUrl(photo);

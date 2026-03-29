@@ -49,7 +49,7 @@
                       <span>แจ้งเตือนขาดเรียน</span>
                       <q-badge color="red" label="ใหม่" class="q-ml-xs" size="xs" />
                     </q-item-label>
-                    <q-item-label caption lines="2">{{ notif.reason || 'เด็กนักเรียนขาดเรียนติดต่อกัน' }} - {{ notif.student_name }}</q-item-label>
+                    <q-item-label caption lines="2">{{ notif.reason || notif.reason_flagged || 'เด็กนักเรียนขาดเรียนติดต่อกัน' }} - {{ notif.student_name }}</q-item-label>
                     <q-item-label caption class="text-primary q-mt-xs">{{ formatDate(notif.created_at) }}</q-item-label>
                   </q-item-section>
                   <q-item-section side top>
@@ -91,7 +91,7 @@
                     <q-item-label class="text-weight-medium row items-center">
                       <span>แจ้งเตือนขาดเรียน</span>
                     </q-item-label>
-                    <q-item-label caption lines="2">{{ notif.reason || 'เด็กนักเรียนขาดเรียนติดต่อกัน' }} - {{ notif.student_name }}</q-item-label>
+                    <q-item-label caption lines="2">{{ notif.reason || notif.reason_flagged || 'เด็กนักเรียนขาดเรียนติดต่อกัน' }} - {{ notif.student_name }}</q-item-label>
                     <q-item-label caption class="q-mt-xs text-grey-6">{{ formatDate(notif.created_at) }}</q-item-label>
                   </q-item-section>
                   <q-item-section side top>
@@ -248,12 +248,10 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { api } from 'boot/axios';
 import { useQuasar } from 'quasar';
 import { 
   MENU_ITEMS, 
   filterMenuItems, 
-  getEffectivePermissions,
   type MenuItem 
 } from '../constants/permissions';
 import { 
@@ -261,45 +259,38 @@ import {
   startProfileSync, 
   stopProfileSync 
 } from '../composables/useUserStore';
+import { useCaseNotifications } from '../composables/useCaseNotifications';
+import { formatCaseDateTime } from '../utils/casePresentation';
+import type { CaseRecord } from '../types/case';
 
 const route = useRoute();
 const router = useRouter();
 const $q = useQuasar();
 const leftDrawerOpen = ref(false);
 
-const { 
+const {
   user, 
   loadUser, 
+  userPermissions,
   userRoleLabel, 
   userDisplayName, 
   userInitials, 
   clearUser 
 } = useUserStore();
-
-interface CaseNotification {
-  id: number;
-  case_id?: number;
-  task_id?: string;
-  student_id?: string;
-  title?: string;
-  message?: string;
-  student_name?: string;
-  reason?: string;
-  created_at: string;
-  status: string;
-}
-
-const notifications = ref<CaseNotification[]>([]);
-const MAX_UNREAD_NOTIFICATIONS = 8;
-const MAX_READ_NOTIFICATIONS = 6;
+const {
+  notifications,
+  displayedUnreadNotifications,
+  displayedReadNotifications,
+  hiddenNotificationsCount,
+  dismissedNotificationsCount,
+  unreadCount,
+  markAsRead,
+  markNotificationAsRead,
+  dismissNotification: dismissCaseNotification,
+  restoreDismissedNotifications: restoreCaseNotifications,
+  fetchNotifications,
+} = useCaseNotifications();
 let notifInterval: number | null = null;
-
-const userPermissions = computed(() => {
-  if (!user.value) return [];
-  const roles = user.value.roles || [];
-  const customPermissions = user.value.permissions || [];
-  return getEffectivePermissions(roles, customPermissions);
-});
 
 const visibleMenuItems = computed(() => {
   return filterMenuItems(MENU_ITEMS, userPermissions.value);
@@ -340,107 +331,16 @@ onUnmounted(() => {
   stopProfileSync();
 });
 
-async function fetchNotifications() {
-  try {
-    const res = await api.get('/api/cases');
-    notifications.value = res.data.filter((c: CaseNotification) => c.status === 'OPEN');
-    cleanupDismissedNotifications();
-  } catch (err) {
-    console.warn('Failed to fetch notifications', err);
-  }
-}
-
-const readCaseIds = ref<number[]>(JSON.parse(localStorage.getItem('read_case_ids') || '[]'));
-const dismissedNotificationIds = ref<number[]>(
-  JSON.parse(localStorage.getItem('dismissed_case_ids') || '[]'),
-);
-const readCaseIdSet = computed(() => new Set(readCaseIds.value));
-const activeNotificationIdSet = computed(
-  () => new Set(notifications.value.map((notification) => notification.id)),
-);
-const activeDismissedNotificationIds = computed(() => {
-  return dismissedNotificationIds.value.filter((notificationId) =>
-    activeNotificationIdSet.value.has(notificationId),
-  );
-});
-const dismissedNotificationIdSet = computed(
-  () => new Set(activeDismissedNotificationIds.value),
-);
-
-const sortedNotifications = computed(() => {
-  return [...notifications.value].sort((a, b) => {
-    const dateA = new Date(a.created_at).getTime();
-    const dateB = new Date(b.created_at).getTime();
-    return dateB - dateA;
-  });
-});
-
-const visibleNotifications = computed(() => {
-  return sortedNotifications.value.filter(
-    (notification) => !dismissedNotificationIdSet.value.has(notification.id),
-  );
-});
-
-const unreadNotifications = computed(() => {
-  return visibleNotifications.value.filter((notification) => !readCaseIdSet.value.has(notification.id));
-});
-
-const readNotifications = computed(() => {
-  return visibleNotifications.value.filter((notification) => readCaseIdSet.value.has(notification.id));
-});
-
-const displayedUnreadNotifications = computed(() => {
-  return unreadNotifications.value.slice(0, MAX_UNREAD_NOTIFICATIONS);
-});
-
-const displayedReadNotifications = computed(() => {
-  return readNotifications.value.slice(0, MAX_READ_NOTIFICATIONS);
-});
-
-const hiddenNotificationsCount = computed(() => {
-  return (
-    unreadNotifications.value.length -
-      displayedUnreadNotifications.value.length +
-    readNotifications.value.length -
-      displayedReadNotifications.value.length
-  );
-});
-
-const dismissedNotificationsCount = computed(() => {
-  return activeDismissedNotificationIds.value.length;
-});
-
-const unreadCount = computed(() => {
-  return unreadNotifications.value.length;
-});
-
 const canOpenNotificationReport = computed(() => {
   return userPermissions.value.includes('dashboard');
 });
 
-function markAsRead() {
-  if (notifications.value.length > 0) {
-    const ids = notifications.value.map(n => n.id);
-    const uniqueIds = Array.from(new Set([...readCaseIds.value, ...ids]));
-    readCaseIds.value = uniqueIds;
-    localStorage.setItem('read_case_ids', JSON.stringify(uniqueIds));
-  }
-}
-
 function formatDate(dateStr: string) {
-  if (!dateStr) return '';
-  const d = new Date(dateStr);
-  return d.toLocaleString('th-TH', {
-    year: 'numeric', month: 'short', day: 'numeric',
-    hour: '2-digit', minute: '2-digit'
-  });
+  return formatCaseDateTime(dateStr);
 }
 
-function goToNotification(notification: CaseNotification) {
-  if (!readCaseIds.value.includes(notification.id)) {
-    readCaseIds.value.push(notification.id);
-    localStorage.setItem('read_case_ids', JSON.stringify(readCaseIds.value));
-  }
+function goToNotification(notification: CaseRecord) {
+  markNotificationAsRead(notification.id);
 
   if (notification.student_id) {
     void router.push(`/students/${notification.student_id}`);
@@ -457,42 +357,11 @@ function openNotificationReport() {
 }
 
 function dismissNotification(notificationId: number) {
-  if (dismissedNotificationIdSet.value.has(notificationId)) {
-    return;
-  }
-
-  dismissedNotificationIds.value = [...dismissedNotificationIds.value, notificationId];
-  localStorage.setItem(
-    'dismissed_case_ids',
-    JSON.stringify(dismissedNotificationIds.value),
-  );
+  dismissCaseNotification(notificationId);
 }
 
 function restoreDismissedNotifications() {
-  dismissedNotificationIds.value = [];
-  localStorage.removeItem('dismissed_case_ids');
-}
-
-function cleanupDismissedNotifications() {
-  const nextDismissedIds = dismissedNotificationIds.value.filter((notificationId) =>
-    activeNotificationIdSet.value.has(notificationId),
-  );
-
-  if (nextDismissedIds.length === dismissedNotificationIds.value.length) {
-    return;
-  }
-
-  dismissedNotificationIds.value = nextDismissedIds;
-
-  if (nextDismissedIds.length === 0) {
-    localStorage.removeItem('dismissed_case_ids');
-    return;
-  }
-
-  localStorage.setItem(
-    'dismissed_case_ids',
-    JSON.stringify(nextDismissedIds),
-  );
+  restoreCaseNotifications();
 }
 
 function isExpansionOpened(item: MenuItem): boolean {

@@ -26,42 +26,15 @@
         </div>
       </div>
 
-      <!-- 2. Main Stats Row (Total, Risk, Dropout) -->
-      <div class="row q-col-gutter-lg q-mb-lg">
-        <div class="col-12 col-md-4">
-          <div class="stat-card stat-card-green">
-            <div class="row justify-between items-start">
-              <div class="stat-title">เด็กทั้งหมด</div>
-              <div class="stat-icon-bg bg-green-1">
-                <i class="fas fa-users color-green-7"></i>
-              </div>
-            </div>
-            <div class="stat-value text-h2 text-weight-bold">{{ overviewData.totalStudents?.toLocaleString() || '0' }}</div>
-          </div>
-        </div>
-        <div class="col-12 col-md-4">
-          <div class="stat-card stat-card-yellow">
-            <div class="row justify-between items-start">
-              <div class="stat-title">เด็กเสี่ยง</div>
-              <div class="stat-icon-bg bg-orange-1">
-                <i class="fas fa-meh color-orange-7"></i>
-              </div>
-            </div>
-            <div class="stat-value text-h2 text-weight-bold">{{ overviewData.atRiskStudents?.toLocaleString() || '0' }}</div>
-          </div>
-        </div>
-        <div class="col-12 col-md-4">
-          <div class="stat-card stat-card-red">
-            <div class="row justify-between items-start">
-              <div class="stat-title">เด็กหลุด</div>
-              <div class="stat-icon-bg bg-red-1">
-                <i class="fas fa-person-running color-red-7"></i>
-              </div>
-            </div>
-            <div class="stat-value text-h2 text-weight-bold">{{ overviewData.dropoutStudents?.toLocaleString() || '0' }}</div>
-          </div>
-        </div>
-      </div>
+      <q-banner v-if="loadError" class="state-banner q-mb-md">
+        <div class="text-weight-bold">ไม่สามารถโหลดข้อมูลภาพรวมได้</div>
+        <div class="text-caption">{{ loadError }}</div>
+        <template #action>
+          <q-btn flat color="negative" label="ลองโหลดอีกครั้ง" @click="refreshData" />
+        </template>
+      </q-banner>
+
+      <OverviewSummaryCards :overview-data="overviewData" />
 
       <!-- 3. Bottom Row: Help Status & Data Export -->
       <div class="row q-col-gutter-lg">
@@ -143,61 +116,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue';
-import { api } from 'boot/axios';
+import { ref, onMounted } from 'vue';
+import OverviewSummaryCards from '../components/dashboard/OverviewSummaryCards.vue';
+import { useOverviewDashboardData } from '../composables/useOverviewDashboardData';
+import { useUserStore } from '../composables/useUserStore';
 
-interface User {
-  id: number;
-  username: string;
-  FirstName: string | null;
-  LastName: string | null;
-  roles: string[];
-  labels?: string[];
-  affiliation?: string | null;
-}
-
-const currentUser = ref<User | null>(null);
-
-const userDisplayName = computed(() => {
-  if (!currentUser.value) return 'ผู้ดูแลระบบ';
-  const { FirstName, LastName, username } = currentUser.value;
-  if (FirstName && LastName) return `${FirstName} ${LastName}`;
-  return FirstName || username || 'ผู้ใช้งาน';
-});
-
-const userRoleLabel = computed(() => {
-  if (!currentUser.value) return 'ผู้ดูแลระบบ';
-  
-  const labels = currentUser.value.labels || [];
-  if (labels.length > 0) {
-    return labels.join(', ');
-  }
-
-  const roles = currentUser.value.roles || [];
-  if (roles.includes('ADMIN')) return 'ผู้ดูแลระบบ';
-  if (roles.includes('DIRECTOR')) return 'ผู้อำนวยการ';
-  if (roles.includes('TEACHER')) return 'คุณครู';
-  if (roles.includes('EXECUTIVE')) return 'ผู้บริหาร';
-  
-  return roles[0] || 'ผู้ใช้งาน';
-});
-
-const userInitials = computed(() => {
-  if (currentUser.value?.FirstName) return currentUser.value.FirstName.charAt(0).toUpperCase();
-  if (currentUser.value?.username) return currentUser.value.username.charAt(0).toUpperCase();
-  return 'A';
-});
-
-const overviewData = ref({
-  totalStudents: 0,
-  dropoutStudents: 0,
-  atRiskStudents: 0,
-  helpStats: {
-    waiting: 0,
-    inProgress: 0,
-    resolved: 0
-  }
-});
+const {
+  user: currentUser,
+  userDisplayName,
+  userRoleLabel,
+  userInitials,
+  loadUser,
+} = useUserStore();
+const { overviewData, loadError, fetchOverviewData, refreshData } = useOverviewDashboardData();
 
 const exportType = ref('ประเภทไฟล์');
 const exportItems = ref([
@@ -207,27 +138,9 @@ const exportItems = ref([
   { label: 'ผลการให้ความช่วยเหลือเด็ก', selected: false },
 ]);
 
-const fetchOverview = async () => {
-  try {
-    const res = await api.get('/api/stats/overview');
-    if (res.data.success) {
-      overviewData.value = res.data.data;
-    }
-  } catch (err) {
-    console.error('Error fetching overview stats:', err);
-  }
-};
-
 onMounted(() => {
-  void fetchOverview();
-  const userStr = sessionStorage.getItem('sts_user') || localStorage.getItem('sts_user');
-  if (userStr) {
-    try {
-      currentUser.value = JSON.parse(userStr) as User;
-    } catch (e) {
-      console.error('Failed to parse sts_user', e);
-    }
-  }
+  void fetchOverviewData();
+  loadUser();
 });
 </script>
 
@@ -241,6 +154,12 @@ onMounted(() => {
 .dashboard-container {
   max-width: 1400px;
   margin: 0 auto;
+}
+
+.state-banner {
+  border-radius: 20px;
+  background: #fff5f5;
+  border: 1px solid #fecaca;
 }
 
 /* Base Card */

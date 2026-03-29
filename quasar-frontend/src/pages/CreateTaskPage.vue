@@ -108,6 +108,9 @@
             <div v-if="formattedStudentAddress" class="address-preview q-mt-sm">
               <span class="text-weight-bold">ที่อยู่ที่จะบันทึก:</span> {{ formattedStudentAddress }}
             </div>
+            <div v-else-if="formData.student_address" class="address-preview q-mt-sm">
+              <span class="text-weight-bold">ที่อยู่จากเคสเดิม:</span> {{ formData.student_address }}
+            </div>
           </div>
           <div class="form-group">
             <label>สาเหตุที่ถูก Flag</label>
@@ -498,300 +501,103 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue';
+import { ref, reactive, computed, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
-import { api } from 'boot/axios';
 import type { AxiosError } from 'axios';
 import { useQuasar } from 'quasar';
-import { useUserStore } from '../composables/useUserStore';
-import {
-  GRANT_EXEMPT_PERMISSION_IDS,
-  PERMISSION_DELTA_LEGEND,
-  PERMISSION_DELTA_META,
-  getLeafMenuItems,
-  getPermissionDeltaState,
-  getRoleScopePreset,
-  type DataScope,
-  type RoleDefinition,
-  type ScopeFormField,
-} from '../constants/permissions';
+import { useAttendanceFilters } from '../composables/useAttendanceFilters';
+import { useLoginTaskForm } from '../composables/useLoginTaskForm';
+import { useTaskFormFlow } from '../composables/useTaskFormFlow';
+import { taskService } from '../services/taskService';
+import { copyText } from '../utils/clipboard';
+import { buildTaskCreatePayload, createTaskFormModel, createTaskScopeFormModel } from '../utils/taskForm';
+import { buildTaskLineShareUrl } from '../utils/taskPresentation';
 
 const $q = useQuasar();
 const route = useRoute();
-const { user } = useUserStore();
 const currentStep = ref(1);
-const loading = ref(false);
-const showResult = ref(false);
-const resultLink = ref('');
-const qrCodeUrl = ref('');
 const mapPickerInput = ref('');
-
-const rolesCatalog = ref<RoleDefinition[]>([]);
-const schoolOptions = ref<Array<{
-  label: string;
-  value: number;
-  province?: string;
-  district?: string;
-  sub_district?: string;
-}>>([]);
-const roomOptions = ref<string[]>([]);
-const suppressRolePermissionSync = ref(false);
-
-const permissionOptions = getLeafMenuItems().map((item) => ({
-  label: item.label,
-  value: item.id,
-}));
-const permissionLegendItems = PERMISSION_DELTA_LEGEND;
-
-const formData = reactive({
-  type: '',
-  student_name: '',
-  student_school: '',
-  student_address: '',
-  student_address_house_no: '',
-  student_address_moo: '',
-  student_address_village: '',
-  student_address_soi: '',
-  student_address_road: '',
-  student_address_subdistrict: '',
-  student_address_district: '',
-  student_address_province: '',
-  student_address_postal_code: '',
-  student_address_note: '',
-  student_lat: null as number | null,
-  student_lng: null as number | null,
-  reason_flagged: '',
-  target_grade: '',
-  target_room: '',
-  target_subject: '',
-  assigned_to_name: '',
-  assigned_to_email: '',
-  expires_value: 1,
-  expires_unit: 'days',
-  target_school_id: '', // Added for attendance scoping
-  selected_user_id: '', // For magic login lookup
-  role: 'TEACHER',
-  permissions: [] as string[],
-  existing_case_id: '', // Pre-linked case when coming from dashboard
+const formData = reactive(createTaskFormModel());
+const {
+  submitting: loading,
+  showResult,
+  resultLink,
+  qrCodeUrl,
+  submitTask,
+} = useTaskFormFlow();
+const {
+  gradeLevels,
+  tempSchools,
+  tempFilters,
+  locationData,
+  filteredDistricts,
+  filteredSubDistricts,
+  loadLocations,
+  loadGradeLevels,
+  handleProvinceFilterChange,
+  handleDistrictFilterChange,
+  handleSubDistrictFilterChange,
+} = useAttendanceFilters();
+const scopeForm = reactive(createTaskScopeFormModel());
+const {
+  permissionOptions,
+  permissionLegendItems,
+  permissionLabelMap,
+  selectedRoleMeta,
+  roleScopePreset,
+  roleOptions,
+  scopeFieldLabels,
+  availableProvinceOptions,
+  availableDistrictOptions,
+  availableSubDistrictOptions,
+  filteredSchools,
+  availableGradeLevels: availableGradeOptions,
+  availableRoomOptions,
+  isNationwideToggleDisabled,
+  initializeForm: initializeLoginTaskForm,
+  buildDataScope,
+  handleAllProvincesToggle: onAllProvincesToggle,
+  handleProvinceChange: onLoginScopeProvinceChange,
+  handleDistrictChange: onLoginScopeDistrictChange,
+  handleSubDistrictChange: onLoginScopeSubDistrictChange,
+  handleSchoolChange: onLoginScopeSchoolChange,
+  isPermissionLocked,
+  isScopeFieldLocked,
+  getPermissionVisualState,
+  getPermissionVisualMeta,
+  togglePermission,
+  removePermission,
+} = useLoginTaskForm({
+  form: formData,
+  scopeForm,
+  enabled: computed(() => formData.type === 'LOGIN'),
 });
-
-interface GradeLevel { id: number; label: string; }
-interface School { id: number; name: string; }
-interface District { province: string; district: string; }
-interface SubDistrict { province: string; district: string; sub_district: string; }
-
-const gradeLevels = ref<GradeLevel[]>([]);
-
-// Location Cascade Data
-const locationData = reactive({
-  provinces: [] as string[],
-  districts: [] as District[],
-  subDistricts: [] as SubDistrict[]
-});
-
-const tempFilters = reactive({
-  province: '',
-  district: '',
-  subDistrict: '',
-});
-
-const scopeForm = reactive({
-  allProvinces: true,
-  province: null as string | null,
-  district: null as string | null,
-  sub_district: null as string | null,
-  school_id: null as number | null,
-  grade_level: null as number | null,
-  room: null as string | null,
-});
-
-const tempSchools = ref<School[]>([]);
-
-const filteredDistricts = computed(() => {
-  if (!tempFilters.province) return [];
-  return Array.from(new Set(
-    locationData.districts
-      .filter((d: District) => d.province === tempFilters.province)
-      .map((d: District) => d.district)
-  ));
-});
-
-const filteredSubDistricts = computed(() => {
-  if (!tempFilters.district) return [];
-  return Array.from(new Set(
-    locationData.subDistricts
-      .filter((sd: SubDistrict) => sd.province === tempFilters.province && sd.district === tempFilters.district)
-      .map((sd: SubDistrict) => sd.sub_district)
-  ));
-});
-
-const permissionLabelMap = computed<Record<string, string>>(() => (
-  Object.fromEntries(permissionOptions.map((item) => [item.value, item.label]))
-));
-
-const normalizeScopeValueList = (value: unknown): string[] => {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  return Array.from(new Set(value.map((item) => String(item).trim()).filter(Boolean)));
-};
-
-const currentUserRole = computed(() => user.value?.roles?.[0] || null);
-const currentUserRoleMeta = computed(() => (
-  rolesCatalog.value.find((role) => role.name === (user.value?.roles?.[0] || null)) || null
-));
-const currentUserGrantablePermissionSet = computed(() => new Set([
-  ...(user.value?.permissions || []),
-  ...(currentUserRoleMeta.value?.default_permissions || []),
-]));
-const currentUserScope = computed(() => ({
-  provinces: normalizeScopeValueList(user.value?.data_scope?.provinces),
-  districts: normalizeScopeValueList(user.value?.data_scope?.districts),
-  sub_districts: normalizeScopeValueList(user.value?.data_scope?.sub_districts),
-  school_ids: normalizeScopeValueList(user.value?.data_scope?.school_ids),
-  grade_levels: normalizeScopeValueList(user.value?.data_scope?.grade_levels),
-  room_ids: normalizeScopeValueList(user.value?.data_scope?.room_ids),
-}));
-const selectedRoleMeta = computed(() => (
-  rolesCatalog.value.find((role) => role.name === formData.role) || null
-));
-const roleDefaultPermissions = computed(() => selectedRoleMeta.value?.default_permissions || []);
-const roleScopePreset = computed(() => (
-  getRoleScopePreset(formData.role, selectedRoleMeta.value?.scope_mode)
-));
-const canUseNationwideScope = computed(() => (
-  currentUserScope.value.provinces.length === 0 &&
-  currentUserScope.value.districts.length === 0 &&
-  currentUserScope.value.sub_districts.length === 0 &&
-  currentUserScope.value.school_ids.length === 0
-));
-const isNationwideToggleDisabled = computed(() => (
-  roleScopePreset.value.mode !== 'flexible' || !canUseNationwideScope.value
-));
-const roleOptions = computed(() => {
-  const actorRole = currentUserRole.value;
-  const actorRank = rolesCatalog.value.find((role) => role.name === actorRole)?.rank || 0;
-
-  return rolesCatalog.value
-    .filter((role) => {
-      const targetRank = role.rank || 0;
-      if (targetRank > actorRank) {
-        return false;
-      }
-
-      if (targetRank === actorRank && actorRole !== 'ADMIN') {
-        return false;
-      }
-
-      return true;
-    })
-    .sort((a, b) => (b.rank || 0) - (a.rank || 0))
-    .map((role) => ({ value: role.name, label: role.label }));
-});
-const availableProvinceOptions = computed(() => (
-  currentUserScope.value.provinces.length > 0
-    ? locationData.provinces.filter((province) => currentUserScope.value.provinces.includes(province))
-    : locationData.provinces
-));
-const availableDistrictOptions = computed(() => {
-  if (!scopeForm.province) return [];
-  let options = Array.from(new Set(
-    locationData.districts
-      .filter((item) => item.province === scopeForm.province)
-      .map((item) => item.district),
-  ));
-
-  if (currentUserScope.value.districts.length > 0) {
-    options = options.filter((district) => currentUserScope.value.districts.includes(district));
-  }
-
-  return options;
-});
-const availableSubDistrictOptions = computed(() => {
-  if (!scopeForm.province || !scopeForm.district) return [];
-  let options = Array.from(new Set(
-    locationData.subDistricts
-      .filter((item) => item.province === scopeForm.province && item.district === scopeForm.district)
-      .map((item) => item.sub_district),
-  ));
-
-  if (currentUserScope.value.sub_districts.length > 0) {
-    options = options.filter((subDistrict) => currentUserScope.value.sub_districts.includes(subDistrict));
-  }
-
-  return options;
-});
-const filteredSchools = computed(() => {
-  let list = schoolOptions.value;
-  if (currentUserScope.value.provinces.length > 0) {
-    list = list.filter((school) => currentUserScope.value.provinces.includes(String(school.province || '')));
-  }
-  if (currentUserScope.value.districts.length > 0) {
-    list = list.filter((school) => currentUserScope.value.districts.includes(String(school.district || '')));
-  }
-  if (currentUserScope.value.sub_districts.length > 0) {
-    list = list.filter((school) => currentUserScope.value.sub_districts.includes(String(school.sub_district || '')));
-  }
-  if (currentUserScope.value.school_ids.length > 0) {
-    list = list.filter((school) => currentUserScope.value.school_ids.includes(String(school.value)));
-  }
-  if (scopeForm.allProvinces) {
-    return list;
-  }
-  if (scopeForm.province) list = list.filter((school) => school.province === scopeForm.province);
-  if (scopeForm.district) list = list.filter((school) => school.district === scopeForm.district);
-  if (scopeForm.sub_district) list = list.filter((school) => school.sub_district === scopeForm.sub_district);
-  return list;
-});
-const availableGradeOptions = computed(() => (
-  currentUserScope.value.grade_levels.length > 0
-    ? gradeLevels.value.filter((grade) => currentUserScope.value.grade_levels.includes(String(grade.id)))
-    : gradeLevels.value
-));
-const availableRoomOptions = computed(() => (
-  currentUserScope.value.room_ids.length > 0
-    ? roomOptions.value.filter((room) => currentUserScope.value.room_ids.includes(String(room)))
-    : roomOptions.value
-));
 const submitButtonLabel = computed(() => (
   formData.type === 'LOGIN' ? 'สร้างลิงก์เข้าสู่ระบบ' : 'สร้างภารกิจ'
 ));
 
 const fetchLocations = async () => {
   try {
-    const res = await api.get('/api/attendance/locations');
-    Object.assign(locationData, res.data.data);
+    await loadLocations();
   } catch (err) {
     console.error('Fetch locations error:', err);
   }
 };
 
 const onProvinceChange = () => {
-  tempFilters.district = '';
-  tempFilters.subDistrict = '';
+  handleProvinceFilterChange({ clearTempSchools: true });
   formData.target_school_id = '';
-  tempSchools.value = [];
 };
 
 const onDistrictChange = () => {
-  tempFilters.subDistrict = '';
+  handleDistrictFilterChange({ clearTempSchools: true });
   formData.target_school_id = '';
-  tempSchools.value = [];
 };
 
 const onSubDistrictChange = async () => {
   formData.target_school_id = '';
-  if (!tempFilters.subDistrict) return;
   try {
-    const res = await api.get('/api/attendance/schools', {
-      params: {
-        province: tempFilters.province,
-        district: tempFilters.district,
-        subDistrict: tempFilters.subDistrict
-      }
-    });
-    tempSchools.value = res.data.data;
+    await handleSubDistrictFilterChange({ clearTempSchoolsWhenEmpty: true });
   } catch (err) {
     console.error('Fetch temp schools error:', err);
   }
@@ -799,82 +605,162 @@ const onSubDistrictChange = async () => {
 
 const fetchGradeLevels = async () => {
   try {
-    const res = await api.get('/api/attendance/grade-levels');
-    gradeLevels.value = res.data.data;
+    await loadGradeLevels();
   } catch (err) {
     console.error('Fetch grade levels error:', err);
   }
 };
 
-const fetchSchools = async () => {
-  try {
-    const res = await api.get('/api/attendance/schools');
-    schoolOptions.value = (res.data?.data || []).map((school: {
-      id: number;
-      name: string;
-      province?: string;
-      district?: string;
-      sub_district?: string;
-      subDistrict?: string;
-    }) => ({
-      label: school.name,
-      value: school.id,
-      province: school.province,
-      district: school.district,
-      sub_district: school.sub_district || school.subDistrict,
-    }));
-  } catch (err) {
-    console.error('Fetch schools error:', err);
+const getQueryText = (value: unknown) => {
+  if (Array.isArray(value)) {
+    const [first] = value;
+    return typeof first === 'string' ? first : '';
   }
+  return typeof value === 'string' ? value : '';
 };
 
-const fetchRolesCatalog = async () => {
-  try {
-    const res = await api.get<RoleDefinition[]>('/api/users/roles');
-    rolesCatalog.value = res.data;
-  } catch (err) {
-    console.error('Fetch roles error:', err);
+const normalizeStudentField = (value: unknown) => {
+  if (value == null) {
+    return '';
   }
+  if (typeof value === 'string' || typeof value === 'number') {
+    return String(value).trim().replace(/\s+/g, ' ');
+  }
+  return '';
 };
 
-const fetchLoginScopeRooms = async () => {
-  if (!scopeForm.grade_level || !scopeForm.school_id) {
-    roomOptions.value = [];
-    scopeForm.room = null;
+const getStudentFieldText = (student: Record<string, unknown>, key: string) => {
+  const exact = normalizeStudentField(student[key]);
+  if (exact) {
+    return exact;
+  }
+
+  return normalizeStudentField(student[key.toLowerCase()]);
+};
+
+const assignAddressPartIfEmpty = (
+  field:
+    | 'student_address_house_no'
+    | 'student_address_moo'
+    | 'student_address_village'
+    | 'student_address_soi'
+    | 'student_address_road'
+    | 'student_address_subdistrict'
+    | 'student_address_district'
+    | 'student_address_province'
+    | 'student_address_postal_code',
+  value: string,
+) => {
+  if (!value || value === '-' || formData[field].trim()) {
+    return;
+  }
+  formData[field] = value;
+};
+
+const extractAddressPart = (address: string, patterns: RegExp[]) => {
+  for (const pattern of patterns) {
+    const match = address.match(pattern);
+    const value = match?.[1]?.trim().replace(/^[\s,:-]+|[\s,.-]+$/g, '');
+    if (value && value !== '-') {
+      return value;
+    }
+  }
+  return '';
+};
+
+const hydrateVisitAddressFromText = (address: string) => {
+  const normalized = address.trim().replace(/\s+/g, ' ');
+  if (!normalized) {
     return;
   }
 
-  try {
-    const selectedGrade = gradeLevels.value.find((grade) => grade.id === scopeForm.grade_level);
-    if (!selectedGrade) {
-      roomOptions.value = [];
-      scopeForm.room = null;
-      return;
-    }
+  formData.student_address = normalized;
+  assignAddressPartIfEmpty(
+    'student_address_house_no',
+    extractAddressPart(normalized, [/บ้านเลขที่\s*([^\s()]+)/, /เลขที่\s*([^\s()]+)/]),
+  );
+  assignAddressPartIfEmpty(
+    'student_address_moo',
+    extractAddressPart(normalized, [/หมู่\s*([^\s()]+)/]),
+  );
+  assignAddressPartIfEmpty(
+    'student_address_village',
+    extractAddressPart(normalized, [
+      /หมู่บ้าน\s*(.+?)(?=\s+(?:ซอย|ถนน|ตำบล\/แขวง|ตำบล|แขวง|อำเภอ\/เขต|อำเภอ|เขต|จังหวัด|\d{5})|$)/,
+      /อาคาร\s*(.+?)(?=\s+(?:ซอย|ถนน|ตำบล\/แขวง|ตำบล|แขวง|อำเภอ\/เขต|อำเภอ|เขต|จังหวัด|\d{5})|$)/,
+    ]),
+  );
+  assignAddressPartIfEmpty(
+    'student_address_soi',
+    extractAddressPart(normalized, [
+      /ซอย\s*(.+?)(?=\s+(?:ถนน|ตำบล\/แขวง|ตำบล|แขวง|อำเภอ\/เขต|อำเภอ|เขต|จังหวัด|\d{5})|$)/,
+    ]),
+  );
+  assignAddressPartIfEmpty(
+    'student_address_road',
+    extractAddressPart(normalized, [
+      /ถนน\s*(.+?)(?=\s+(?:ตำบล\/แขวง|ตำบล|แขวง|อำเภอ\/เขต|อำเภอ|เขต|จังหวัด|\d{5})|$)/,
+    ]),
+  );
+  assignAddressPartIfEmpty(
+    'student_address_subdistrict',
+    extractAddressPart(normalized, [
+      /(?:ตำบล\/แขวง|ตำบล|แขวง)\s*(.+?)(?=\s+(?:อำเภอ\/เขต|อำเภอ|เขต|จังหวัด|\d{5})|$)/,
+    ]),
+  );
+  assignAddressPartIfEmpty(
+    'student_address_district',
+    extractAddressPart(normalized, [
+      /(?:อำเภอ\/เขต|อำเภอ|เขต)\s*(.+?)(?=\s+(?:จังหวัด|\d{5})|$)/,
+    ]),
+  );
+  assignAddressPartIfEmpty(
+    'student_address_province',
+    extractAddressPart(normalized, [/จังหวัด\s*(.+?)(?=\s+\d{5}|$)/]),
+  );
+  assignAddressPartIfEmpty(
+    'student_address_postal_code',
+    extractAddressPart(normalized, [/(\d{5})(?!.*\d)/]),
+  );
+};
 
-    const res = await api.get('/api/attendance/rooms', {
-      params: {
-        grade: selectedGrade.label,
-        schoolId: scopeForm.school_id,
-      },
-    });
-    roomOptions.value = (res.data?.data || []).map(String);
-    if (scopeForm.room && !roomOptions.value.includes(String(scopeForm.room))) {
-      scopeForm.room = null;
-    }
-  } catch (err) {
-    console.error('Fetch login scope rooms error:', err);
+const hydrateVisitAddressFromStudentRecord = (student: Record<string, unknown>) => {
+  const villageNumber = getStudentFieldText(student, 'VillageNumber_Onec');
+  const soi = getStudentFieldText(student, 'Soi_Onec');
+  const street = getStudentFieldText(student, 'Street_Onec');
+  const subdistrict = getStudentFieldText(student, 'SubDistrictNameThai_Onec');
+  const district = getStudentFieldText(student, 'DistrictNameThai_Onec');
+  const province = getStudentFieldText(student, 'ProvinceNameThai_Onec');
+
+  assignAddressPartIfEmpty('student_address_moo', villageNumber);
+  assignAddressPartIfEmpty('student_address_soi', soi);
+  assignAddressPartIfEmpty('student_address_road', street);
+  assignAddressPartIfEmpty('student_address_subdistrict', subdistrict);
+  assignAddressPartIfEmpty('student_address_district', district);
+  assignAddressPartIfEmpty('student_address_province', province);
+
+  if (!formData.student_school.trim()) {
+    formData.student_school = getStudentFieldText(student, 'school_name');
+  }
+
+  if (!formData.student_address.trim()) {
+    const parts: string[] = [];
+    if (villageNumber) parts.push(`หมู่ ${villageNumber}`);
+    if (soi) parts.push(`ซอย${soi}`);
+    if (street) parts.push(`ถนน${street}`);
+    if (subdistrict) parts.push(`ตำบล/แขวง${subdistrict}`);
+    if (district) parts.push(`อำเภอ/เขต${district}`);
+    if (province) parts.push(`จังหวัด${province}`);
+    formData.student_address = parts.join(' ');
   }
 };
 
-const ensureLoginOptionsLoaded = async () => {
-  const tasks: Promise<void>[] = [];
-  if (locationData.provinces.length === 0) tasks.push(fetchLocations());
-  if (gradeLevels.value.length === 0) tasks.push(fetchGradeLevels());
-  if (schoolOptions.value.length === 0) tasks.push(fetchSchools());
-  if (rolesCatalog.value.length === 0) tasks.push(fetchRolesCatalog());
-  if (tasks.length > 0) {
-    await Promise.all(tasks);
+const fetchStudentAddressPrefill = async (studentId: string) => {
+  try {
+    const studentRecord = await taskService.getStudentRecord(studentId);
+    hydrateVisitAddressFromStudentRecord(studentRecord);
+  } catch (err) {
+    console.error('Fetch student address prefill error:', err);
   }
 };
 
@@ -883,14 +769,20 @@ onMounted(async () => {
   void fetchLocations();
 
   // Pre-fill from query params when coming from dashboard OPEN case
-  const { case_id, student_name, student_school, reason } = route.query;
-  if (case_id) {
-    formData.existing_case_id = String(case_id);
-    formData.student_name = student_name ? String(student_name) : '';
-    formData.student_school = student_school ? String(student_school) : '';
-    formData.reason_flagged = reason ? String(reason) : '';
+  const caseId = getQueryText(route.query.case_id);
+  if (caseId) {
+    const studentId = getQueryText(route.query.student_id);
+    formData.existing_case_id = caseId;
+    formData.student_name = getQueryText(route.query.student_name);
+    formData.student_school = getQueryText(route.query.student_school);
+    formData.reason_flagged = getQueryText(route.query.reason);
+    hydrateVisitAddressFromText(getQueryText(route.query.student_address));
     formData.type = 'VISIT';
     currentStep.value = 2;
+
+    if (studentId) {
+      void fetchStudentAddressPrefill(studentId);
+    }
   }
 });
 
@@ -913,145 +805,13 @@ const hasValidCoordinates = computed(() => {
   );
 });
 
-const selectType = (type: string) => {
+const selectType = (type: 'VISIT' | 'ATTENDANCE' | 'LOGIN') => {
   formData.type = type;
   if (type === 'LOGIN') {
     void initializeLoginTaskForm();
   }
   currentStep.value = 2;
 };
-
-const scopeFieldLabels: Record<ScopeFormField, string> = {
-  province: 'จังหวัด',
-  district: 'อำเภอ',
-  sub_district: 'ตำบล',
-  school_id: 'โรงเรียน',
-  grade_level: 'ระดับชั้น',
-  room: 'ห้องเรียน',
-};
-
-const isScopeFieldLocked = (field: ScopeFormField) => (
-  !roleScopePreset.value.allowedFields.includes(field)
-);
-
-const resetScopeForm = () => {
-  scopeForm.allProvinces = canUseNationwideScope.value;
-  scopeForm.province = null;
-  scopeForm.district = null;
-  scopeForm.sub_district = null;
-  scopeForm.school_id = null;
-  scopeForm.grade_level = null;
-  scopeForm.room = null;
-  roomOptions.value = [];
-};
-
-const applyRoleScopePreset = () => {
-  const preset = roleScopePreset.value;
-
-  if (preset.mode === 'flexible') {
-    return;
-  }
-
-  if (preset.mode === 'global') {
-    resetScopeForm();
-    scopeForm.allProvinces = true;
-    return;
-  }
-
-  scopeForm.allProvinces = false;
-
-  if (!preset.allowedFields.includes('province')) scopeForm.province = null;
-  if (!preset.allowedFields.includes('district')) scopeForm.district = null;
-  if (!preset.allowedFields.includes('sub_district')) scopeForm.sub_district = null;
-  if (!preset.allowedFields.includes('school_id')) scopeForm.school_id = null;
-  if (!preset.allowedFields.includes('grade_level')) scopeForm.grade_level = null;
-  if (!preset.allowedFields.includes('room')) scopeForm.room = null;
-
-  if (preset.requiredFields.includes('province') && !scopeForm.province && availableProvinceOptions.value.length === 1) {
-    scopeForm.province = availableProvinceOptions.value[0] || null;
-  }
-  if (preset.requiredFields.includes('district') && !scopeForm.district && availableDistrictOptions.value.length === 1) {
-    scopeForm.district = availableDistrictOptions.value[0] || null;
-  }
-  if (preset.requiredFields.includes('sub_district') && !scopeForm.sub_district && availableSubDistrictOptions.value.length === 1) {
-    scopeForm.sub_district = availableSubDistrictOptions.value[0] || null;
-  }
-  if (preset.requiredFields.includes('school_id') && !scopeForm.school_id && filteredSchools.value.length === 1) {
-    scopeForm.school_id = filteredSchools.value[0]?.value || null;
-  }
-  if (isScopeFieldLocked('room')) {
-    roomOptions.value = [];
-  }
-};
-
-const onAllProvincesToggle = (enabled: boolean | null) => {
-  if (!canUseNationwideScope.value) {
-    scopeForm.allProvinces = false;
-    return;
-  }
-
-  if (!enabled) {
-    return;
-  }
-
-  resetScopeForm();
-  scopeForm.allProvinces = true;
-};
-
-const onLoginScopeProvinceChange = () => {
-  scopeForm.allProvinces = false;
-  scopeForm.district = null;
-  scopeForm.sub_district = null;
-  scopeForm.school_id = null;
-  scopeForm.grade_level = null;
-  scopeForm.room = null;
-  roomOptions.value = [];
-};
-
-const onLoginScopeDistrictChange = () => {
-  scopeForm.sub_district = null;
-  scopeForm.school_id = null;
-  scopeForm.grade_level = null;
-  scopeForm.room = null;
-  roomOptions.value = [];
-};
-
-const onLoginScopeSubDistrictChange = () => {
-  scopeForm.school_id = null;
-  scopeForm.grade_level = null;
-  scopeForm.room = null;
-  roomOptions.value = [];
-};
-
-const onLoginScopeSchoolChange = () => {
-  scopeForm.grade_level = null;
-  scopeForm.room = null;
-  roomOptions.value = [];
-};
-
-const canGrantPermission = (permissionId: string) => (
-  GRANT_EXEMPT_PERMISSION_IDS.includes(permissionId) ||
-  currentUserGrantablePermissionSet.value.has('*') ||
-  currentUserGrantablePermissionSet.value.has('ALL') ||
-  currentUserGrantablePermissionSet.value.has(permissionId)
-);
-
-const isPermissionLocked = (permissionId: string) => (
-  !formData.permissions.includes(permissionId) && !canGrantPermission(permissionId)
-);
-
-const getPermissionVisualState = (permissionId: string) => (
-  getPermissionDeltaState(
-    permissionId,
-    formData.permissions,
-    roleDefaultPermissions.value,
-    isPermissionLocked(permissionId),
-  )
-);
-
-const getPermissionVisualMeta = (permissionId: string) => (
-  PERMISSION_DELTA_META[getPermissionVisualState(permissionId)]
-);
 
 const shouldShowPermissionBadge = (permissionId: string) => {
   const state = getPermissionVisualState(permissionId);
@@ -1066,81 +826,17 @@ const getPermissionBadgeLabel = (permissionId: string) => {
   return getPermissionVisualMeta(permissionId).shortLabel;
 };
 
-const togglePermission = (permissionId: string, checked: boolean) => {
-  if (checked) {
-    if (!formData.permissions.includes(permissionId) && canGrantPermission(permissionId)) {
-      formData.permissions = [...formData.permissions, permissionId];
-    }
-    return;
-  }
-
-  formData.permissions = formData.permissions.filter((item) => item !== permissionId);
-};
-
-const removePermission = (permissionId: string) => {
-  formData.permissions = formData.permissions.filter((item) => item !== permissionId);
-};
-
-const buildLoginDataScope = (): DataScope => {
-  const dataScope: DataScope = {};
-  if (!scopeForm.allProvinces && scopeForm.province) dataScope.provinces = [scopeForm.province];
-  if (!scopeForm.allProvinces && scopeForm.district) dataScope.districts = [scopeForm.district];
-  if (!scopeForm.allProvinces && scopeForm.sub_district) dataScope.sub_districts = [scopeForm.sub_district];
-  if (!scopeForm.allProvinces && scopeForm.school_id) dataScope.school_ids = [scopeForm.school_id];
-  if (scopeForm.grade_level) dataScope.grade_levels = [scopeForm.grade_level];
-  if (scopeForm.room) dataScope.room_ids = [scopeForm.room];
-  return dataScope;
-};
-
-const initializeLoginTaskForm = async () => {
-  await ensureLoginOptionsLoaded();
-  suppressRolePermissionSync.value = true;
-  formData.role = roleOptions.value.find((item) => item.value === 'TEACHER')?.value || roleOptions.value[0]?.value || 'TEACHER';
-  formData.permissions = [];
-  resetScopeForm();
-  await nextTick();
-  suppressRolePermissionSync.value = false;
-  formData.permissions = Array.from(
-    new Set(
-      (selectedRoleMeta.value?.default_permissions || []).filter((permissionId) => canGrantPermission(permissionId)),
-    ),
-  );
-  applyRoleScopePreset();
-};
-
-watch(() => formData.role, () => {
-  if (formData.type !== 'LOGIN') {
-    return;
-  }
-
-  if (!suppressRolePermissionSync.value) {
-    formData.permissions = Array.from(
-      new Set(
-        (selectedRoleMeta.value?.default_permissions || []).filter((permissionId) => canGrantPermission(permissionId)),
-      ),
-    );
-  }
-
-  applyRoleScopePreset();
-});
-
-watch(
-  () => [scopeForm.grade_level, scopeForm.school_id],
-  () => {
-    if (formData.type !== 'LOGIN') {
-      return;
-    }
-
-    if (scopeForm.grade_level && scopeForm.school_id) {
-      void fetchLoginScopeRooms();
-    } else {
-      roomOptions.value = [];
-      scopeForm.room = null;
-    }
-  },
-);
-
 const normalizeAddressPart = (value: string) => value.trim().replace(/\s+/g, ' ');
+
+const hasCompleteStructuredVisitAddress = () => (
+  [
+    formData.student_address_house_no,
+    formData.student_address_subdistrict,
+    formData.student_address_district,
+    formData.student_address_province,
+    formData.student_address_postal_code,
+  ].every((value) => value.trim().length > 0)
+);
 
 const buildDetailedAddress = (data: typeof formData) => {
   const parts: string[] = [];
@@ -1193,20 +889,15 @@ const submitForm = async () => {
     }
   }
   if (formData.type === 'VISIT') {
-    const hasRequiredAddressParts = [
-      formData.student_address_house_no,
-      formData.student_address_subdistrict,
-      formData.student_address_district,
-      formData.student_address_province,
-      formData.student_address_postal_code,
-    ].every((value) => value.trim().length > 0);
+    const hasStructuredAddress = hasCompleteStructuredVisitAddress();
+    const existingAddress = normalizeAddressPart(formData.student_address);
 
-    if (!hasRequiredAddressParts) {
+    if (!hasStructuredAddress && !existingAddress) {
       $q.notify({ message: 'กรุณากรอกที่อยู่ให้ครบ (บ้านเลขที่, ตำบล/แขวง, อำเภอ/เขต, จังหวัด, รหัสไปรษณีย์)', color: 'negative' });
       return;
     }
 
-    if (!/^\d{5}$/.test(formData.student_address_postal_code.trim())) {
+    if (hasStructuredAddress && !/^\d{5}$/.test(formData.student_address_postal_code.trim())) {
       $q.notify({ message: 'รหัสไปรษณีย์ต้องเป็นตัวเลข 5 หลัก', color: 'negative' });
       return;
     }
@@ -1235,47 +926,45 @@ const submitForm = async () => {
     }
   }
 
-  loading.value = true;
   try {
-    const payload: Record<string, unknown> = {
-      ...formData,
-      role: formData.type === 'LOGIN' ? formData.role : undefined,
-      permissions: formData.type === 'LOGIN' ? [...formData.permissions] : undefined,
-      data_scope: formData.type === 'LOGIN' ? buildLoginDataScope() : undefined,
-      student_address: formData.type === 'VISIT' ? buildDetailedAddress(formData) : formData.student_address,
-      task_type: formData.type,
-      subject: formData.target_subject || null,
-      target_school_id: formData.type === 'ATTENDANCE' && formData.target_school_id ? parseInt(formData.target_school_id, 10) : null,
-    };
-    if (formData.existing_case_id) {
-      payload.existing_case_id = formData.existing_case_id;
-    }
-    const res = await api.post('/api/tasks', payload);
-    let link = normalizePublicLink(res.data.magic_link);
-    if (formData.type === 'LOGIN') {
-      link = link.replace('/task/', '/login/magic/');
-    }
-    resultLink.value = link;
-    // We don't have a QR code generator in this mock yet, so just leave it empty or use dummy
-    qrCodeUrl.value = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(resultLink.value)}`;
-    showResult.value = true;
+    const visitStudentAddress = formData.type === 'VISIT'
+      ? (hasCompleteStructuredVisitAddress()
+        ? buildDetailedAddress(formData)
+        : normalizeAddressPart(formData.student_address))
+      : formData.student_address;
+
+    const payload = buildTaskCreatePayload(formData, {
+      loginDataScope: formData.type === 'LOGIN' ? buildDataScope() : undefined,
+      visitStudentAddress,
+    });
+
+    await submitTask(payload, {
+      loginLink: formData.type === 'LOGIN',
+    });
   } catch (err: unknown) {
     console.error(err);
     const error = err as AxiosError<{ message?: string }>;
     $q.notify({ message: error.response?.data?.message || 'เกิดข้อผิดพลาดในการสร้างภารกิจ', color: 'negative' });
-  } finally {
-    loading.value = false;
   }
 };
 
-const copyLink = () => {
-  void navigator.clipboard.writeText(resultLink.value).then(() => {
-    $q.notify({ message: 'คัดลอกลิงก์สำเร็จ', color: 'positive', timeout: 2000 });
-  });
+const copyLink = async () => {
+  try {
+    const method = await copyText(resultLink.value);
+    $q.notify({
+      message: method === 'manual'
+        ? 'เบราว์เซอร์บล็อกการคัดลอกอัตโนมัติ กรุณาคัดลอกจากหน้าต่างที่เปิดขึ้นมา'
+        : 'คัดลอกลิงก์สำเร็จ',
+      color: method === 'manual' ? 'warning' : 'positive',
+      timeout: 2000,
+    });
+  } catch {
+    $q.notify({ message: 'ไม่สามารถคัดลอกลิงก์ได้', color: 'negative', timeout: 2000 });
+  }
 };
 
 const getLineUrl = (link: string) => {
-  return `https://social-plugins.line.me/lineit/share?url=${encodeURIComponent(link)}`;
+  return buildTaskLineShareUrl(link);
 };
 
 const isValidCoordinatePair = (lat: number, lng: number) => {
@@ -1344,19 +1033,6 @@ const getEmbedMapUrl = () => {
   return `https://maps.google.com/maps?q=${formData.student_lat},${formData.student_lng}&z=15&output=embed`;
 };
 
-const normalizePublicLink = (rawLink: string) => {
-  if (!rawLink) return rawLink;
-  try {
-    const url = new URL(rawLink, window.location.origin);
-    if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') {
-      url.protocol = window.location.protocol;
-      url.host = window.location.host;
-    }
-    return url.toString();
-  } catch {
-    return rawLink;
-  }
-};
 </script>
 
 <style lang="scss" scoped>
