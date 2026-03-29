@@ -1,4 +1,5 @@
 import {
+  Inject,
   Controller,
   Post,
   Get,
@@ -11,41 +12,37 @@ import {
   HttpStatus,
   UseGuards,
 } from '@nestjs/common';
+import type { ConfigType } from '@nestjs/config';
 import { TaskService } from './task.service';
 import type { Request } from 'express';
 import { AuthGuard, PermissionsGuard, RequirePermission } from '../auth';
-
-type RequestWithActor = Request & {
-  user?: {
-    id: number;
-    username: string;
-    roles: string[];
-    permissions: string[];
-    data_scope?: Record<string, unknown>;
-    virtual_login?: boolean;
-  };
-};
+import { resolveExternalBaseUrl } from '../common/utils/request-url';
+import { appConfig } from '../config/app.config';
+import {
+  CreateTaskDto,
+  SaveTaskAttendanceDto,
+  SaveTaskSubmissionDto,
+} from './dto/task.dto';
+import {
+  getHeaderValue,
+  getTaskErrorMessage,
+  hasHttpStatusGetter,
+  type RequestWithActor,
+} from './task.types';
 
 @Controller('api/tasks')
 export class TaskController {
-  constructor(private readonly taskService: TaskService) {}
+  constructor(
+    private readonly taskService: TaskService,
+    @Inject(appConfig.KEY)
+    private readonly runtimeConfig: ConfigType<typeof appConfig>,
+  ) {}
 
-  private resolveBaseUrl(req: Request): string {
-    const envBase = process.env.FRONTEND_BASE_URL;
-    if (envBase) return envBase;
-
-    const origin = req.get('origin');
-    if (origin) return origin;
-
-    const xfProto = req.get('x-forwarded-proto');
-    const xfHost = req.get('x-forwarded-host');
-    if (xfHost) return `${xfProto || req.protocol}://${xfHost}`;
-
-    return `${req.protocol}://${req.get('host')}`;
-  }
-
-  private resolveStatusCode(err: unknown, fallbackStatus: HttpStatus): HttpStatus {
-    if (typeof err === 'object' && err !== null && 'getStatus' in err && typeof err.getStatus === 'function') {
+  private resolveStatusCode(
+    err: unknown,
+    fallbackStatus: HttpStatus,
+  ): HttpStatus {
+    if (hasHttpStatusGetter(err)) {
       return err.getStatus() as HttpStatus;
     }
 
@@ -54,14 +51,16 @@ export class TaskController {
 
   @UseGuards(AuthGuard)
   @Post()
-  async createTask(@Body() body: any, @Req() req: RequestWithActor) {
+  async createTask(@Body() body: CreateTaskDto, @Req() req: RequestWithActor) {
     try {
-      const baseUrl = this.resolveBaseUrl(req);
+      const baseUrl = resolveExternalBaseUrl(
+        req as Request,
+        this.runtimeConfig.frontendBaseUrl,
+      );
       return await this.taskService.createTask(req.user, body, baseUrl);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'เกิดข้อผิดพลาด';
       throw new HttpException(
-        message,
+        getTaskErrorMessage(err),
         this.resolveStatusCode(err, HttpStatus.BAD_REQUEST),
       );
     }
@@ -76,7 +75,7 @@ export class TaskController {
 
   @Get(':token')
   async getTask(@Param('token') token: string, @Req() req: Request) {
-    const sessionToken = req.headers['x-magic-session'] as string;
+    const sessionToken = getHeaderValue(req.headers['x-magic-session']);
     const task = await this.taskService.getTaskByToken(token, sessionToken);
     if (!task) {
       throw new HttpException('Task not found', HttpStatus.NOT_FOUND);
@@ -98,10 +97,13 @@ export class TaskController {
   @Get(':token/login-verify')
   async verifyMagicLogin(@Param('token') token: string, @Req() req: Request) {
     try {
-      const sessionToken = req.headers['x-magic-session'] as string;
+      const sessionToken = getHeaderValue(req.headers['x-magic-session']);
       return await this.taskService.verifyMagicLogin(token, sessionToken);
     } catch (err) {
-      throw new HttpException(err.message, HttpStatus.UNAUTHORIZED);
+      throw new HttpException(
+        getTaskErrorMessage(err),
+        HttpStatus.UNAUTHORIZED,
+      );
     }
   }
 
@@ -124,12 +126,18 @@ export class TaskController {
   }
 
   @Post(':token/attendance')
-  async saveTaskAttendance(@Param('token') token: string, @Body() body: any) {
+  async saveTaskAttendance(
+    @Param('token') token: string,
+    @Body() body: SaveTaskAttendanceDto,
+  ) {
     return await this.taskService.saveTaskAttendance(token, body.records);
   }
 
   @Post(':token/submission')
-  async saveTaskSubmission(@Param('token') token: string, @Body() body: any) {
+  async saveTaskSubmission(
+    @Param('token') token: string,
+    @Body() body: SaveTaskSubmissionDto,
+  ) {
     return await this.taskService.saveTaskSubmission(token, body);
   }
 
@@ -143,8 +151,8 @@ export class TaskController {
     return await this.taskService.verifyOtp(token, otp);
   }
 
-  @Post(':taskId/delete') // Wait, using @Delete is better standard
-  @Post('delete/:taskId') // Wait, let's just do standard @Delete
+  @Post(':taskId/delete')
+  @Post('delete/:taskId')
   @Delete(':taskId')
   async deleteTask(@Param('taskId') taskId: string) {
     return await this.taskService.deleteTask(taskId);

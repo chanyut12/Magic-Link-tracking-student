@@ -10,6 +10,13 @@ import { EmailService } from './email.service';
 import { CaseController } from './case.controller';
 import { CaseService } from './case.service';
 import { AutomationModule } from '../automation/automation.module';
+import { TaskRepository } from './task.repository';
+import { TaskPolicyService } from './task-policy.service';
+import { TaskLifecycleService } from './task-lifecycle.service';
+import { TaskAccessService } from './task-access.service';
+import { TaskReadService } from './task-read.service';
+import { TaskSubmissionService } from './task-submission.service';
+import { TaskStatsService } from './task-stats.service';
 
 @Module({
   imports: [AutomationModule],
@@ -21,7 +28,19 @@ import { AutomationModule } from '../automation/automation.module';
     SubmissionController,
     CaseController,
   ],
-  providers: [TaskService, DelegationService, EmailService, CaseService],
+  providers: [
+    TaskRepository,
+    TaskPolicyService,
+    TaskLifecycleService,
+    TaskAccessService,
+    TaskReadService,
+    TaskSubmissionService,
+    TaskStatsService,
+    TaskService,
+    DelegationService,
+    EmailService,
+    CaseService,
+  ],
   exports: [TaskService, DelegationService, EmailService, CaseService],
 })
 export class TaskModule {}

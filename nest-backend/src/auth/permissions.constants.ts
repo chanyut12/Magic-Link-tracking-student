@@ -1,3 +1,5 @@
+import type { DataScope } from './auth.types';
+
 export type RoleScopeMode =
   | 'flexible'
   | 'global'
@@ -15,16 +17,6 @@ export interface SystemRoleDefinition {
   is_system: boolean;
 }
 
-interface DataScope {
-  provinces?: string[];
-  districts?: string[];
-  sub_districts?: string[];
-  school_ids?: number[];
-  grade_levels?: number[];
-  room_ids?: Array<number | string>;
-  own_only?: boolean;
-}
-
 interface PermissionMenuItem {
   id: string;
   children?: PermissionMenuItem[];
@@ -39,10 +31,7 @@ export const PERMISSION_MENU_ITEMS: PermissionMenuItem[] = [
   { id: 'import-data' },
   {
     id: 'attendance-system',
-    children: [
-      { id: 'attendance-dashboard' },
-      { id: 'attendance' },
-    ],
+    children: [{ id: 'attendance-dashboard' }, { id: 'attendance' }],
   },
   {
     id: 'manage-users',
@@ -56,14 +45,16 @@ export const PERMISSION_MENU_ITEMS: PermissionMenuItem[] = [
 ];
 
 function collectLeafPermissionIds(items: PermissionMenuItem[]): string[] {
-  return items.flatMap((item) => (
+  return items.flatMap((item) =>
     item.children && item.children.length > 0
       ? collectLeafPermissionIds(item.children)
-      : [item.id]
-  ));
+      : [item.id],
+  );
 }
 
-export const VALID_PERMISSION_IDS = collectLeafPermissionIds(PERMISSION_MENU_ITEMS);
+export const VALID_PERMISSION_IDS = collectLeafPermissionIds(
+  PERMISSION_MENU_ITEMS,
+);
 
 export const GRANT_EXEMPT_PERMISSION_IDS = ['student-self'];
 
@@ -204,10 +195,7 @@ export const SYSTEM_ROLE_DEFINITIONS: SystemRoleDefinition[] = [
     name: 'STUDENT',
     label: 'นักเรียน',
     rank: 1,
-    default_permissions: [
-      'home',
-      'student-self',
-    ],
+    default_permissions: ['home', 'student-self'],
     scope_mode: 'flexible',
     is_system: true,
   },
@@ -225,9 +213,10 @@ export const ROLE_LABELS: Record<string, string> = Object.fromEntries(
   SYSTEM_ROLE_DEFINITIONS.map((role) => [role.name, role.label]),
 );
 
-export const ROLE_SCOPE_MODES: Record<string, RoleScopeMode> = Object.fromEntries(
-  SYSTEM_ROLE_DEFINITIONS.map((role) => [role.name, role.scope_mode]),
-);
+export const ROLE_SCOPE_MODES: Record<string, RoleScopeMode> =
+  Object.fromEntries(
+    SYSTEM_ROLE_DEFINITIONS.map((role) => [role.name, role.scope_mode]),
+  );
 
 function normalizeScopeArray(value: unknown): string[] {
   if (!Array.isArray(value)) {
@@ -298,7 +287,10 @@ export function getRoleScopeValidationError(
   }
 
   if (scopeMode === 'district') {
-    if (normalized.provinces.length !== 1 || normalized.districts.length !== 1) {
+    if (
+      normalized.provinces.length !== 1 ||
+      normalized.districts.length !== 1
+    ) {
       return `${roleLabel}ต้องเลือกจังหวัดและอำเภออย่างละ 1 รายการ`;
     }
     if (
@@ -340,13 +332,24 @@ export function getRoleScopeValidationError(
   return null;
 }
 
-export function getEffectivePermissions(roles: string[], customPermissions: string[] = []): string[] {
+export function getEffectivePermissions(
+  roles: string[],
+  customPermissions: string[] = [],
+): string[] {
   void roles;
   return Array.from(new Set(customPermissions));
 }
 
-export function hasPermission(roles: string[], customPermissions: string[], permission: string): boolean {
-  if (customPermissions.includes('*') || customPermissions.includes('ALL')) return true;
-  const effectivePermissions = getEffectivePermissions(roles, customPermissions);
+export function hasPermission(
+  roles: string[],
+  customPermissions: string[],
+  permission: string,
+): boolean {
+  if (customPermissions.includes('*') || customPermissions.includes('ALL'))
+    return true;
+  const effectivePermissions = getEffectivePermissions(
+    roles,
+    customPermissions,
+  );
   return effectivePermissions.includes(permission);
 }

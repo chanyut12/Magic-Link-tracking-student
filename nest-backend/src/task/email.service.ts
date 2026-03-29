@@ -1,18 +1,16 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import type { ConfigType } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
+import { emailConfig } from '../config/email.config';
 
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
 
-  private readonly config = {
-    enabled: process.env.EMAIL_ENABLED === 'true',
-    host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-    port: parseInt(process.env.EMAIL_PORT || '587', 10),
-    user: process.env.EMAIL_USER || '',
-    pass: process.env.EMAIL_PASS || '',
-    from: process.env.EMAIL_FROM || '"STS System" <noreply@sts-app.com>',
-  };
+  constructor(
+    @Inject(emailConfig.KEY)
+    private readonly config: ConfigType<typeof emailConfig>,
+  ) {}
 
   async sendOTP(
     email: string,

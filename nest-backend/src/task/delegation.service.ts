@@ -1,8 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { DatabaseService } from '../database/database.service';
 import { hashToken, generateToken, clean } from '../common/utils/helpers';
 import * as QRCode from 'qrcode';
 import * as crypto from 'crypto';
+import { DelegateTaskDto } from './dto/task.dto';
+import { TaskRepository } from './task.repository';
 
 const MAX_EXPIRY_HOURS = 2160;
 const DEFAULT_EXPIRY_HOURS = 24;
@@ -11,15 +12,30 @@ const DEFAULT_EXPIRY_HOURS = 24;
 export class DelegationService {
   private readonly logger = new Logger(DelegationService.name);
 
-  constructor(private readonly db: DatabaseService) {}
+  constructor(private readonly taskRepository: TaskRepository) {}
 
-  async delegateTask(token: string, data: any, baseUrl: string) {
+  private normalizeNumber(
+    value: string | number | null | undefined,
+  ): number | null {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value;
+    }
+
+    if (typeof value === 'string' && value.trim().length > 0) {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+
+    return null;
+  }
+
+  async delegateTask(token: string, data: DelegateTaskDto, baseUrl: string) {
     const tokenHash = hashToken(token);
     const newAssigneeName = clean(data.new_assignee_name);
     const newAssigneePhone = clean(data.new_assignee_phone);
     const newAssigneeEmail = clean(data.new_assignee_email);
     const delegateHours = Math.min(
-      parseInt(data.expires_in_hours) || DEFAULT_EXPIRY_HOURS,
+      this.normalizeNumber(data.expires_in_hours) || DEFAULT_EXPIRY_HOURS,
       MAX_EXPIRY_HOURS,
     );
 
@@ -27,22 +43,13 @@ export class DelegationService {
       throw new Error('new_assignee_name is required');
     }
 
-    const linkResult = await this.db.query(
-      `
-      SELECT tl.*, t.max_delegation_depth
-      FROM task_links tl
-      JOIN tasks t ON t.id = tl.task_id
-      WHERE tl.token_hash = $1
-    `,
-      [tokenHash],
-    );
-
-    const link = linkResult.rows[0];
+    const link =
+      await this.taskRepository.findDelegationLinkByTokenHash(tokenHash);
     if (!link) {
       throw new Error('Link not found');
     }
 
-    if (new Date(link.expires_at) < new Date()) {
+    if (new Date(String(link.expires_at)) < new Date()) {
       throw new Error('Link expired');
     }
 
@@ -54,7 +61,7 @@ export class DelegationService {
       throw new Error('Link is disabled by admin');
     }
 
-    if (link.delegation_depth >= link.max_delegation_depth) {
+    if (Number(link.delegation_depth) >= Number(link.max_delegation_depth)) {
       throw new Error('Max delegation depth reached');
     }
 
@@ -67,36 +74,33 @@ export class DelegationService {
     ).toISOString();
     const magicLink = `${baseUrl}/#/task/${newToken}`;
 
-    await this.db.transaction(async (client) => {
-      await client.query(
-        `
-        UPDATE task_links SET status = 'DELEGATED' WHERE id = $1
-      `,
-        [link.id],
+    await this.taskRepository.withTransaction(async (executor) => {
+      await this.taskRepository.updateTaskLinkStatus(
+        String(link.id),
+        'DELEGATED',
+        executor,
       );
 
-      await client.query(
-        `
-        INSERT INTO task_links (
-          id, task_id, parent_link_id, token_hash, magic_link, 
-          delegation_depth, assigned_to_name, assigned_to_phone, 
-          assigned_to_email, expires_at, otp_verified
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-      `,
-        [
-          newLinkId,
-          link.task_id,
-          link.id,
-          newTokenHash,
+      await this.taskRepository.createDelegatedTaskLink(
+        {
+          linkId: newLinkId,
+          taskId: String(link.task_id),
+          parentLinkId: String(link.id),
+          tokenHash: newTokenHash,
           magicLink,
-          link.delegation_depth + 1,
-          newAssigneeName,
-          newAssigneePhone,
-          newAssigneeEmail,
+          delegationDepth: Number(link.delegation_depth) + 1,
+          assignedToName: newAssigneeName,
+          assignedToPhone: newAssigneePhone,
+          assignedToEmail: newAssigneeEmail,
           expiresAt,
+          subject: null,
           otpVerified,
-        ],
+          createdByUserId: null,
+          loginRole: null,
+          loginPermissions: [],
+          loginDataScope: {},
+        },
+        executor,
       );
     });
 
@@ -111,7 +115,7 @@ export class DelegationService {
       magic_link: magicLink,
       qr_code_data: qrDataUrl,
       expires_at: expiresAt,
-      delegation_depth: link.delegation_depth + 1,
+      delegation_depth: Number(link.delegation_depth) + 1,
     };
   }
 }

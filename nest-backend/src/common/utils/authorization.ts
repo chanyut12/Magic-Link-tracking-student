@@ -1,26 +1,81 @@
-export interface DataScope {
-  provinces?: string[];
-  districts?: string[];
-  sub_districts?: string[];
-  school_ids?: number[];
-  grade_levels?: number[];
-  room_ids?: Array<number | string>;
-  own_only?: boolean;
-}
+import type { DataScope } from '../../auth/auth.types';
+import { normalizeDataScope } from '../../auth/auth.types';
+
+export type { DataScope };
 
 export const ROLE_BASELINES: Record<string, string[]> = {
-  ADMIN: ['home', 'dashboard', 'students', 'create', 'attendance', 'attendance-dashboard', 'manage-users-list', 'login-links', 'settings', 'import-data'],
-  ADMIN_PROVINCE: ['home', 'dashboard', 'students', 'create', 'attendance', 'attendance-dashboard', 'manage-users-list', 'login-links'],
-  ADMIN_DISTRICT: ['home', 'dashboard', 'students', 'create', 'attendance', 'attendance-dashboard', 'manage-users-list', 'login-links'],
-  ADMIN_SUBDISTRICT: ['home', 'dashboard', 'students', 'create', 'attendance', 'attendance-dashboard', 'manage-users-list', 'login-links'],
-  ADMIN_SCHOOL: ['home', 'dashboard', 'students', 'create', 'attendance', 'attendance-dashboard', 'manage-users-list', 'login-links'],
-  DIRECTOR: ['home', 'dashboard', 'students', 'create', 'attendance', 'attendance-dashboard', 'manage-users-list', 'login-links', 'settings'],
+  ADMIN: [
+    'home',
+    'dashboard',
+    'students',
+    'create',
+    'attendance',
+    'attendance-dashboard',
+    'manage-users-list',
+    'login-links',
+    'settings',
+    'import-data',
+  ],
+  ADMIN_PROVINCE: [
+    'home',
+    'dashboard',
+    'students',
+    'create',
+    'attendance',
+    'attendance-dashboard',
+    'manage-users-list',
+    'login-links',
+  ],
+  ADMIN_DISTRICT: [
+    'home',
+    'dashboard',
+    'students',
+    'create',
+    'attendance',
+    'attendance-dashboard',
+    'manage-users-list',
+    'login-links',
+  ],
+  ADMIN_SUBDISTRICT: [
+    'home',
+    'dashboard',
+    'students',
+    'create',
+    'attendance',
+    'attendance-dashboard',
+    'manage-users-list',
+    'login-links',
+  ],
+  ADMIN_SCHOOL: [
+    'home',
+    'dashboard',
+    'students',
+    'create',
+    'attendance',
+    'attendance-dashboard',
+    'manage-users-list',
+    'login-links',
+  ],
+  DIRECTOR: [
+    'home',
+    'dashboard',
+    'students',
+    'create',
+    'attendance',
+    'attendance-dashboard',
+    'manage-users-list',
+    'login-links',
+    'settings',
+  ],
   EXECUTIVE: ['home', 'dashboard', 'students', 'attendance-dashboard'],
   TEACHER: ['home', 'students', 'attendance', 'attendance-dashboard'],
   STUDENT: ['home', 'student-self'],
 };
 
-export function getEffectivePermissions(roles: string[], customPermissions: string[] = []): string[] {
+export function getEffectivePermissions(
+  roles: string[],
+  customPermissions: string[] = [],
+): string[] {
   void roles;
   return Array.from(new Set(customPermissions));
 }
@@ -44,8 +99,8 @@ export function parseScopeHeader(scopeHeader?: string): DataScope | undefined {
 
   for (const candidate of candidates) {
     try {
-      const parsed = JSON.parse(candidate) as DataScope;
-      if (parsed && typeof parsed === 'object') {
+      const parsed = normalizeDataScope(JSON.parse(candidate));
+      if (parsed) {
         return parsed;
       }
     } catch {
@@ -57,19 +112,19 @@ export function parseScopeHeader(scopeHeader?: string): DataScope | undefined {
 }
 
 export function buildDataScopeQuery(
-  scope: DataScope, 
-  tableAliases: { 
-    school_id?: string; 
-    province?: string; 
-    district?: string; 
+  scope: DataScope,
+  tableAliases: {
+    school_id?: string;
+    province?: string;
+    district?: string;
     sub_district?: string;
-    grade?: string; 
-    room?: string; 
+    grade?: string;
+    room?: string;
   } = {},
-  startIndex = 1
-): { sql: string; params: any[] } {
+  startIndex = 1,
+): { sql: string; params: unknown[] } {
   const clauses: string[] = [];
-  const params: any[] = [];
+  const params: unknown[] = [];
   let paramIndex = startIndex;
 
   const schoolAlias = tableAliases.school_id || 'school_id';
@@ -110,7 +165,7 @@ export function buildDataScopeQuery(
   }
 
   if (clauses.length === 0) {
-    return { sql: '1=1', params: [] };
+    return { sql: '', params: [] };
   }
 
   return { sql: clauses.join(' AND '), params };

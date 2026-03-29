@@ -1,4 +1,5 @@
 import {
+  Inject,
   Controller,
   Post,
   Body,
@@ -7,51 +8,50 @@ import {
   HttpException,
   HttpStatus,
 } from '@nestjs/common';
+import type { ConfigType } from '@nestjs/config';
 import { DelegationService } from './delegation.service';
 import type { Request } from 'express';
+import { resolveExternalBaseUrl } from '../common/utils/request-url';
+import { appConfig } from '../config/app.config';
+import { DelegateTaskDto } from './dto/task.dto';
+import { getTaskErrorMessage } from './task.types';
 
 @Controller('api/tasks')
 export class DelegationController {
-  constructor(private readonly delegationService: DelegationService) {}
-
-  private resolveBaseUrl(req: Request): string {
-    const envBase = process.env.FRONTEND_BASE_URL;
-    if (envBase) return envBase;
-
-    const origin = req.get('origin');
-    if (origin) return origin;
-
-    const xfProto = req.get('x-forwarded-proto');
-    const xfHost = req.get('x-forwarded-host');
-    if (xfHost) return `${xfProto || req.protocol}://${xfHost}`;
-
-    return `${req.protocol}://${req.get('host')}`;
-  }
+  constructor(
+    private readonly delegationService: DelegationService,
+    @Inject(appConfig.KEY)
+    private readonly runtimeConfig: ConfigType<typeof appConfig>,
+  ) {}
 
   @Post(':token/delegate')
   async delegateTask(
     @Param('token') token: string,
-    @Body() body: any,
+    @Body() body: DelegateTaskDto,
     @Req() req: Request,
   ) {
     try {
-      const baseUrl = this.resolveBaseUrl(req);
+      const baseUrl = resolveExternalBaseUrl(
+        req,
+        this.runtimeConfig.frontendBaseUrl,
+      );
       return await this.delegationService.delegateTask(token, body, baseUrl);
     } catch (err) {
-      if (err.message.includes('not found')) {
-        throw new HttpException(err.message, HttpStatus.NOT_FOUND);
+      const message = getTaskErrorMessage(err);
+      if (message.includes('not found')) {
+        throw new HttpException(message, HttpStatus.NOT_FOUND);
       }
-      if (err.message.includes('expired')) {
-        throw new HttpException(err.message, HttpStatus.GONE);
+      if (message.includes('expired')) {
+        throw new HttpException(message, HttpStatus.GONE);
       }
       if (
-        err.message.includes('no longer active') ||
-        err.message.includes('disabled') ||
-        err.message.includes('Max delegation')
+        message.includes('no longer active') ||
+        message.includes('disabled') ||
+        message.includes('Max delegation')
       ) {
-        throw new HttpException(err.message, HttpStatus.FORBIDDEN);
+        throw new HttpException(message, HttpStatus.FORBIDDEN);
       }
-      throw new HttpException(err.message, HttpStatus.BAD_REQUEST);
+      throw new HttpException(message, HttpStatus.BAD_REQUEST);
     }
   }
 }

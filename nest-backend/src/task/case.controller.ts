@@ -4,10 +4,13 @@ import {
   Get,
   HttpException,
   HttpStatus,
+  ParseIntPipe,
   Param,
   Post,
 } from '@nestjs/common';
 import { CaseService } from './case.service';
+import { ReviewCaseDto } from './dto/task.dto';
+import { getTaskErrorMessage } from './task.types';
 
 @Controller('api/cases')
 export class CaseController {
@@ -15,58 +18,46 @@ export class CaseController {
 
   @Post(':caseId/review')
   async reviewCase(
-    @Param('caseId') caseIdParam: string,
-    @Body() body: Record<string, unknown>,
+    @Param('caseId', ParseIntPipe) caseId: number,
+    @Body() body: ReviewCaseDto,
   ) {
-    const caseId = Number(caseIdParam);
-    if (!Number.isInteger(caseId) || caseId <= 0) {
-      throw new HttpException('Invalid case id', HttpStatus.BAD_REQUEST);
-    }
-
     try {
       return await this.caseService.reviewCase(caseId, body);
     } catch (err) {
+      const message = getTaskErrorMessage(err);
       const status =
-        err.message === 'Case not found'
+        message === 'Case not found'
           ? HttpStatus.NOT_FOUND
           : HttpStatus.BAD_REQUEST;
-      throw new HttpException(err.message, status);
+      throw new HttpException(message, status);
     }
   }
 
   @Get(':caseId/tasks')
-  async getCaseTasks(@Param('caseId') caseIdParam: string) {
-    const caseId = Number(caseIdParam);
-    if (!Number.isInteger(caseId) || caseId <= 0) {
-      throw new HttpException('Invalid case id', HttpStatus.BAD_REQUEST);
-    }
-
+  async getCaseTasks(@Param('caseId', ParseIntPipe) caseId: number) {
     try {
       return await this.caseService.getTasksByCase(caseId);
     } catch (err) {
+      const message = getTaskErrorMessage(err);
       const status =
-        err.message === 'Case not found'
+        message === 'Case not found'
           ? HttpStatus.NOT_FOUND
           : HttpStatus.BAD_REQUEST;
-      throw new HttpException(err.message, status);
+      throw new HttpException(message, status);
     }
   }
 
   @Get(':caseId/reviews')
-  async getCaseReviews(@Param('caseId') caseIdParam: string) {
-    const caseId = Number(caseIdParam);
-    if (!Number.isInteger(caseId) || caseId <= 0) {
-      throw new HttpException('Invalid case id', HttpStatus.BAD_REQUEST);
-    }
-
+  async getCaseReviews(@Param('caseId', ParseIntPipe) caseId: number) {
     try {
       return await this.caseService.getCaseReviews(caseId);
     } catch (err) {
+      const message = getTaskErrorMessage(err);
       const status =
-        err.message === 'Case not found'
+        message === 'Case not found'
           ? HttpStatus.NOT_FOUND
           : HttpStatus.BAD_REQUEST;
-      throw new HttpException(err.message, status);
+      throw new HttpException(message, status);
     }
   }
 }
