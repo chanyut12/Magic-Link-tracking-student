@@ -75,114 +75,22 @@
         </div>
 
         <template v-else>
-          <div class="table-wrap">
-            <q-table
-              class="student-table"
-              :rows="filteredStudents"
-              :columns="columns"
-              row-key="id"
-              flat
-              v-model:pagination="pagination"
-              :rows-per-page-options="rowsPerPageOptions"
-              @row-click="onStudentRowClick"
-            >
-              <template v-slot:body-cell-index="props">
-                <q-td :props="props" class="text-grey-5">
-                  {{ (pagination.page - 1) * pagination.rowsPerPage + props.pageIndex + 1 }}
-                </q-td>
-              </template>
+          <StudentsTable
+            :rows="filteredStudents"
+            :pagination="pagination"
+            :rows-per-page-options="rowsPerPageOptions"
+            @update:pagination="pagination = $event"
+            @row-click="openStudent"
+          />
 
-              <template v-slot:body-cell-name="props">
-                <q-td :props="props">
-                  <div class="student-info">
-                    <div class="student-avatar" :style="getAvatarGradient(props.row.name)">
-                      {{ props.row.name[0] }}
-                    </div>
-                    <div class="student-details">
-                      <h3>{{ props.row.name }}</h3>
-                      <div class="student-id">รหัส: {{ props.row.id }}</div>
-                    </div>
-                  </div>
-                </q-td>
-              </template>
-
-              <template v-slot:body-cell-school_name="props">
-                <q-td :props="props" class="table-value-muted">
-                  {{ props.row.school_name || '-' }}
-                </q-td>
-              </template>
-
-              <template v-slot:body-cell-grade="props">
-                <q-td :props="props" class="text-center">
-                  <span class="count-badge">{{ props.row.grade || '-' }}</span>
-                </q-td>
-              </template>
-
-              <template v-slot:body-cell-room="props">
-                <q-td :props="props" class="text-center">
-                  <span class="count-badge">{{ props.row.room === '0' || !props.row.room ? '-' : `ห้อง ${props.row.room}` }}</span>
-                </q-td>
-              </template>
-            </q-table>
-          </div>
-
-          <div class="mobile-student-list">
-            <div
-              v-for="(s, index) in paginatedStudents"
-              :key="s.id"
-              class="student-card q-mb-sm"
-              style="cursor: pointer;"
-              @click="openStudent(s.id)"
-              :style="{ animationDelay: `${(index % pagination.rowsPerPage) * 30}ms` }"
-            >
-              <div class="student-info">
-                <div
-                  class="student-avatar"
-                  :style="getAvatarGradient(s.name)"
-                >{{ s.name[0] }}</div>
-                <div class="student-details">
-                  <h3>{{ s.name }}</h3>
-                  <div class="student-id">รหัส: {{ s.id }}</div>
-                </div>
-              </div>
-
-              <div style="color: #64748b; font-weight: 600;">
-                {{ s.school_name || '-' }}
-              </div>
-              <div class="text-center count-badge">
-                {{ s.grade }}
-              </div>
-              <div class="text-center count-badge">
-                {{ s.room === '0' || !s.room ? '-' : 'ห้อง ' + s.room }}
-              </div>
-            </div>
-
-            <div class="pagination-panel">
-              <div class="pagination-summary">
-                แสดง {{ paginationStart }}-{{ paginationEnd }} จาก {{ filteredStudents.length }} คน
-              </div>
-
-              <div class="pagination-controls">
-                <label class="rows-per-page-control">
-                  <span>ต่อหน้า</span>
-                  <select v-model.number="pagination.rowsPerPage" class="filter-select rows-per-page-select">
-                    <option v-for="size in rowsPerPageOptions" :key="size" :value="size">{{ size }}</option>
-                  </select>
-                </label>
-
-                <q-pagination
-                  v-model="pagination.page"
-                  :max="totalPages"
-                  :max-pages="6"
-                  direction-links
-                  boundary-links
-                  color="primary"
-                  active-design="unelevated"
-                  active-color="primary"
-                />
-              </div>
-            </div>
-          </div>
+          <StudentsMobileList
+            :students="paginatedStudents"
+            :pagination="pagination"
+            :rows-per-page-options="rowsPerPageOptions"
+            :total-count="filteredStudents.length"
+            @update:pagination="pagination = $event"
+            @row-click="openStudent"
+          />
         </template>
       </div>
     </div>
@@ -254,52 +162,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, watch } from 'vue';
-import { api } from 'boot/axios';
-import type { QTableColumn } from 'quasar';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
+import StudentsMobileList from '../components/students/StudentsMobileList.vue';
+import StudentsTable from '../components/students/StudentsTable.vue';
+import { useAttendanceFilters } from '../composables/useAttendanceFilters';
+import { useStudentList } from '../composables/useStudentList';
 import { useUserStore } from '../composables/useUserStore';
 import { useDataScopeLock } from '../composables/useDataScopeLock';
 
-// --- Interfaces ---
-interface Student {
-  id: string;
-  name: string;
-  grade: string;
-  room: string;
-  school_name?: string;
-  school_id?: number | string;
-}
-
-interface GradeLevel {
-  id: number;
-  label: string;
-  category: string;
-}
-
-interface School {
-  id: number;
-  name: string;
-}
-
-interface District {
-  province: string;
-  district: string;
-}
-
-interface SubDistrict {
-  province: string;
-  district: string;
-  sub_district: string;
-}
-
 // --- State Variables ---
-const students = ref<Student[]>([]);
-const gradeLevels = ref<GradeLevel[]>([]);
-const schools = ref<School[]>([]);
-const rooms = ref<string[]>([]);
-const searchQuery = ref('');
-const loading = ref(false);
 const $router = useRouter();
 const { user, loadUser } = useUserStore();
 const userScope = computed(() => user.value?.data_scope);
@@ -313,28 +185,35 @@ const {
   lockedGradeValue,
   lockedRoomValue,
 } = useDataScopeLock(userScope);
-
-const filters = reactive({
-  schoolId: '',
-  grade: 'ALL',
-  room: 'ALL'
-});
+const {
+  gradeLevels,
+  schools,
+  rooms,
+  tempSchools,
+  tempFilters,
+  locationData,
+  filteredDistricts,
+  filteredSubDistricts,
+  loadLocations,
+  loadAllSchools,
+  loadGradeLevels,
+  loadRooms,
+  handleProvinceFilterChange,
+  handleDistrictFilterChange,
+  handleSubDistrictFilterChange,
+} = useAttendanceFilters();
+const {
+  searchQuery,
+  loading,
+  filters,
+  rowsPerPageOptions,
+  pagination,
+  filteredStudents,
+  paginatedStudents,
+  fetchStudentsList,
+} = useStudentList();
 
 const showFilterDialog = ref(false);
-const tempFilters = reactive({
-  province: '',
-  district: '',
-  subDistrict: '',
-  schoolId: ''
-});
-
-const locationData = reactive({
-  provinces: [] as string[],
-  districts: [] as District[],
-  subDistricts: [] as SubDistrict[]
-});
-
-const tempSchools = ref<School[]>([]);
 
 const applyActiveScope = () => {
   if (isProvinceLocked.value && lockedProvinceValue.value) {
@@ -373,129 +252,14 @@ const selectedSchoolName = computed(() => {
   return school ? school.name : 'ทุกโรงเรียน';
 });
 
-const filteredDistricts = computed(() => {
-  if (!tempFilters.province) return [];
-  return Array.from(new Set(
-    locationData.districts
-      .filter(d => d.province === tempFilters.province)
-      .map(d => d.district)
-  ));
-});
-
-const filteredSubDistricts = computed(() => {
-  if (!tempFilters.district) return [];
-  return Array.from(new Set(
-    locationData.subDistricts
-      .filter(sd => sd.province === tempFilters.province && sd.district === tempFilters.district)
-      .map(sd => sd.sub_district)
-  ));
-});
-
-const filteredStudents = computed(() => {
-  let list = [...students.value];
-  if (searchQuery.value) {
-    const term = searchQuery.value.toLowerCase();
-    list = list.filter(s => 
-      s.name.toLowerCase().includes(term) || 
-      String(s.id).includes(term)
-    );
-  }
-  return list.sort((a, b) => a.name.localeCompare(b.name));
-});
-
-const rowsPerPageOptions = [10, 20, 50];
-const pagination = ref({
-  page: 1,
-  rowsPerPage: 20,
-  sortBy: 'name',
-  descending: false,
-});
-
-const totalPages = computed(() => {
-  return Math.max(1, Math.ceil(filteredStudents.value.length / pagination.value.rowsPerPage));
-});
-
-const paginatedStudents = computed(() => {
-  const start = (pagination.value.page - 1) * pagination.value.rowsPerPage;
-  const end = start + pagination.value.rowsPerPage;
-  return filteredStudents.value.slice(start, end);
-});
-
-const paginationStart = computed(() => {
-  if (filteredStudents.value.length === 0) return 0;
-  return (pagination.value.page - 1) * pagination.value.rowsPerPage + 1;
-});
-
-const paginationEnd = computed(() => {
-  if (filteredStudents.value.length === 0) return 0;
-  return Math.min(pagination.value.page * pagination.value.rowsPerPage, filteredStudents.value.length);
-});
-
-const columns: QTableColumn<Student>[] = [
-  { name: 'index', label: '#', field: 'id', align: 'left' },
-  { name: 'name', label: 'ชื่อ - นามสกุล', field: 'name', align: 'left', sortable: true },
-  { name: 'school_name', label: 'โรงเรียน', field: (row: Student) => row.school_name || '-', align: 'left', sortable: true },
-  { name: 'grade', label: 'ระดับชั้น', field: 'grade', align: 'center', sortable: true },
-  { name: 'room', label: 'ห้อง', field: 'room', align: 'center', sortable: true },
-];
-
-// --- UI Helpers ---
-const avatarColors = [
-  ['#6366f1', '#8b5cf6'],
-  ['#ec4899', '#f43f5e'],
-  ['#14b8a6', '#06b6d4'],
-  ['#f59e0b', '#f97316'],
-  ['#10b981', '#22c55e'],
-  ['#3b82f6', '#0ea5e9'],
-  ['#8b5cf6', '#a855f7'],
-  ['#ef4444', '#f97316'],
-];
-
-const getAvatarGradient = (name: string) => {
-  if (!name) return { background: '#ccc', color: '#fff' };
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  const index = Math.abs(hash) % avatarColors.length;
-  const colorPair = avatarColors[index];
-  if (!colorPair) {
-    return {
-      background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-      color: 'white'
-    };
-  }
-  const [c1, c2] = colorPair;
-  return {
-    background: `linear-gradient(135deg, ${c1}, ${c2})`,
-    color: 'white',
-    textShadow: '0 1px 2px rgba(0,0,0,0.2)',
-  };
-};
-
 const openStudent = (studentId: string) => {
   void $router.push(`/students/${studentId}`);
 };
 
-const onStudentRowClick = (_event: Event, row: Student) => {
-  openStudent(row.id);
-};
-
 // --- API Calls & Data Fetching ---
-const fetchLocations = async () => {
-  try {
-    const res = await api.get('/api/attendance/locations');
-    Object.assign(locationData, res.data.data);
-  } catch (err) {
-    console.error('Fetch locations error:', err);
-  }
-};
-
 const fetchSchools = async () => {
   try {
-    const res = await api.get('/api/attendance/schools');
-    schools.value = res.data.data;
-    tempSchools.value = res.data.data;
+    await loadAllSchools();
     if (schools.value.length > 0 && !filters.schoolId) {
       const fallbackSchoolId =
         isSchoolLocked.value && lockedSchoolValue.value !== null
@@ -510,8 +274,7 @@ const fetchSchools = async () => {
 
 const fetchGradeLevels = async () => {
   try {
-    const res = await api.get('/api/attendance/grade-levels');
-    gradeLevels.value = res.data.data;
+    await loadGradeLevels();
   } catch (err) {
     console.error('Fetch grade levels error:', err);
   }
@@ -526,13 +289,7 @@ const fetchRooms = async () => {
     return;
   }
   try {
-    const res = await api.get('/api/attendance/rooms', { 
-      params: { 
-        grade: filters.grade,
-        schoolId: filters.schoolId
-      } 
-    });
-    rooms.value = res.data.data;
+    await loadRooms(filters.grade, filters.schoolId);
     if (isRoomLocked.value && lockedRoomValue.value !== null) {
       filters.room = String(lockedRoomValue.value);
       return;
@@ -545,53 +302,18 @@ const fetchRooms = async () => {
   }
 };
 
-const fetchStudentsList = async () => {
-  loading.value = true;
-  try {
-    const res = await api.get('/api/students', {
-      params: { 
-        grade: filters.grade,
-        room: filters.room,
-        schoolId: filters.schoolId
-      }
-    });
-    students.value = res.data.data || [];
-  } catch (err) {
-    console.error('Fetch students error:', err);
-  } finally {
-    loading.value = false;
-  }
-};
-
 // --- Event Handlers ---
 const onProvinceChange = () => {
-  tempFilters.district = '';
-  tempFilters.subDistrict = '';
-  tempFilters.schoolId = '';
-  tempSchools.value = schools.value;
+  handleProvinceFilterChange();
 };
 
 const onDistrictChange = () => {
-  tempFilters.subDistrict = '';
-  tempFilters.schoolId = '';
-  tempSchools.value = schools.value;
+  handleDistrictFilterChange();
 };
 
 const onSubDistrictChange = async () => {
-  tempFilters.schoolId = '';
-  if (!tempFilters.subDistrict) {
-    tempSchools.value = schools.value;
-    return;
-  }
   try {
-    const res = await api.get('/api/attendance/schools', {
-      params: {
-        province: tempFilters.province,
-        district: tempFilters.district,
-        subDistrict: tempFilters.subDistrict
-      }
-    });
-    tempSchools.value = res.data.data;
+    await handleSubDistrictFilterChange();
   } catch (err) {
     console.error('Fetch temp schools error:', err);
   }
@@ -609,21 +331,6 @@ const applyFilters = () => {
     void fetchStudentsList();
   }
 };
-
-// --- Watchers ---
-watch([() => filters.schoolId, () => filters.grade, () => filters.room, searchQuery], () => {
-  pagination.value.page = 1;
-});
-
-watch(() => pagination.value.rowsPerPage, () => {
-  pagination.value.page = 1;
-});
-
-watch(() => filteredStudents.value.length, () => {
-  if (pagination.value.page > totalPages.value) {
-    pagination.value.page = totalPages.value;
-  }
-});
 
 watch(() => filters.schoolId, async () => {
   await fetchRooms();
@@ -659,7 +366,7 @@ watch(
 // --- Init ---
 onMounted(async () => {
   loadUser();
-  await fetchLocations();
+  await loadLocations();
   await fetchSchools(); 
   await fetchGradeLevels();
   applyActiveScope();

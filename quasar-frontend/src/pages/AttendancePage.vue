@@ -94,29 +94,11 @@
         </div>
       </div>
 
-      <!-- History Stats -->
-      <div v-if="currentTab === 'history'" class="stats-cards q-mb-lg">
-        <div class="stat-card-mini total">
-          <div class="stat-icon"><i class="fas fa-users"></i></div>
-          <span class="label">นักเรียนทั้งหมด</span>
-          <span class="value">{{ filteredHistory.length }}</span>
-        </div>
-        <div class="stat-card-mini present">
-          <div class="stat-icon"><i class="fas fa-check-circle"></i></div>
-          <span class="label">มา</span>
-          <span class="value">{{ historyStats.present }}</span>
-        </div>
-        <div class="stat-card-mini absent">
-          <div class="stat-icon"><i class="fas fa-times-circle"></i></div>
-          <span class="label">ขาด</span>
-          <span class="value">{{ historyStats.absent }}</span>
-        </div>
-        <div class="stat-card-mini late">
-          <div class="stat-icon"><i class="fas fa-clock"></i></div>
-          <span class="label">สาย</span>
-          <span class="value">{{ historyStats.late }}</span>
-        </div>
-      </div>
+      <AttendanceHistoryStats
+        v-if="currentTab === 'history'"
+        :total="filteredHistory.length"
+        :stats="historyStats"
+      />
 
       <!-- Table Header (Desktop) -->
       <div class="table-header d-none-mobile" v-if="filteredDisplayList.length > 0">
@@ -306,65 +288,31 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue';
-import { api } from 'boot/axios';
 import { useQuasar } from 'quasar';
+import AttendanceHistoryStats from '../components/attendance/AttendanceHistoryStats.vue';
+import { useAttendanceFilters } from '../composables/useAttendanceFilters';
+import { useAttendanceHistory } from '../composables/useAttendanceHistory';
+import { useAttendanceSubmission } from '../composables/useAttendanceSubmission';
 import { useUserStore } from '../composables/useUserStore';
 import { useDataScopeLock } from '../composables/useDataScopeLock';
-
-interface Student {
-  id: string;
-  name: string;
-  grade: string;
-  room: string;
-  total_late?: number;
-  total_absent?: number;
-}
-
-interface AttendanceRecord {
-  id: string;
-  name: string;
-  grade: string;
-  room: string;
-  status: string;
-  check_date?: string;
-  PersonID_Onec?: string;
-  school_id?: string | number;
-}
-
-interface NewCase {
-  case_id: number;
-  student_name: string;
-  student_school: string;
-  reason_flagged: string;
-}
-
-interface GradeLevel {
-  id: number;
-  label: string;
-  category: string;
-}
-
-interface School {
-  id: number;
-  name: string;
-}
-
-interface District {
-  province: string;
-  district: string;
-}
-
-interface SubDistrict {
-  province: string;
-  district: string;
-  sub_district: string;
-}
+import { attendanceService } from '../services/attendanceService';
+import type {
+  AttendanceAutoCase,
+  AttendanceFilter,
+  AttendanceHistoryRecord,
+  AttendanceStudent,
+} from '../types/attendance';
+import {
+  buildAttendanceHistoryStats,
+  getAttendanceStatusClass,
+  getAttendanceStatusIcon,
+  getAttendanceStatusLabel,
+} from '../utils/attendancePresentation';
+import { getStudentAvatarGradient } from '../utils/studentPresentation';
 
 const $q = useQuasar();
 const currentTab = ref('today');
 const searchQuery = ref('');
-const historyDate = ref(new Date().toISOString().split('T')[0]);
-const saving = ref(false);
 const showConfetti = ref(false);
 const { user, loadUser } = useUserStore();
 const userScope = computed(() => user.value?.data_scope);
@@ -378,79 +326,62 @@ const {
   lockedGradeValue,
   lockedRoomValue,
 } = useDataScopeLock(userScope);
+const {
+  gradeLevels,
+  schools,
+  rooms,
+  tempSchools,
+  tempFilters,
+  locationData,
+  filteredDistricts,
+  filteredSubDistricts,
+  loadLocations,
+  loadAllSchools,
+  loadGradeLevels,
+  loadRooms,
+  handleProvinceFilterChange,
+  handleDistrictFilterChange,
+  handleSubDistrictFilterChange,
+} = useAttendanceFilters();
+const {
+  history,
+  historyDate,
+  fetchHistory: loadHistory,
+  fetchTodayRecords: loadTodayRecords,
+} = useAttendanceHistory();
+const {
+  saving,
+  attendanceSelections,
+  initializeSelections,
+  syncSelectionsFromHistory,
+  setStatus,
+  saveAttendance: submitAttendance,
+} = useAttendanceSubmission();
 
-const newCasesDialog = reactive<{ show: boolean; cases: NewCase[] }>({
+const newCasesDialog = reactive<{ show: boolean; cases: AttendanceAutoCase[] }>({
   show: false,
   cases: [],
 });
 
-const avatarColors = [
-  ['#6366f1', '#8b5cf6'],
-  ['#ec4899', '#f43f5e'],
-  ['#14b8a6', '#06b6d4'],
-  ['#f59e0b', '#f97316'],
-  ['#10b981', '#22c55e'],
-  ['#3b82f6', '#0ea5e9'],
-  ['#8b5cf6', '#a855f7'],
-  ['#ef4444', '#f97316'],
-];
-
-const getAvatarGradient = (name: string) => {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  const index = Math.abs(hash) % avatarColors.length;
-  const colorPair = avatarColors[index];
-  if (!colorPair) {
-    return {
-      background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-      color: 'white',
-      textShadow: '0 1px 2px rgba(0,0,0,0.2)',
-    };
-  }
-  const [c1, c2] = colorPair;
-  return {
-    background: `linear-gradient(135deg, ${c1}, ${c2})`,
-    color: 'white',
-    textShadow: '0 1px 2px rgba(0,0,0,0.2)',
-  };
-};
+const getAvatarGradient = getStudentAvatarGradient;
+const getStatusClass = getAttendanceStatusClass;
+const getStatusIcon = getAttendanceStatusIcon;
+const getStatusLabel = getAttendanceStatusLabel;
 
 const triggerConfetti = () => {
   showConfetti.value = true;
   setTimeout(() => { showConfetti.value = false; }, 2500);
 };
 
-const students = ref<Student[]>([]);
-const gradeLevels = ref<GradeLevel[]>([]);
-const schools = ref<School[]>([]);
-const history = ref<AttendanceRecord[]>([]);
-const rooms = ref<string[]>([]);
-const attendanceSelections = reactive<Record<string, string>>({});
+const students = ref<AttendanceStudent[]>([]);
 
-const filters = reactive({
+const filters = reactive<Pick<AttendanceFilter, 'schoolId' | 'grade' | 'room'>>({
   schoolId: '',
   grade: '',
-  room: '1'
+  room: '1',
 });
 
 const showFilterDialog = ref(false);
-
-const tempFilters = reactive({
-  province: '',
-  district: '',
-  subDistrict: '',
-  schoolId: ''
-});
-
-const locationData = reactive({
-  provinces: [] as string[],
-  districts: [] as District[],
-  subDistricts: [] as SubDistrict[]
-});
-
-const tempSchools = ref<School[]>([]);
 
 const applyActiveScope = () => {
   if (isProvinceLocked.value && lockedProvinceValue.value) {
@@ -483,62 +414,30 @@ const applyActiveScope = () => {
 };
 
 const selectedSchoolName = computed(() => {
+  if (!filters.schoolId) return 'เลือกโรงเรียน';
   const school = schools.value.find(s => String(s.id) === filters.schoolId);
   return school ? school.name : 'เลือกโรงเรียน';
 });
 
-const filteredDistricts = computed(() => {
-  if (!tempFilters.province) return [];
-  return Array.from(new Set(
-    locationData.districts
-      .filter(d => d.province === tempFilters.province)
-      .map(d => d.district)
-  ));
-});
-
-const filteredSubDistricts = computed(() => {
-  if (!tempFilters.district) return [];
-  return Array.from(new Set(
-    locationData.subDistricts
-      .filter(sd => sd.province === tempFilters.province && sd.district === tempFilters.district)
-      .map(sd => sd.sub_district)
-  ));
-});
-
 const fetchLocations = async () => {
   try {
-    const res = await api.get('/api/attendance/locations');
-    Object.assign(locationData, res.data.data);
+    await loadLocations();
   } catch (err) {
     console.error('Fetch locations error:', err);
   }
 };
 
 const onProvinceChange = () => {
-  tempFilters.district = '';
-  tempFilters.subDistrict = '';
-  tempFilters.schoolId = '';
-  tempSchools.value = [];
+  handleProvinceFilterChange({ clearTempSchools: true });
 };
 
 const onDistrictChange = () => {
-  tempFilters.subDistrict = '';
-  tempFilters.schoolId = '';
-  tempSchools.value = [];
+  handleDistrictFilterChange({ clearTempSchools: true });
 };
 
 const onSubDistrictChange = async () => {
-  tempFilters.schoolId = '';
-  if (!tempFilters.subDistrict) return;
   try {
-    const res = await api.get('/api/attendance/schools', {
-      params: {
-        province: tempFilters.province,
-        district: tempFilters.district,
-        subDistrict: tempFilters.subDistrict
-      }
-    });
-    tempSchools.value = res.data.data;
+    await handleSubDistrictFilterChange({ clearTempSchoolsWhenEmpty: true });
   } catch (err) {
     console.error('Fetch temp schools error:', err);
   }
@@ -566,8 +465,7 @@ const applyFilters = () => {
 
 const fetchGradeLevels = async () => {
   try {
-    const res = await api.get('/api/attendance/grade-levels');
-    gradeLevels.value = res.data.data;
+    await loadGradeLevels();
     if (gradeLevels.value.length > 0 && !filters.grade) {
       filters.grade = gradeLevels.value[0]?.label || '';
     }
@@ -578,10 +476,13 @@ const fetchGradeLevels = async () => {
 
 const fetchSchools = async () => {
   try {
-    const res = await api.get('/api/attendance/schools');
-    schools.value = res.data.data;
+    await loadAllSchools();
     if (schools.value.length > 0 && !filters.schoolId) {
-      filters.schoolId = String(schools.value[0]?.id || '');
+      const fallbackSchoolId =
+        isSchoolLocked.value && lockedSchoolValue.value !== null
+          ? String(lockedSchoolValue.value)
+          : String(schools.value[0]?.id || '');
+      filters.schoolId = fallbackSchoolId;
     }
   } catch (err) {
     console.error('Fetch schools error:', err);
@@ -594,37 +495,21 @@ const fetchStudents = async () => {
     return;
   }
   try {
-    const res = await api.get('/api/attendance/students', {
-      params: { 
-        grade: filters.grade,
-        room: filters.room,
-        schoolId: filters.schoolId
-      }
+    students.value = await attendanceService.getStudents({
+      grade: filters.grade,
+      room: filters.room,
+      schoolId: filters.schoolId,
     });
-    students.value = res.data.data;
-    
-    // Default everyone to present if not set
-    students.value.forEach(s => {
-      if (!attendanceSelections[s.id]) {
-        attendanceSelections[s.id] = 'P_PRESENT';
-      }
-    });
+    initializeSelections(students.value);
   } catch (err) {
     console.error('Fetch students error:', err);
   }
 };
 
 const fetchTodayRecords = async () => {
-  const today = new Date().toISOString().split('T')[0];
   try {
-    const res = await api.get(`/api/attendance/history?date=${today}`);
-    const data = res.data.data;
-    data.forEach((r: AttendanceRecord) => {
-      const studentId = r.PersonID_Onec || r.id;
-      if (r.status && (!modifiedIds.value.has(studentId) || !attendanceSelections[studentId])) {
-         attendanceSelections[studentId] = r.status;
-      }
-    });
+    const records = await loadTodayRecords();
+    syncSelectionsFromHistory(records);
   } catch (err) {
     console.error('Fetch today records error:', err);
   }
@@ -639,13 +524,7 @@ const fetchRooms = async () => {
     return;
   }
   try {
-    const res = await api.get('/api/attendance/rooms', { 
-      params: { 
-        grade: filters.grade,
-        schoolId: filters.schoolId
-      } 
-    });
-    rooms.value = res.data.data;
+    await loadRooms(filters.grade, filters.schoolId);
     if (isRoomLocked.value && lockedRoomValue.value !== null) {
       filters.room = String(lockedRoomValue.value);
       return;
@@ -667,36 +546,16 @@ const fetchRooms = async () => {
 const fetchHistory = async () => {
   if (!historyDate.value) return;
   try {
-    const res = await api.get(`/api/attendance/history?date=${historyDate.value}`);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    history.value = res.data.data.map((r: any) => ({
-      ...r,
-      id: r.PersonID_Onec || r.student_id || r.id,
-      name: r.name || r.student_name,
-      recorded_by: r.RecordedBy || r.recorded_by || 'Admin'
-    }));
+    await loadHistory();
   } catch (err) {
     console.error('Fetch history error:', err);
   }
 };
 
-const modifiedIds = ref(new Set<string>());
-
-const setStatus = (id: string, status: string) => {
-  attendanceSelections[id] = status;
-  modifiedIds.value.add(id);
-};
-
 const saveAttendance = async () => {
-  saving.value = true;
-  const records = filteredStudents.value.map(s => ({
-    student_id: s.id,
-    status: attendanceSelections[s.id] || 'P_PRESENT'
-  }));
-  
   try {
-    const res = await api.post('/api/attendance', { records });
-    if (res.data.success) {
+    const response = await submitAttendance(filteredStudents.value);
+    if (response.success) {
       triggerConfetti();
       $q.notify({
         message: 'บันทึกสำเร็จ! 🎉',
@@ -705,13 +564,17 @@ const saveAttendance = async () => {
         icon: 'check_circle',
         timeout: 2000
       });
-      modifiedIds.value.clear();
+
+      if (response.newCases?.length) {
+        newCasesDialog.cases = response.newCases;
+        newCasesDialog.show = true;
+      }
+
       await fetchStudents();
+      await fetchTodayRecords();
     }
   } catch {
     $q.notify({ message: 'เกิดข้อผิดพลาด', color: 'negative' });
-  } finally {
-    saving.value = false;
   }
 };
 
@@ -737,39 +600,10 @@ const filteredHistory = computed(() => {
 });
 
 const filteredDisplayList = computed(() => {
-  return currentTab.value === 'today' ? filteredStudents.value : (filteredHistory.value as AttendanceRecord[]);
+  return currentTab.value === 'today' ? filteredStudents.value : (filteredHistory.value as AttendanceHistoryRecord[]);
 });
 
-const historyStats = computed(() => {
-  const stats = { present: 0, absent: 0, late: 0 };
-  filteredHistory.value.forEach(h => {
-    if (h.status === 'P_PRESENT') stats.present++;
-    else if (h.status === 'P_ABSENT') stats.absent++;
-    else if (h.status === 'P_LATE') stats.late++;
-  });
-  return stats;
-});
-
-const getStatusClass = (status: string) => {
-  if (status === 'P_PRESENT') return 'present';
-  if (status === 'P_ABSENT') return 'absent';
-  if (status === 'P_LATE') return 'late';
-  return 'none';
-};
-
-const getStatusIcon = (status: string) => {
-  if (status === 'P_PRESENT') return 'fa-check';
-  if (status === 'P_ABSENT') return 'fa-times';
-  if (status === 'P_LATE') return 'fa-clock';
-  return 'fa-question-circle';
-};
-
-const getStatusLabel = (status: string) => {
-  if (status === 'P_PRESENT') return 'มาเรียน';
-  if (status === 'P_ABSENT') return 'ขาด';
-  if (status === 'P_LATE') return 'สาย';
-  return 'ไม่ได้เช็คชื่อ';
-};
+const historyStats = computed(() => buildAttendanceHistoryStats(filteredHistory.value));
 
 watch(() => filters.schoolId, async () => {
   await fetchRooms();

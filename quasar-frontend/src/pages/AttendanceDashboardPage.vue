@@ -38,50 +38,9 @@
         </div>
       </section>
 
-      <div class="row q-col-gutter-md q-mb-md">
-        <div class="col-6 col-md-3">
-          <div class="stat-card stat-card--total full-height">
-            <div class="stat-head">
-              <i class="fa-solid fa-link"></i>
-              <div class="stat-label">ลิงก์ทั้งหมด</div>
-            </div>
-            <div class="stat-value text-h4">{{ cardStats.total }}</div>
-            <div class="stat-sub">ลิงก์ในระบบ</div>
-          </div>
-        </div>
-        <div class="col-6 col-md-3">
-          <div class="stat-card stat-card--progress full-height">
-            <div class="stat-head">
-              <i class="fa-solid fa-bolt"></i>
-              <div class="stat-label">ใช้งานอยู่</div>
-            </div>
-            <div class="stat-value text-h4">{{ cardStats.active }}</div>
-            <div class="stat-sub">พร้อมใช้งาน</div>
-          </div>
-        </div>
-        <div class="col-6 col-md-3">
-          <div class="stat-card stat-card--resolved full-height">
-            <div class="stat-head">
-              <i class="fa-solid fa-lock"></i>
-              <div class="stat-label">ถูกล็อก</div>
-            </div>
-            <div class="stat-value text-h4">{{ cardStats.locked }}</div>
-            <div class="stat-sub">ถูกปิดโดยผู้ดูแล</div>
-          </div>
-        </div>
-        <div class="col-6 col-md-3">
-          <div class="stat-card stat-card--today full-height">
-            <div class="stat-head">
-              <i class="fa-solid fa-hourglass-end"></i>
-              <div class="stat-label">หมดอายุ</div>
-            </div>
-            <div class="stat-value text-h4">{{ cardStats.expired }}</div>
-            <div class="stat-sub">ต้องสร้างลิงก์ใหม่</div>
-          </div>
-        </div>
-      </div>
+      <AttendanceDashboardSummaryCards :stats="cardStats" />
 
-      <div class="q-card q-pa-lg q-mb-md shadow-xs control-bar">
+      <div class="q-card q-mb-sm control-bar">
         <div class="row items-center justify-between q-col-gutter-sm">
           <div class="text-h6 text-weight-bold text-gray-700">จัดการลิงก์เช็คชื่อ</div>
           <div class="result-counter">
@@ -90,9 +49,22 @@
         </div>
       </div>
 
-      <div class="q-card q-pa-lg q-mb-lg shadow-xs filter-panel">
+      <div class="q-card q-mb-md filter-panel">
         <div class="row q-col-gutter-md items-center">
-          <div class="col-12 col-sm-3">
+          <div class="col-12 col-md-4">
+            <div class="text-caption text-gray-500 q-mb-xs font-weight-bold">โรงเรียน</div>
+            <q-select
+              v-model="filters.schoolId"
+              :options="schoolOptions"
+              outlined
+              dense
+              emit-value
+              map-options
+              bg-color="white"
+              :disable="isSchoolLocked"
+            />
+          </div>
+          <div class="col-6 col-md-2">
             <div class="text-caption text-gray-500 q-mb-xs font-weight-bold">ชั้นเรียน</div>
             <q-select
               v-model="filters.grade"
@@ -102,9 +74,10 @@
               emit-value
               map-options
               bg-color="white"
+              :disable="isGradeLocked"
             />
           </div>
-          <div class="col-12 col-sm-3">
+          <div class="col-6 col-md-2">
             <div class="text-caption text-gray-500 q-mb-xs font-weight-bold">ห้อง</div>
             <q-select
               v-model="filters.room"
@@ -114,9 +87,10 @@
               emit-value
               map-options
               bg-color="white"
+              :disable="isRoomLocked || roomOptions.length <= 1"
             />
           </div>
-          <div class="col-12 col-sm-3">
+          <div class="col-6 col-md-2">
             <div class="text-caption text-gray-500 q-mb-xs font-weight-bold">สถานะลิงก์</div>
             <q-select
               v-model="filters.status"
@@ -128,7 +102,7 @@
               bg-color="white"
             />
           </div>
-          <div class="col-12 col-sm-3 text-right q-pt-lg">
+          <div class="col-6 col-md-2 text-right q-pt-lg">
             <q-btn flat color="primary" icon="fa-solid fa-rotate" label="ล้างตัวกรอง" @click="resetFilters" class="text-caption" />
           </div>
         </div>
@@ -157,15 +131,14 @@
             @click="resetFilters"
           />
         </div>
-        <div v-for="(row, i) in filteredTasks" :key="row.id" class="mobile-card">
+        <div v-for="(row, i) in filteredTasks" :key="row.task_id" class="mobile-card">
           <div class="mobile-card-top">
             <div>
-              <div class="mobile-card-name">{{ i + 1 }}. {{ row.target_grade }}/{{ row.target_room }}</div>
+              <div class="mobile-card-name">{{ i + 1 }}. {{ row.target_grade || '-' }}/{{ row.target_room || '-' }}</div>
+              <div class="mobile-card-meta">โรงเรียน: {{ row.target_school_name || '-' }}</div>
               <div class="mobile-card-meta">ผู้รับผิดชอบ: {{ row.link_assigned_to || '-' }}</div>
             </div>
-            <span v-if="row.active_link && !row.active_link_locked" class="badge badge-active">สถานะ: ใช้งานอยู่</span>
-            <span v-else-if="row.active_link && row.active_link_locked" class="badge badge-expired">สถานะ: ถูกปิดโดยผู้ดูแล</span>
-            <span v-else class="badge badge-neutral">สถานะ: หมดอายุ</span>
+            <AttendanceTaskStatusBadge :task="row" prefix="สถานะ" />
           </div>
 
           <div class="mobile-card-info">
@@ -173,68 +146,10 @@
           </div>
 
           <div class="mobile-card-actions">
-            <div class="row-action-group">
-              <q-btn
-                v-if="isLinkReady(row)"
-                flat
-                dense
-                color="primary"
-                label="เปิดลิงก์"
-                class="action-btn action-btn--open"
-                :href="getPublicLink(row)"
-                target="_blank"
-              />
-              <span v-else class="status-text status-text--muted">ไม่มีลิงก์ที่ใช้งานได้</span>
-            </div>
-
-            <q-btn
-              v-if="hasRowMenu(row)"
-              flat
-              round
-              dense
-              color="grey-7"
-              icon="fa-solid fa-ellipsis-vertical"
-              class="action-menu-btn"
-            >
-              <q-menu auto-close>
-                <q-list dense style="min-width: 190px">
-                  <q-item clickable class="action-menu-item action-menu-item--copy" @click="copyLink(getPublicLink(row))">
-                    <q-item-section avatar><i class="fa-regular fa-copy"></i></q-item-section>
-                    <q-item-section>คัดลอกลิงก์</q-item-section>
-                  </q-item>
-                  <q-item
-                    v-if="isLinkReady(row)"
-                    clickable
-                    class="action-menu-item action-menu-item--share"
-                    tag="a"
-                    :href="getLineUrl(getPublicLink(row))"
-                    target="_blank"
-                  >
-                    <q-item-section avatar><i class="fa-brands fa-line"></i></q-item-section>
-                    <q-item-section>แชร์ผ่าน LINE</q-item-section>
-                  </q-item>
-                  <q-separator v-if="row.active_link_id" />
-                  <q-item
-                    v-if="row.active_link_id && row.active_link_locked"
-                    clickable
-                    class="action-menu-item action-menu-item--unlock"
-                    @click="openAdminActionDialog(row.active_link_id, 'unlock')"
-                  >
-                    <q-item-section avatar><i class="fa-solid fa-lock-open"></i></q-item-section>
-                    <q-item-section>เปิดลิงก์อีกครั้ง</q-item-section>
-                  </q-item>
-                  <q-item
-                    v-if="row.active_link_id && !row.active_link_locked"
-                    clickable
-                    class="action-menu-item action-menu-item--lock"
-                    @click="openAdminActionDialog(row.active_link_id, 'lock')"
-                  >
-                    <q-item-section avatar><i class="fa-solid fa-lock"></i></q-item-section>
-                    <q-item-section>ปิดลิงก์</q-item-section>
-                  </q-item>
-                </q-list>
-              </q-menu>
-            </q-btn>
+            <AttendanceTaskRowActions
+              :task="row"
+              @admin-action="openAdminActionDialog"
+            />
           </div>
         </div>
       </div>
@@ -243,12 +158,13 @@
         <q-table
           :rows="filteredTasks"
           :columns="columns"
-          row-key="id"
+          row-key="task_id"
           flat
+          dense
           :loading="loading"
           :no-data-label="tableEmptyLabel"
           v-model:pagination="pagination"
-          :rows-per-page-options="[10, 15, 20, 50]"
+          :rows-per-page-options="[15, 20, 30, 50, 100]"
         >
           <template v-slot:body-cell-index="props">
             <q-td :props="props" class="text-gray-400">
@@ -258,82 +174,28 @@
 
           <template v-slot:body-cell-class="props">
             <q-td :props="props">
-              <strong>{{ props.row.target_grade }}/{{ props.row.target_room }}</strong>
+              <strong>{{ props.row.target_grade || '-' }}/{{ props.row.target_room || '-' }}</strong>
+            </q-td>
+          </template>
+
+          <template v-slot:body-cell-school="props">
+            <q-td :props="props">
+              {{ props.row.target_school_name || '-' }}
             </q-td>
           </template>
 
           <template v-slot:body-cell-status="props">
             <q-td :props="props">
-              <span v-if="props.row.active_link && !props.row.active_link_locked" class="badge badge-active">สถานะ: ใช้งานอยู่</span>
-              <span v-else-if="props.row.active_link && props.row.active_link_locked" class="badge badge-expired">สถานะ: ถูกปิดโดยผู้ดูแล</span>
-              <span v-else class="badge badge-neutral">สถานะ: หมดอายุ</span>
+              <AttendanceTaskStatusBadge :task="props.row" prefix="สถานะ" />
             </q-td>
           </template>
 
           <template v-slot:body-cell-actions="props">
             <q-td :props="props">
-              <div class="row-action-group">
-                <q-btn
-                  v-if="isLinkReady(props.row)"
-                  flat
-                  dense
-                  color="primary"
-                  label="เปิดลิงก์"
-                  :href="getPublicLink(props.row)"
-                  target="_blank"
-                  class="action-btn action-btn--open"
-                />
-                <span v-else class="status-text status-text--muted">ไม่มีลิงก์ที่ใช้งานได้</span>
-
-                <q-btn
-                  v-if="hasRowMenu(props.row)"
-                  flat
-                  round
-                  dense
-                  color="grey-7"
-                  icon="fa-solid fa-ellipsis-vertical"
-                  class="action-menu-btn"
-                >
-                  <q-menu auto-close>
-                    <q-list dense style="min-width: 190px">
-                      <q-item clickable class="action-menu-item action-menu-item--copy" @click="copyLink(getPublicLink(props.row))">
-                        <q-item-section avatar><i class="fa-regular fa-copy"></i></q-item-section>
-                        <q-item-section>คัดลอกลิงก์</q-item-section>
-                      </q-item>
-                      <q-item
-                        v-if="isLinkReady(props.row)"
-                        clickable
-                        class="action-menu-item action-menu-item--share"
-                        tag="a"
-                        :href="getLineUrl(getPublicLink(props.row))"
-                        target="_blank"
-                      >
-                        <q-item-section avatar><i class="fa-brands fa-line"></i></q-item-section>
-                        <q-item-section>แชร์ผ่าน LINE</q-item-section>
-                      </q-item>
-                      <q-separator v-if="props.row.active_link_id" />
-                      <q-item
-                        v-if="props.row.active_link_id && props.row.active_link_locked"
-                        clickable
-                        class="action-menu-item action-menu-item--unlock"
-                        @click="openAdminActionDialog(props.row.active_link_id, 'unlock')"
-                      >
-                        <q-item-section avatar><i class="fa-solid fa-lock-open"></i></q-item-section>
-                        <q-item-section>เปิดลิงก์อีกครั้ง</q-item-section>
-                      </q-item>
-                      <q-item
-                        v-if="props.row.active_link_id && !props.row.active_link_locked"
-                        clickable
-                        class="action-menu-item action-menu-item--lock"
-                        @click="openAdminActionDialog(props.row.active_link_id, 'lock')"
-                      >
-                        <q-item-section avatar><i class="fa-solid fa-lock"></i></q-item-section>
-                        <q-item-section>ปิดลิงก์</q-item-section>
-                      </q-item>
-                    </q-list>
-                  </q-menu>
-                </q-btn>
-              </div>
+              <AttendanceTaskRowActions
+                :task="props.row"
+                @admin-action="openAdminActionDialog"
+              />
             </q-td>
           </template>
 
@@ -346,181 +208,328 @@
       </div>
     </div>
 
-    <q-dialog v-model="adminActionDialog.show">
-      <q-card style="min-width: 360px; max-width: 92vw;">
-        <q-card-section>
-          <div class="text-h6">{{ adminDialogTitle }}</div>
-          <div class="text-caption text-grey-7 q-mt-xs">{{ adminDialogHint }}</div>
-        </q-card-section>
-        <q-card-section>
-          <q-input
-            v-model="adminActionDialog.reason"
-            :label="adminReasonLabel"
-            outlined
-            dense
-            autogrow
-            type="textarea"
-            :rules="[val => !!val || 'กรุณาระบุเหตุผล']"
-          />
-        </q-card-section>
-        <q-card-actions align="right">
-          <q-btn flat label="ยกเลิก" v-close-popup />
-          <q-btn
-            :color="adminActionDialog.action === 'lock' ? 'negative' : 'primary'"
-            :label="adminConfirmLabel"
-            @click="confirmAdminAction"
-            :loading="adminActionDialog.loading"
-          />
-        </q-card-actions>
-      </q-card>
-    </q-dialog>
+    <TaskLinkAdminDialog
+      v-model="adminActionDialog.show"
+      :reason="adminActionDialog.reason"
+      :title="adminDialogTitle"
+      :hint="adminDialogHint"
+      :reason-label="adminReasonLabel"
+      :confirm-label="adminConfirmLabel"
+      :action="adminActionDialog.action"
+      :loading="adminActionDialog.loading"
+      @update:reason="adminActionDialog.reason = $event"
+      @confirm="confirmAdminAction"
+    />
   </q-page>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue';
-import { api } from 'boot/axios';
-import { useQuasar } from 'quasar';
+import AttendanceDashboardSummaryCards from '../components/attendance/AttendanceDashboardSummaryCards.vue';
+import AttendanceTaskRowActions from '../components/attendance/AttendanceTaskRowActions.vue';
+import AttendanceTaskStatusBadge from '../components/attendance/AttendanceTaskStatusBadge.vue';
+import TaskLinkAdminDialog from '../components/task/TaskLinkAdminDialog.vue';
 import type { QTableColumn } from 'quasar';
-
-interface AttendanceTask {
-  id: string;
-  task_type: string;
-  target_grade: string;
-  target_room: string;
-  link_assigned_to: string;
-  active_link: string | null;
-  active_link_locked: boolean;
-  active_link_id: string;
-  created_at: string;
-}
+import { useAttendanceDashboardData } from '../composables/useAttendanceDashboardData';
+import { useAttendanceFilters } from '../composables/useAttendanceFilters';
+import { useUserStore } from '../composables/useUserStore';
+import { useDataScopeLock } from '../composables/useDataScopeLock';
+import { useTaskLinkAdminDialog } from '../composables/useTaskLinkAdminDialog';
+import {
+  mapAttendanceGradesToOptions,
+  mapAttendanceSchoolsToOptions,
+} from '../utils/attendanceLookupOptions';
+import type {
+  AttendanceTask,
+  AttendanceTaskStatus,
+} from '../types/attendance';
+import {
+  buildAttendanceTaskCardStats,
+  formatAttendanceDate,
+  getAttendanceTaskStatus,
+  sortAttendanceRoomValues,
+} from '../utils/attendancePresentation';
 
 interface SelectOption {
   label: string;
   value: string;
 }
 
-interface GradeLevel {
-  id: number;
-  label: string;
-  category: string;
+interface AttendanceTaskFilters {
+  schoolId: string;
+  grade: string;
+  room: string;
+  status: string;
 }
 
-const $q = useQuasar();
-const loading = ref(false);
-const tasks = ref<AttendanceTask[]>([]);
-const lastUpdated = ref('');
-const loadError = ref('');
-const pagination = ref({ page: 1, rowsPerPage: 20 });
-
-type AdminAction = 'lock' | 'unlock';
-
-const adminActionDialog = reactive<{
-  show: boolean;
-  action: AdminAction;
-  linkId: string;
-  reason: string;
-  loading: boolean;
-}>({
-  show: false,
-  action: 'lock',
-  linkId: '',
-  reason: '',
-  loading: false
+const pagination = ref({ page: 1, rowsPerPage: 30 });
+const { user, loadUser } = useUserStore();
+const userScope = computed(() => user.value?.data_scope);
+const {
+  isSchoolLocked,
+  isGradeLocked,
+  isRoomLocked,
+  lockedSchoolValue,
+  lockedGradeValue,
+  lockedRoomValue,
+} = useDataScopeLock(userScope);
+const {
+  gradeLevels,
+  schools,
+  rooms,
+  loadAllSchools,
+  loadGradeLevels,
+  loadRooms,
+} = useAttendanceFilters();
+const {
+  loading,
+  tasks,
+  lastUpdated,
+  loadError,
+  fetchTasks,
+  refreshData,
+} = useAttendanceDashboardData();
+const {
+  adminActionDialog,
+  adminDialogTitle,
+  adminDialogHint,
+  adminReasonLabel,
+  adminConfirmLabel,
+  openAdminActionDialog,
+  confirmAdminAction,
+} = useTaskLinkAdminDialog({
+  lockTitle: 'ยืนยันปิดลิงก์เช็คชื่อ',
+  unlockTitle: 'ยืนยันเปิดลิงก์เช็คชื่อ',
+  lockHint: 'ระบบจะปิดการใช้งานลิงก์นี้ทันที และบันทึกเหตุผลไว้',
+  unlockHint: 'ระบบจะเปิดใช้งานลิงก์นี้อีกครั้ง และบันทึกเหตุผลไว้',
+  lockSuccessMessage: 'ปิดลิงก์สำเร็จ',
+  unlockSuccessMessage: 'เปิดลิงก์สำเร็จ',
+  errorMessage: 'ไม่สามารถอัปเดตสถานะลิงก์ได้',
+  onSuccess: async () => {
+    await refreshData();
+  },
 });
 
-const filters = reactive({
+const filters = reactive<AttendanceTaskFilters>({
+  schoolId: 'ALL',
   grade: 'ALL',
   room: 'ALL',
   status: 'ALL',
 });
 
-const gradeOptions = ref<SelectOption[]>([{ label: 'ทุกชั้น', value: 'ALL' }]);
-
-const fetchGradeLevels = async () => {
-  try {
-    const res = await api.get('/api/attendance/grade-levels');
-    const levels = res.data.data.map((l: GradeLevel) => ({
-      label: l.label,
-      value: l.label
-    }));
-    gradeOptions.value = [{ label: 'ทุกชั้น', value: 'ALL' }, ...levels];
-  } catch (err) {
-    console.error('Fetch grade levels error:', err);
-  }
-};
-
-const roomOptions = [
-  { label: 'ทุกห้อง', value: 'ALL' },
-  { label: '1', value: '1' },
-  { label: '2', value: '2' },
-  { label: '3', value: '3' },
-  { label: '4', value: '4' },
-  { label: '5', value: '5' },
-  { label: '6', value: '6' },
-];
-
-const statusOptions = [
+const statusOptions: SelectOption[] = [
   { label: 'ทุกสถานะ', value: 'ALL' },
   { label: 'ใช้งานอยู่', value: 'ACTIVE' },
   { label: 'ถูกล็อก', value: 'LOCKED' },
   { label: 'หมดอายุ', value: 'EXPIRED' },
 ];
 
+const normalizeScopeValueList = (value: unknown): string[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return Array.from(new Set(value.map((item) => String(item).trim()).filter(Boolean)));
+};
+
+const currentUserScope = computed(() => ({
+  provinces: normalizeScopeValueList(user.value?.data_scope?.provinces),
+  districts: normalizeScopeValueList(user.value?.data_scope?.districts),
+  sub_districts: normalizeScopeValueList(user.value?.data_scope?.sub_districts),
+  school_ids: normalizeScopeValueList(user.value?.data_scope?.school_ids),
+  grade_levels: normalizeScopeValueList(user.value?.data_scope?.grade_levels),
+  room_ids: normalizeScopeValueList(user.value?.data_scope?.room_ids),
+}));
+
+const schoolOptions = computed<SelectOption[]>(() => {
+  let list = mapAttendanceSchoolsToOptions(schools.value);
+
+  if (currentUserScope.value.provinces.length > 0) {
+    list = list.filter((school) => currentUserScope.value.provinces.includes(String(school.province || '')));
+  }
+  if (currentUserScope.value.districts.length > 0) {
+    list = list.filter((school) => currentUserScope.value.districts.includes(String(school.district || '')));
+  }
+  if (currentUserScope.value.sub_districts.length > 0) {
+    list = list.filter((school) => currentUserScope.value.sub_districts.includes(String(school.sub_district || '')));
+  }
+  if (currentUserScope.value.school_ids.length > 0) {
+    list = list.filter((school) => currentUserScope.value.school_ids.includes(String(school.value)));
+  }
+
+  return [
+    { label: 'ทุกโรงเรียน', value: 'ALL' },
+    ...list.map((school) => ({
+      label: school.label,
+      value: String(school.value),
+    })),
+  ];
+});
+
+const gradeOptions = computed<SelectOption[]>(() => {
+  let list = mapAttendanceGradesToOptions(gradeLevels.value);
+
+  if (currentUserScope.value.grade_levels.length > 0) {
+    list = list.filter((grade) => currentUserScope.value.grade_levels.includes(String(grade.value)));
+  }
+
+  return [
+    { label: 'ทุกชั้น', value: 'ALL' },
+    ...list.map((grade) => ({
+      label: grade.label,
+      value: grade.label,
+    })),
+  ];
+});
+
+const taskDerivedRoomValues = computed(() => {
+  let list = tasks.value;
+
+  if (filters.schoolId !== 'ALL') {
+    list = list.filter((task) => String(task.target_school_id ?? '') === filters.schoolId);
+  }
+
+  if (filters.grade !== 'ALL') {
+    list = list.filter((task) => task.target_grade === filters.grade);
+  }
+
+  let values = Array.from(new Set(
+    list
+      .map((task) => String(task.target_room || '').trim())
+      .filter(Boolean),
+  ));
+
+  if (currentUserScope.value.room_ids.length > 0) {
+    values = values.filter((room) => currentUserScope.value.room_ids.includes(room));
+  }
+
+  return values.sort(sortAttendanceRoomValues);
+});
+
+const availableRoomValues = computed(() => {
+  let values = (
+    filters.schoolId !== 'ALL' && filters.grade !== 'ALL' && rooms.value.length > 0
+      ? rooms.value.map(String)
+      : taskDerivedRoomValues.value
+  );
+
+  values = Array.from(new Set(values.map((room) => String(room).trim()).filter(Boolean)));
+
+  if (currentUserScope.value.room_ids.length > 0) {
+    values = values.filter((room) => currentUserScope.value.room_ids.includes(room));
+  }
+
+  return values.sort(sortAttendanceRoomValues);
+});
+
+const roomOptions = computed<SelectOption[]>(() => [
+  { label: 'ทุกห้อง', value: 'ALL' },
+  ...availableRoomValues.value.map((room) => ({
+    label: `ห้อง ${room}`,
+    value: room,
+  })),
+]);
+
 const columns: QTableColumn<AttendanceTask>[] = [
-  { name: 'index', label: '#', field: (row: AttendanceTask) => row.id, align: 'left' },
+  { name: 'index', label: '#', field: (row: AttendanceTask) => row.task_id, align: 'left' },
   { name: 'class', label: 'ชั้น/ห้อง', field: (row: AttendanceTask) => `${row.target_grade}/${row.target_room}`, align: 'left' },
+  { name: 'school', label: 'โรงเรียน', field: (row: AttendanceTask) => row.target_school_name || '-', align: 'left' },
   { name: 'assigned_to', label: 'ผู้รับผิดชอบ', field: 'link_assigned_to', align: 'left' },
   { name: 'status', label: 'สถานะ', field: (row: AttendanceTask) => getLinkStatus(row), align: 'center' },
-  { name: 'actions', label: 'การจัดการ', field: 'id', align: 'left' },
+  { name: 'actions', label: 'การจัดการ', field: (row: AttendanceTask) => row.task_id, align: 'left' },
   { name: 'created_at', label: 'วันที่สร้าง', field: 'created_at', align: 'right' },
 ];
 
-const fetchData = async (silent = false) => {
-  if (!silent) loading.value = true;
-  try {
-    const res = await api.get('/api/attendance/tasks');
-    tasks.value = res.data;
-    loadError.value = '';
-    if (!silent) {
-      lastUpdated.value = new Date().toLocaleString('th-TH', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
+const getLockedGradeLabel = () => {
+  if (!isGradeLocked.value || lockedGradeValue.value === null) {
+    return 'ALL';
+  }
+
+  const lockedGrade = gradeLevels.value.find((grade) => grade.id === lockedGradeValue.value);
+  return lockedGrade?.label || 'ALL';
+};
+
+const applyActiveScope = () => {
+  if (isSchoolLocked.value && lockedSchoolValue.value !== null) {
+    const nextSchoolId = String(lockedSchoolValue.value);
+    if (filters.schoolId !== nextSchoolId) {
+      filters.schoolId = nextSchoolId;
     }
-  } catch (err) {
-    console.error(err);
-    loadError.value = 'ตรวจสอบการเชื่อมต่อหรือสิทธิ์การเข้าถึง แล้วกดรีเฟรชอีกครั้ง';
-  } finally {
-    if (!silent) loading.value = false;
+  }
+
+  const nextGrade = getLockedGradeLabel();
+  if (isGradeLocked.value && nextGrade !== 'ALL' && filters.grade !== nextGrade) {
+    filters.grade = nextGrade;
+  }
+
+  if (isRoomLocked.value && lockedRoomValue.value !== null) {
+    const nextRoom = String(lockedRoomValue.value);
+    if (filters.room !== nextRoom) {
+      filters.room = nextRoom;
+    }
   }
 };
 
-const refreshData = async () => {
-  await fetchData();
+const ensureRoomFilterValid = () => {
+  if (isRoomLocked.value && lockedRoomValue.value !== null) {
+    filters.room = String(lockedRoomValue.value);
+    return;
+  }
+
+  if (filters.room !== 'ALL' && !availableRoomValues.value.includes(filters.room)) {
+    filters.room = 'ALL';
+  }
 };
 
-const getLinkStatus = (task: AttendanceTask) => {
-  if (task.active_link && !task.active_link_locked) return 'ACTIVE';
-  if (task.active_link && task.active_link_locked) return 'LOCKED';
-  return 'EXPIRED';
+const fetchSchools = async () => {
+  try {
+    await loadAllSchools({ syncTempSchools: false });
+  } catch (err) {
+    console.error('Fetch schools error:', err);
+  }
 };
 
-const filteredTasks = computed<AttendanceTask[]>(() => {
-  return tasks.value.filter(t => {
-    if (filters.grade !== 'ALL' && t.target_grade !== filters.grade) return false;
-    if (filters.room !== 'ALL' && t.target_room !== filters.room) return false;
-    if (filters.status !== 'ALL' && getLinkStatus(t) !== filters.status) return false;
-    return true;
-  });
-});
+const fetchGradeFilters = async () => {
+  try {
+    await loadGradeLevels();
+  } catch (err) {
+    console.error('Fetch grade levels error:', err);
+  }
+};
 
-const hasActiveFilter = computed(() => {
-  return filters.grade !== 'ALL' || filters.room !== 'ALL' || filters.status !== 'ALL';
-});
+const syncRoomOptions = async () => {
+  if (filters.schoolId === 'ALL' || filters.grade === 'ALL') {
+    rooms.value = [];
+    ensureRoomFilterValid();
+    return;
+  }
+
+  try {
+    await loadRooms(filters.grade, filters.schoolId);
+  } catch (err) {
+    console.error('Fetch rooms error:', err);
+    rooms.value = [];
+  }
+
+  ensureRoomFilterValid();
+};
+
+const getLinkStatus = (task: AttendanceTask): AttendanceTaskStatus => getAttendanceTaskStatus(task);
+
+const filteredTasks = computed<AttendanceTask[]>(() => tasks.value.filter((task) => {
+  if (filters.schoolId !== 'ALL' && String(task.target_school_id ?? '') !== filters.schoolId) return false;
+  if (filters.grade !== 'ALL' && task.target_grade !== filters.grade) return false;
+  if (filters.room !== 'ALL' && task.target_room !== filters.room) return false;
+  if (filters.status !== 'ALL' && getLinkStatus(task) !== filters.status) return false;
+  return true;
+}));
+
+const hasActiveFilter = computed(() => (
+  filters.schoolId !== 'ALL'
+  || filters.grade !== 'ALL'
+  || filters.room !== 'ALL'
+  || filters.status !== 'ALL'
+));
 
 const tableEmptyLabel = computed(() => {
   if (loading.value) return 'กำลังโหลดข้อมูล...';
@@ -535,139 +544,71 @@ const mobileEmptyMessage = computed(() => {
   return 'ยังไม่มีลิงก์เช็คชื่อในระบบ';
 });
 
-const cardStats = computed(() => {
-  const stats = { total: tasks.value.length, active: 0, locked: 0, expired: 0 };
-  tasks.value.forEach(t => {
-    const s = getLinkStatus(t);
-    if (s === 'ACTIVE') stats.active++;
-    else if (s === 'LOCKED') stats.locked++;
-    else stats.expired++;
-  });
-  return stats;
-});
+const cardStats = computed(() => buildAttendanceTaskCardStats(tasks.value));
 
 const activeRate = computed(() => {
   if (!cardStats.value.total) return 0;
   return Math.round((cardStats.value.active / cardStats.value.total) * 100);
 });
 
-const isLinkReady = (row: AttendanceTask) => Boolean(row.active_link && !row.active_link_locked);
-
-const hasRowMenu = (row: AttendanceTask) => Boolean(row.active_link_id || row.active_link);
-
-const getPublicLink = (task: AttendanceTask) => {
-  if (task.active_link) {
-    return normalizePublicLink(task.active_link);
-  }
-  const baseUrl = window.location.origin;
-  return `${baseUrl}/#/task/${task.active_link_id}`;
-};
-
-const normalizePublicLink = (rawLink: string) => {
-  if (!rawLink) return rawLink;
-  try {
-    const url = new URL(rawLink, window.location.origin);
-    if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') {
-      url.protocol = window.location.protocol;
-      url.host = window.location.host;
-    }
-    return url.toString();
-  } catch {
-    return rawLink;
-  }
-};
-
-const getLineUrl = (link: string) => {
-  return `https://social-plugins.line.me/lineit/share?url=${encodeURIComponent(link)}`;
-};
-
-const copyLink = async (link: string) => {
-  try {
-    await navigator.clipboard.writeText(link);
-    $q.notify({ message: 'คัดลอกลิงก์สำเร็จ', color: 'positive', position: 'top', timeout: 2000 });
-  } catch {
-    $q.notify({ message: 'ไม่สามารถคัดลอกลิงก์ได้', color: 'negative', position: 'top' });
-  }
-};
-
-const openAdminActionDialog = (linkId: string, action: AdminAction) => {
-  adminActionDialog.linkId = linkId;
-  adminActionDialog.action = action;
-  adminActionDialog.reason = action === 'lock'
-    ? 'ปิดลิงก์โดยผู้ดูแลระบบ'
-    : 'เปิดลิงก์อีกครั้งโดยผู้ดูแลระบบ';
-  adminActionDialog.show = true;
-};
-
-const adminDialogTitle = computed(() =>
-  adminActionDialog.action === 'lock' ? 'ยืนยันปิดลิงก์เช็คชื่อ' : 'ยืนยันเปิดลิงก์เช็คชื่อ'
-);
-
-const adminDialogHint = computed(() =>
-  adminActionDialog.action === 'lock'
-    ? 'ระบบจะปิดการใช้งานลิงก์นี้ทันที และบันทึกเหตุผลไว้'
-    : 'ระบบจะเปิดใช้งานลิงก์นี้อีกครั้ง และบันทึกเหตุผลไว้'
-);
-
-const adminReasonLabel = computed(() =>
-  adminActionDialog.action === 'lock' ? 'เหตุผลที่ปิดลิงก์' : 'เหตุผลที่เปิดลิงก์'
-);
-
-const adminConfirmLabel = computed(() =>
-  adminActionDialog.action === 'lock' ? 'ยืนยันปิดลิงก์' : 'ยืนยันเปิดลิงก์'
-);
-
-const confirmAdminAction = async () => {
-  if (!adminActionDialog.reason.trim()) {
-    $q.notify({ message: 'กรุณาระบุเหตุผล', color: 'warning' });
-    return;
-  }
-
-  adminActionDialog.loading = true;
-  try {
-    await api.post(`/api/task-links/${adminActionDialog.linkId}/admin-lock`, {
-      action: adminActionDialog.action,
-      reason: adminActionDialog.reason.trim()
-    });
-    $q.notify({
-      message: adminActionDialog.action === 'lock' ? 'ปิดลิงก์สำเร็จ' : 'เปิดลิงก์สำเร็จ',
-      color: 'positive'
-    });
-    adminActionDialog.show = false;
-    await fetchData();
-  } catch {
-    $q.notify({ message: 'ไม่สามารถอัปเดตสถานะลิงก์ได้', color: 'negative' });
-  } finally {
-    adminActionDialog.loading = false;
-  }
-};
-
-const formatDate = (date: string) => {
-  if (!date) return '-';
-  return new Date(date).toLocaleDateString('th-TH', {
-    day: '2-digit',
-    month: 'short',
-    year: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
-};
+const formatDate = formatAttendanceDate;
 
 const resetFilters = () => {
-  filters.grade = 'ALL';
-  filters.room = 'ALL';
+  filters.schoolId = isSchoolLocked.value && lockedSchoolValue.value !== null
+    ? String(lockedSchoolValue.value)
+    : 'ALL';
+  filters.grade = getLockedGradeLabel();
+  filters.room = isRoomLocked.value && lockedRoomValue.value !== null
+    ? String(lockedRoomValue.value)
+    : 'ALL';
   filters.status = 'ALL';
+  void syncRoomOptions();
 };
 
-watch(filters, () => { pagination.value.page = 1; });
+watch(
+  [() => filters.schoolId, () => filters.grade],
+  async () => {
+    pagination.value.page = 1;
+    await syncRoomOptions();
+  },
+);
+
+watch(
+  [() => filters.room, () => filters.status],
+  () => {
+    pagination.value.page = 1;
+  },
+);
+
+watch(tasks, () => {
+  ensureRoomFilterValid();
+});
+
+watch(
+  [() => user.value?.data_scope, () => gradeLevels.value.length],
+  () => {
+    applyActiveScope();
+  },
+  { immediate: true, deep: true },
+);
 
 let refreshInterval: ReturnType<typeof setInterval> | null = null;
 
 onMounted(async () => {
-  await fetchGradeLevels();
-  await fetchData();
-  // Poll every 10 seconds silently
-  refreshInterval = setInterval(() => { void fetchData(true); }, 10000);
+  loadUser();
+  await Promise.all([
+    fetchSchools(),
+    fetchGradeFilters(),
+  ]);
+  applyActiveScope();
+  await syncRoomOptions();
+  await fetchTasks();
+  ensureRoomFilterValid();
+  refreshInterval = setInterval(() => {
+    void fetchTasks(true).then(() => {
+      ensureRoomFilterValid();
+    });
+  }, 10000);
 });
 
 onUnmounted(() => {
@@ -695,6 +636,6 @@ onUnmounted(() => {
 }
 
 :deep(.q-table__container) {
-  min-width: 980px;
+  min-width: 860px;
 }
 </style>
