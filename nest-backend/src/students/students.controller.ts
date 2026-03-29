@@ -1,10 +1,26 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, Headers } from '@nestjs/common';
-
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
+import {
+  AuthGuard,
+  CurrentUser,
+  normalizeDataScope,
+  type AuthenticatedRequestUser,
+} from '../auth';
 import { StudentsService } from './students.service';
 import { CreateStudentDto } from './dto/create-student.dto';
+import { GetStudentsQueryDto } from './dto/students.dto';
 import { UpdateStudentDto } from './dto/update-student.dto';
-import { parseScopeHeader } from '../common/utils/authorization';
 
+@UseGuards(AuthGuard)
 @Controller('api/students')
 export class StudentsController {
   constructor(private readonly studentsService: StudentsService) {}
@@ -15,24 +31,47 @@ export class StudentsController {
   }
 
   @Get()
-  findAll(@Query() query: any, @Headers('x-user-scope') scopeHeader?: string) {
-    const userScope = parseScopeHeader(scopeHeader);
-    return this.studentsService.findAll(query, userScope);
+  findAll(
+    @Query() query: GetStudentsQueryDto,
+    @CurrentUser() actor?: AuthenticatedRequestUser,
+  ) {
+    return this.studentsService.findAll(
+      query,
+      normalizeDataScope(actor?.data_scope),
+      actor,
+    );
   }
 
   @Get('cases/by-name/:name')
-  findCasesByName(@Param('name') name: string) {
-    return this.studentsService.findCasesByName(name);
-  }
-
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.studentsService.findOne(id);
+  findCasesByName(
+    @Param('name') name: string,
+    @CurrentUser() actor?: AuthenticatedRequestUser,
+  ) {
+    return this.studentsService.findCasesByName(name, actor);
   }
 
   @Get('attendance/:id')
-  findAttendanceByStudentId(@Param('id') id: string) {
-    return this.studentsService.findAttendanceByStudentId(id);
+  findAttendanceByStudentId(
+    @Param('id') id: string,
+    @CurrentUser() actor?: AuthenticatedRequestUser,
+  ) {
+    return this.studentsService.findAttendanceByStudentId(
+      id,
+      actor,
+      normalizeDataScope(actor?.data_scope),
+    );
+  }
+
+  @Get(':id')
+  findOne(
+    @Param('id') id: string,
+    @CurrentUser() actor?: AuthenticatedRequestUser,
+  ) {
+    return this.studentsService.findOne(
+      id,
+      actor,
+      normalizeDataScope(actor?.data_scope),
+    );
   }
 
   @Patch(':id')
