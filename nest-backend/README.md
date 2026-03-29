@@ -1,98 +1,277 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# nest-backend
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Backend ของระบบติดตามนักเรียน พัฒนาด้วย NestJS + TypeScript โดยโครงสร้างปัจจุบันเป็นแบบ `controller + dto + focused services + repository/data layer` และใช้ TypeORM `DataSource` + migrations เป็นฐาน runtime
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Current Stack
 
-## Description
+- NestJS 11
+- TypeScript
+- TypeORM 0.3
+- PostgreSQL
+- class-validator
+- class-transformer
+- Jest
+- ESLint
+- Prettier
+- Nodemailer
+- @nestjs/schedule
+- better-sqlite3
+- xlsx
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## Current Architecture
 
-## Project setup
+ปัจจุบัน backend ไม่ได้ใช้โครง `controller + service ก้อนเดียว` แล้ว แต่เน้นแยก responsibility ตามนี้:
 
-```bash
-$ npm install
+- `controller`
+  รับ request, map DTO, เรียก use case/service
+- `dto`
+  request contracts และ validation
+- `focused services`
+  จัด orchestration / domain logic
+- `repository`
+  query และ persistence ผ่าน `DataSource`
+- `common`
+  cross-cutting concerns เช่น auth helpers, filters, validation, utils
+
+## Current Structure
+
+โครงสร้างหลักใต้ `src/`
+
+```text
+src/
+  attendance/      attendance domain
+  auth/            auth actor loading, mock student auth, auth controllers
+  automation/      absence monitor / scheduler / automation services
+  common/          filters, validation, shared utils
+  config/          typed app config
+  database/        TypeORM config, entities, migrations, SQL helpers
+  imports/         import/upload domain
+  master-data/     master-data CRUD domain
+  settings/        system settings domain
+  students/        students read model and self-access boundary
+  task/            task, login-link, case, delegation, dashboard domains
+  users/           users, roles, auth-related user management
+  scripts/         maintenance / verification scripts
 ```
 
-## Compile and run the project
+โฟลเดอร์ย่อยที่สำคัญ:
 
-```bash
-# development
-$ npm run start
+- `src/*/dto`
+- `src/database/entities`
+- `src/database/migrations`
+- `src/common/filters`
+- `src/common/validation`
 
-# watch mode
-$ npm run start:dev
+## Data Layer Policy
 
-# production mode
-$ npm run start:prod
+runtime ตอนนี้:
+
+- ใช้ TypeORM `DataSource`
+- ใช้ migrations เป็นทางเดียวสำหรับ schema setup
+- ไม่ใช้ runtime schema bootstrap แล้ว
+- ไม่ใช้ `DatabaseService` เดิมแล้ว
+- ไม่ใช้ runtime direct `pg` usage ในโมดูลหลักแล้ว
+
+หมายเหตุ:
+
+- `src/scripts/**` อาจยังมี tooling/helper บางส่วนที่เป็นงาน maintenance แยกจาก runtime path
+
+## Module Pattern
+
+โมดูลที่ refactor แล้วจะมี pattern ประมาณนี้:
+
+```text
+module/
+  dto/
+  *.controller.ts
+  *.service.ts
+  *.repository.ts
+  *.module.ts
 ```
 
-## Run tests
+บางโมดูลอาจมี service แยกหลายตัว เช่น:
+
+- read service
+- write service
+- policy service
+- lifecycle service
+- access service
+
+เหตุผลคือ domain นี้มี business rule ค่อนข้างเยอะ และตั้งใจหลีกเลี่ยง service ก้อนเดียว
+
+## Auth Model
+
+auth ปัจจุบันรองรับหลาย source:
+
+- normal login จาก `users`
+- magic login ผ่าน login links
+- Mock ThaID student login ผ่าน virtual session
+
+รายละเอียดสำคัญ:
+
+- actor loading อยู่ใน auth layer กลาง
+- normal login ใช้ `x-user-id`
+- magic login ใช้ `x-magic-link-token` และ `x-magic-session`
+- mock student session ใช้ `x-virtual-auth`
+
+`AuthGuard` ตอนนี้ควรเหลือบทบาท auth/authz เป็นหลัก ไม่ควรไปถือ business logic หรือ query เอง
+
+## Student Auth Notes
+
+student login ตอนนี้รองรับ `Mock ThaID`
+
+- endpoint: `POST /api/auth/thaid/mock/login`
+- match ผ่าน `student_term.PersonID_Onec`
+- ออก signed `virtual_auth_token`
+- student actor ถูก hydrate เป็น own-only session
+
+ดังนั้น flow `/my-attendance` ใช้งานได้โดยไม่ต้องสร้าง `users` row สำหรับนักเรียน
+
+## Database Setup
+
+ติดตั้ง dependencies:
 
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+npm install
 ```
 
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+ตรวจ parity ของ shared bootstrap definitions:
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+npm run bootstrap:verify-parity
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+apply migrations:
 
-## Resources
+```bash
+npm run migration:run
+```
 
-Check out a few resources that may come in handy when working with NestJS:
+เริ่ม backend:
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+```bash
+npm run start:dev
+```
 
-## Support
+หรือ:
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+```bash
+npm run start
+```
 
-## Stay in touch
+production:
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+```bash
+npm run start:prod
+```
 
-## License
+## Important Commands
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+build:
+
+```bash
+npm run build
+```
+
+lint:
+
+```bash
+npm run lint
+```
+
+tests:
+
+```bash
+npm run test
+npm run test:e2e
+npm run test:cov
+```
+
+TypeORM commands:
+
+```bash
+npm run migration:show
+npm run migration:run
+npm run migration:revert
+```
+
+## Current Tools And Utilities
+
+สิ่งที่ใช้จริงใน codebase ตอนนี้:
+
+- global `ValidationPipe`
+- global exception filter
+- typed config layer
+- shared SQL helper ผ่าน `src/database/sql-query.ts`
+- parity verification script สำหรับ migration/bootstrap
+- Jest tests สำหรับ unit regression บางส่วน
+
+## Development Guidelines
+
+### 1. Controllers
+
+controller ควร:
+
+- รับ DTO
+- ใช้ guard/decorator กลาง
+- เรียก service
+- ไม่ query DB ตรง
+
+### 2. Services
+
+service ควร:
+
+- ถือ orchestration
+- ถือ domain rule
+- แยกตาม concern ถ้า logic เริ่มหนา
+
+### 3. Repository / Data Layer
+
+repository ควร:
+
+- ถือ query/persistence
+- เป็น boundary ระหว่าง domain logic กับ DB
+- ใช้ `DataSource` / query helpers ที่มีอยู่แล้ว
+
+### 4. DTO / Validation
+
+endpoint ใหม่ควร:
+
+- มี DTO ชัดเจน
+- ใช้ class-validator เท่าที่เหมาะสม
+- ไม่ปล่อย `any` ใหม่ใน controller contracts
+
+### 5. Migrations
+
+การเปลี่ยน schema ใหม่ควร:
+
+- ทำผ่าน migration
+- ไม่เพิ่ม runtime schema bootstrap กลับมา
+- ยึด naming convention ของ migration ให้ชัด
+
+## Recommended Workflow
+
+เวลาพัฒนา backend เพิ่ม แนะนำลำดับนี้:
+
+1. นิยาม DTO/contracts
+2. เพิ่มหรือแก้ repository/data query
+3. เพิ่ม/แก้ focused service
+4. ให้ controller เรียก use case ให้บางที่สุด
+5. ถ้าเปลี่ยน schema ให้เพิ่ม migration
+6. รัน `build`, `lint`, และ tests/smoke ที่เกี่ยวข้อง
+
+## Current Direction
+
+แนวทางปัจจุบันของ backend คือ:
+
+- คง API contract เดิมให้มากที่สุดระหว่าง refactor
+- แยก domain logic ออกจาก controller และ data access
+- ใช้ migration-first database workflow
+- ลด legacy coupling
+- เปิดทางให้ maintain ง่ายขึ้นในระยะยาว
+
+## Notes
+
+- ถ้าฐานข้อมูลยังไม่ apply migration จะ start app อย่างเดียวไม่พอ
+- ก่อน debug ปัญหา backend ใหม่ ควรเช็ก `bootstrap:verify-parity` และ `migration:run` ก่อน
+- ถ้าจะเพิ่ม module ใหม่ ให้ยึด pattern เดียวกับโมดูลที่ refactor แล้ว เช่น `users`, `task`, `attendance`, `settings`

@@ -1,198 +1,226 @@
-# STS Link Generate (Prototype)
+# Magic-Link-tracking-student
 
-Student Tracking System (STS) แบบ Prototype สำหรับงานติดตามนักเรียนผ่าน **Magic Link** และ **Task Delegation Chain**  
-ออกแบบให้ใช้งานง่ายบนมือถือด้วย stack แบบ low-tech (HTML/CSS/Vanilla JS + Node.js + SQLite)
+ระบบติดตามนักเรียนแบบ monorepo ที่ประกอบด้วย frontend ฝั่ง Quasar/Vue และ backend ฝั่ง NestJS โดยปัจจุบัน codebase ผ่านรอบ refactor หลักแล้วและใช้โครงสร้างแบบ domain-oriented มากกว่าต้นฉบับ prototype เดิม
 
-## What this project does
+## Workspace Overview
 
-- ผู้ดูแลสร้างภารกิจติดตามนักเรียน และได้ลิงก์ + QR สำหรับส่งต่อ
-- ผู้รับงานเปิดลิงก์บนมือถือ แล้วเลือก:
-  - ลงพื้นที่เอง
-  - ส่งต่อให้ผู้เกี่ยวข้องคนอื่น
-- ผู้ลงพื้นที่ส่งรายงาน พร้อมสาเหตุ, รูปภาพ, พิกัด
-- หลังส่งรายงาน เคสจะเข้า `PENDING_REVIEW`
-- ผอ./ผู้ดูแลประเมินผลต่อได้ 3 ทาง:
-  - `ASSIST` ให้ความช่วยเหลือ
-  - `FORWARD` ส่งต่อหน่วยงาน/ผู้เกี่ยวข้อง
-  - `CLOSE` ปิดเคส
-- ผู้ดูแลสามารถ `lock/unlock` ลิงก์ได้ทันที พร้อมเหตุผล
-- Dashboard กรองเคสตามวันที่ / โรงเรียน / สถานะลิงก์ + โหมดผู้บริหาร
+repo นี้มี 2 แอปหลัก:
 
-## Tech stack
+- [quasar-frontend](/Users/chanyut/STS_ALL/STS_main_1/Magic-Link-tracking-student/quasar-frontend/README.md)
+  frontend สำหรับหน้า admin, dashboard, attendance, tasks, login links, student self และ status pages
+- [nest-backend](/Users/chanyut/STS_ALL/STS_main_1/Magic-Link-tracking-student/nest-backend/README.md)
+  backend สำหรับ auth, task domain, attendance, users, students, settings, imports, automation และ migrations
 
-- Frontend: HTML, CSS, Vanilla JavaScript
-- Backend: Node.js + Express
-- Database: SQLite (`better-sqlite3`)
-- Upload: `multer` (เก็บรูปในโฟลเดอร์ `uploads`)
-- Map: Leaflet + OpenStreetMap
-- QR: `qrcode`
+## Current Tech Stack
 
-## Quick start
+### Frontend
 
-```bash
-npm install
-npm run init-db
-# ตั้งรหัสผู้บริหารแบบง่าย (จำเป็น ถ้าเข้าผ่าน dashboard)
-# macOS/Linux:
-export ADMIN_ACCESS_KEY="your-strong-key"
-npm start
-```
+- Quasar 2
+- Vue 3
+- TypeScript
+- Vue Router
+- Axios
+- Pinia
 
-## Docker (PostgreSQL + Auto Restore)
+### Backend
 
-ระบบจะ restore จากไฟล์ `sts_backup.sql` อัตโนมัติเมื่อเริ่ม `db` ครั้งแรก (ตอนที่ volume ยังว่าง):
+- NestJS 11
+- TypeScript
+- TypeORM 0.3
+- PostgreSQL
+- class-validator / class-transformer
+- Jest
 
-```bash
-docker compose up -d db
-```
+## Current High-Level Architecture
 
-ครั้งถัดไปให้ใช้แค่ `docker compose down` และ `docker compose up -d db` ได้เลย (จะไม่ restore ซ้ำเพราะใช้ volume เดิม)
+### Frontend Direction
 
-ถ้าต้องการให้ restore ใหม่อีกครั้ง ให้ลบ volume เก่าก่อน:
+frontend ใช้แนวทาง:
 
-```bash
-docker compose down -v
-docker compose up -d db
-```
+- `page` เป็น orchestration layer
+- `service` เป็น API boundary
+- `composable` ถือ reusable UI/domain logic
+- `Pinia` ใช้เฉพาะ shared long-lived state
 
-เปิดเว็บที่:
+Pinia ถูกใช้แล้วกับ:
 
-- บนเครื่องที่รันเซิร์ฟเวอร์: `http://localhost:3000`
-- บนอุปกรณ์อื่นใน Wi-Fi เดียวกัน (เช่น โทรศัพท์): `http://<YOUR_LOCAL_IP>:3000`
-  - ตัวอย่าง: `http://192.168.0.108:3000`
-  - หมายเหตุ: `localhost` กับ `192.168.x.x` คือเซิร์ฟเวอร์เดียวกัน แต่คนละชื่อเข้าถึง
+- auth/session
+- attendance lookup cache
+- case notifications
 
-## Scripts
+แต่ page-local form/dialog/search state ยังตั้งใจเก็บไว้ใน composable/local state
 
-- `npm start` - รันเซิร์ฟเวอร์
-- `npm run init-db` - สร้าง/อัปเดต schema ใน SQLite
-- `npm run smoke:check` - ตรวจ endpoint หลักหลัง deploy (`/healthz`, `/expired`, `/`)
+### Backend Direction
 
-## Deploy on Render (recommended now)
+backend ใช้แนวทาง:
 
-สำหรับงาน prototype ที่อยาก deploy เร็วและ setup น้อย แนะนำ Render แบบ web service เดียว
+- `controller + dto + focused services + repository`
+- query/persistence อยู่ใน data layer ที่ชัด
+- auth actor loading แยกออกจาก guards
+- database ใช้ `TypeORM DataSource + migrations`
+- ไม่ใช้ runtime schema bootstrap แล้ว
 
-### 1) Create Web Service
-- ไปที่ Render Dashboard แล้วเลือก **New + > Blueprint**
-- ชี้มาที่ repo นี้ (มีไฟล์ `render.yaml` แล้ว)
-- กด deploy ได้เลย
+## Main Business Flows
 
-### 2) Environment Variables
-- ใน `render.yaml` ตั้งไว้แล้ว:
-  - `NODE_ENV=production`
-  - `TRUST_PROXY=true`
-  - `STS_DATA_DIR=/var/data`
-- ต้องใส่ค่าเองใน Dashboard:
-  - `ADMIN_ACCESS_KEY=<strong-random-key>`
+flow หลักที่มีอยู่จริงในระบบตอนนี้:
 
-### 3) Persistent Disk
-- ใน `render.yaml` กำหนดไว้แล้ว:
-  - mount path: `/var/data`
-  - แอปจะเก็บ:
-    - SQLite: `/var/data/sts.db`
-    - Uploads: `/var/data/uploads`
+- normal login ผ่าน `/admin-access`
+- magic login ผ่าน login links
+- Mock ThaID student login
+- attendance classroom workflow
+- attendance dashboard / attendance tasks
+- student follow-up / case dashboard
+- task delegation / guest report / review workflow
+- student self attendance view ผ่าน `/my-attendance`
 
-ถ้าไม่ตั้ง `STS_DATA_DIR` ระบบจะใช้ค่า default:
-- DB: `db/sts.db`
-- uploads: `uploads/`
-
-### 4) Health Check
-- endpoint: `GET /healthz`
-- ต้องได้ `200` พร้อม JSON status
-
-### 5) Smoke test หลัง deploy
-- รันจาก local machine:
-  - `SMOKE_BASE_URL=https://<your-render-domain> npm run smoke:check`
-- ทดสอบ flow ธุรกิจ:
-  - admin access (`/admin-access`)
-  - create task
-  - open magic link
-  - submit report with image
-  - review/close case
-
-## Backup and restore (baseline)
-
-### Backup
-- SQLite: สำรองไฟล์ `sts.db` (จาก data dir เดียวกับที่ mount)
-- Uploads: สำรองโฟลเดอร์ `uploads/`
-- ความถี่แนะนำ: อย่างน้อยวันละครั้ง
-
-### Restore
-1. หยุด service
-2. กู้คืน `sts.db` และโฟลเดอร์ `uploads/` ไปยัง data dir เดิม
-3. start service ใหม่
-4. รัน smoke check เพื่อยืนยัน
-
-## Main routes
-
-### Pages
-
-- `/admin-access` หน้าใส่รหัสผู้บริหาร
-- `/` Dashboard (admin only)
-- `/create` สร้างภารกิจ (admin only)
-- `/task/:token` ดูภารกิจจากลิงก์
-- `/task/:token/delegate` ส่งต่อภารกิจ
-- `/task/:token/report` ส่งรายงานลงพื้นที่
-- `/task/:token/success` หน้าสำเร็จ
-- `/task-detail/:taskId` ดู Audit Trail + ข้อมูลรายงาน + ประเมินผล (admin only)
-- `/expired` ลิงก์หมดอายุ
-
-### APIs (สำคัญ)
-
-- `POST /api/tasks` (admin only)
-- `GET /api/tasks/:token`
-- `POST /api/tasks/:token/delegate`
-- `POST /api/tasks/:token/submit`
-- `GET /api/tasks/:taskId/chain` (admin only)
-- `GET /api/cases` (admin only)
-- `GET /api/stats` (admin only)
-- `POST /api/task-links/:linkId/admin-lock` (admin only)
-- `POST /api/cases/:caseId/review` (admin only)
-- `GET /api/cases/:caseId/reviews` (admin only)
-
-## Project structure
+## Repository Structure
 
 ```text
-STS_LINK_GENERATE/
-├── server.js
-├── config/
-│   └── constants.js          # ค่าคงที่รวมศูนย์ (file limits, expiry, categories)
-├── controllers/
-│   ├── admin.controller.js
-│   ├── case.controller.js
-│   ├── delegation.controller.js
-│   ├── stats.controller.js
-│   ├── submission.controller.js
-│   └── task.controller.js
-├── routes/
-│   ├── api.js                # Routing layer (ชี้ไป controllers)
-│   └── pages.js
-├── db/
-│   ├── database.js
-│   ├── init.js
-│   ├── migrations.js         # Schema migration runner
-│   └── sts.db
-├── utils/
-│   ├── admin-auth.js         # Cookie-based HMAC session
-│   ├── helpers.js            # hashToken, maskName, sanitize, getBaseUrl
-│   └── storage-paths.js
-├── scripts/
-│   └── smoke-check.js
-├── views/
-├── public/
-│   ├── css/style.css
-│   └── js/
-└── uploads/
+Magic-Link-tracking-student/
+  README.md
+  REFACTOR_PLAN.md
+  quasar-frontend/
+  nest-backend/
+  docs/
+  scripts/
+  db/
+  markdown/
+  docker-compose.yml
+  render.yaml
 ```
 
-## Notes for mobile/LAN usage
+โฟลเดอร์ที่ควรรู้:
 
-- ถ้าจะให้โทรศัพท์เครื่องอื่นสแกน QR ได้ ต้องเปิดเว็บผ่าน IP เครื่องแม่ข่าย เช่น `http://192.168.x.x:3000`
-- ถ้าเข้าผ่าน HTTP + IP:
-  - บาง browser จะจำกัด GPS/clipboard
-  - ระบบมี fallback ให้ใช้งานได้ แต่แนะนำ HTTPS หากนำไปใช้จริง
+- `REFACTOR_PLAN.md`
+  แผน refactor หลักและ checklist ของงานที่ทำไปแล้ว
+- `docs/`
+  เอกสารประกอบระดับ repo
+- `scripts/`
+  scripts ระดับ root
+- `db/`
+  ข้อมูล/ไฟล์ฐานข้อมูลระดับเก่าใน repo เดิม
 
-## Related docs
+## Quick Start
 
-- แผนงาน prototype: `STS_PROTOTYPE_PLAN.md`
-- สรุป spec + flow + diagram: `STS_SYSTEM_SPEC_AND_FLOW.md`
+### 1. Install dependencies
+
+frontend:
+
+```bash
+cd quasar-frontend
+npm install
+```
+
+backend:
+
+```bash
+cd nest-backend
+npm install
+```
+
+### 2. Prepare backend database
+
+จาก `nest-backend/`
+
+```bash
+npm run bootstrap:verify-parity
+npm run migration:run
+```
+
+### 3. Start backend
+
+จาก `nest-backend/`
+
+```bash
+npm run start:dev
+```
+
+### 4. Start frontend
+
+จาก `quasar-frontend/`
+
+```bash
+npm run dev
+```
+
+## Current Development Workflow
+
+เวลาพัฒนาใน repo นี้ แนะนำลำดับแบบนี้:
+
+1. backend contract / DTO / service / repository ให้เสร็จก่อนถ้ากระทบ API
+2. frontend types และ services
+3. frontend composables
+4. page/components
+5. verification scripts
+6. lint/build/manual smoke
+
+## Verification Commands
+
+### Frontend
+
+จาก `quasar-frontend/`
+
+```bash
+npm run lint
+npm run build
+npm run verify:refactor-boundaries
+npm run verify:routes
+npm run verify:auth-regression
+npm run verify:pinia-migration
+npm run verify:frontend-gate
+```
+
+### Backend
+
+จาก `nest-backend/`
+
+```bash
+npm run build
+npm run lint
+npm run test
+npm run bootstrap:verify-parity
+npm run migration:show
+```
+
+## Auth Notes
+
+ระบบตอนนี้รองรับหลาย auth flow:
+
+- normal login
+- magic login
+- Mock ThaID student login
+
+ข้อสำคัญ:
+
+- student login ตอนนี้ยังเป็น `Mock ThaID`
+- ใช้ `PersonID_Onec` เพื่อ match กับ `student_term`
+- ออก `virtual_auth_token` สำหรับ student virtual session
+
+## Important Docs
+
+เอกสารที่ควรเปิดคู่กัน:
+
+- [REFACTOR_PLAN.md](/Users/chanyut/STS_ALL/STS_main_1/Magic-Link-tracking-student/REFACTOR_PLAN.md)
+- [quasar-frontend/README.md](/Users/chanyut/STS_ALL/STS_main_1/Magic-Link-tracking-student/quasar-frontend/README.md)
+- [nest-backend/README.md](/Users/chanyut/STS_ALL/STS_main_1/Magic-Link-tracking-student/nest-backend/README.md)
+- [nest-backend/docs/typeorm-transition.md](/Users/chanyut/STS_ALL/STS_main_1/Magic-Link-tracking-student/nest-backend/docs/typeorm-transition.md)
+- [quasar-frontend/docs/frontend-verification-gate.md](/Users/chanyut/STS_ALL/STS_main_1/Magic-Link-tracking-student/quasar-frontend/docs/frontend-verification-gate.md)
+
+## Current Status
+
+ตามสภาพ codebase ปัจจุบัน:
+
+- frontend refactor หลักปิดแล้ว
+- backend refactor หลักปิดแล้ว
+- Mock ThaID phase ปิดแล้ว
+- Deferred Pinia Migration ปิดแล้ว
+
+สิ่งที่เหลือในแผนหลักตอนนี้เป็นงานลักษณะ verification/audit checklist มากกว่า phase feature ใหม่
+
+## Notes For Contributors
+
+- อย่าเพิ่ม direct API call จาก page/layout/component ถ้ายังควรวิ่งผ่าน service
+- อย่าเพิ่ม direct storage access ใหม่ใน UI layer ถ้ายังควรอยู่ใน helper/store/composable กลาง
+- ถ้าเพิ่ม shared long-lived state ให้ประเมินก่อนว่าจะอยู่ composable หรือ Pinia
+- ถ้าเปลี่ยน schema backend ให้ทำผ่าน migration
+- อย่าเอา runtime schema bootstrap กลับเข้าระบบ
