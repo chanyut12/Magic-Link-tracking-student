@@ -6,54 +6,71 @@ import {
   Delete,
   Body,
   Param,
-  HttpException,
-  HttpStatus,
-  Req,
+  NotFoundException,
+  ParseIntPipe,
+  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
-import type { Request } from 'express';
 import { UsersService } from './users.service';
-import { AuthGuard, PermissionsGuard, RequirePermission } from '../auth';
-
-type RequestWithActor = Request & {
-  user?: {
-    id: number;
-    username: string;
-    roles: string[];
-    permissions: string[];
-    data_scope?: Record<string, unknown>;
-  };
-};
+import {
+  AuthGuard,
+  CurrentUser,
+  PermissionsGuard,
+  RequirePermission,
+  type AuthenticatedRequestUser,
+} from '../auth';
+import {
+  CreateRoleGroupDto,
+  CreateUserDto,
+  LoginDto,
+  UpdateRoleGroupDto,
+  UpdateUserDto,
+} from './dto/users.dto';
+import { RoleGroupsService } from './role-groups.service';
+import { UserAuthService } from './user-auth.service';
+import { PasswordMigrationService } from './password-migration.service';
 
 @Controller('api/users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly roleGroupsService: RoleGroupsService,
+    private readonly userAuthService: UserAuthService,
+    private readonly passwordMigrationService: PasswordMigrationService,
+  ) {}
 
   @UseGuards(AuthGuard, PermissionsGuard)
   @RequirePermission('manage-users-list')
   @Get()
-  async getAllUsers(@Req() req: RequestWithActor) {
-    return await this.usersService.getAllUsers(req.user);
+  async getAllUsers(
+    @CurrentUser() actor: AuthenticatedRequestUser | undefined,
+  ) {
+    return await this.usersService.getAllUsers(actor);
   }
 
   @UseGuards(AuthGuard)
   @Get('roles')
-  async getRoles(@Req() req: RequestWithActor) {
-    return await this.usersService.getRoles(req.user);
+  async getRoles(@CurrentUser() actor: AuthenticatedRequestUser | undefined) {
+    return await this.usersService.getRoles(actor);
   }
 
   @UseGuards(AuthGuard, PermissionsGuard)
   @RequirePermission('manage-role-groups')
   @Get('role-groups')
-  async getRoleGroups(@Req() req: RequestWithActor) {
-    return await this.usersService.getRoleGroups(req.user);
+  async getRoleGroups(
+    @CurrentUser() actor: AuthenticatedRequestUser | undefined,
+  ) {
+    return await this.roleGroupsService.getRoleGroups(actor);
   }
 
   @UseGuards(AuthGuard, PermissionsGuard)
   @RequirePermission('manage-role-groups')
   @Post('role-groups')
-  async createRoleGroup(@Body() data: any, @Req() req: RequestWithActor) {
-    return await this.usersService.createRoleGroup(req.user, data);
+  async createRoleGroup(
+    @Body() data: CreateRoleGroupDto,
+    @CurrentUser() actor: AuthenticatedRequestUser | undefined,
+  ) {
+    return await this.roleGroupsService.createRoleGroup(actor, data);
   }
 
   @UseGuards(AuthGuard, PermissionsGuard)
@@ -61,30 +78,32 @@ export class UsersController {
   @Put('role-groups/:name')
   async updateRoleGroup(
     @Param('name') name: string,
-    @Body() data: any,
-    @Req() req: RequestWithActor,
+    @Body() data: UpdateRoleGroupDto,
+    @CurrentUser() actor: AuthenticatedRequestUser | undefined,
   ) {
-    return await this.usersService.updateRoleGroup(req.user, name, data);
+    return await this.roleGroupsService.updateRoleGroup(actor, name, data);
   }
 
   @UseGuards(AuthGuard, PermissionsGuard)
   @RequirePermission('manage-role-groups')
   @Delete('role-groups/:name')
-  async deleteRoleGroup(@Param('name') name: string, @Req() req: RequestWithActor) {
-    return await this.usersService.deleteRoleGroup(req.user, name);
+  async deleteRoleGroup(
+    @Param('name') name: string,
+    @CurrentUser() actor: AuthenticatedRequestUser | undefined,
+  ) {
+    return await this.roleGroupsService.deleteRoleGroup(actor, name);
   }
 
   @UseGuards(AuthGuard, PermissionsGuard)
   @RequirePermission('manage-users-list')
   @Get(':id')
-  async getUserById(@Param('id') id: string, @Req() req: RequestWithActor) {
-    const userId = parseInt(id, 10);
-    if (isNaN(userId)) {
-      throw new HttpException('ID ผู้ใช้งานไม่ถูกต้อง', HttpStatus.BAD_REQUEST);
-    }
-    const user = await this.usersService.getUserById(userId, req.user);
+  async getUserById(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() actor: AuthenticatedRequestUser | undefined,
+  ) {
+    const user = await this.usersService.getUserById(id, actor);
     if (!user) {
-      throw new HttpException('ไม่พบผู้ใช้งาน', HttpStatus.NOT_FOUND);
+      throw new NotFoundException('ไม่พบผู้ใช้งาน');
     }
     return user;
   }
@@ -92,39 +111,42 @@ export class UsersController {
   @UseGuards(AuthGuard, PermissionsGuard)
   @RequirePermission('manage-users-list')
   @Post()
-  async createUser(@Body() data: any, @Req() req: RequestWithActor) {
-    return await this.usersService.createUser(req.user, data);
+  async createUser(
+    @Body() data: CreateUserDto,
+    @CurrentUser() actor: AuthenticatedRequestUser | undefined,
+  ) {
+    return await this.usersService.createUser(actor, data);
   }
 
   @UseGuards(AuthGuard, PermissionsGuard)
   @RequirePermission('manage-users-list')
   @Put(':id')
-  async updateUser(@Param('id') id: string, @Body() data: any, @Req() req: RequestWithActor) {
-    return await this.usersService.updateUser(req.user, parseInt(id, 10), data);
+  async updateUser(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() data: UpdateUserDto,
+    @CurrentUser() actor: AuthenticatedRequestUser | undefined,
+  ) {
+    return await this.usersService.updateUser(actor, id, data);
   }
 
   @UseGuards(AuthGuard, PermissionsGuard)
   @RequirePermission('manage-users-list')
   @Delete(':id')
-  async deleteUser(@Param('id') id: string, @Req() req: RequestWithActor) {
-    const userId = parseInt(id, 10);
-    if (isNaN(userId)) {
-      throw new HttpException('ID ผู้ใช้งานไม่ถูกต้อง', HttpStatus.BAD_REQUEST);
-    }
-    return await this.usersService.deleteUser(req.user, userId);
+  async deleteUser(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() actor: AuthenticatedRequestUser | undefined,
+  ) {
+    return await this.usersService.deleteUser(actor, id);
   }
 
   @Post('login')
-  async login(@Body() body: any) {
-    const user = await this.usersService.validateUser(
+  async login(@Body() body: LoginDto) {
+    const user = await this.userAuthService.validateUser(
       body.username,
       body.password,
     );
     if (!user) {
-      throw new HttpException(
-        'ชื่อผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง',
-        HttpStatus.UNAUTHORIZED,
-      );
+      throw new UnauthorizedException('ชื่อผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง');
     }
     return user;
   }
@@ -133,6 +155,6 @@ export class UsersController {
   @RequirePermission('settings')
   @Post('migrate-passwords')
   async migratePasswords() {
-    return await this.usersService.hashExistingPasswords();
+    return await this.passwordMigrationService.hashExistingPasswords();
   }
 }

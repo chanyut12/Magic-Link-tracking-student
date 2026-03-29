@@ -1,18 +1,22 @@
 import { Module, Global } from '@nestjs/common';
+import { AuthController } from './auth.controller';
 import { PasswordService } from './password.service';
-import { DatabaseModule } from '../database/database.module';
 import {
   AuthGuard,
   OptionalAuthGuard,
   PermissionsGuard,
   RolesGuard,
 } from './auth.guard';
+import { AuthActorService } from './auth-actor.service';
+import { StudentAuthService } from './student-auth.service';
 
 @Global()
 @Module({
-  imports: [DatabaseModule],
+  controllers: [AuthController],
   providers: [
     PasswordService,
+    AuthActorService,
+    StudentAuthService,
     AuthGuard,
     PermissionsGuard,
     RolesGuard,
@@ -20,6 +24,8 @@ import {
   ],
   exports: [
     PasswordService,
+    AuthActorService,
+    StudentAuthService,
     AuthGuard,
     PermissionsGuard,
     RolesGuard,

@@ -9,13 +9,16 @@ export class PasswordService {
     return bcrypt.hash(password, this.saltRounds);
   }
 
-  async compare(plainPassword: string, hashedPassword: string): Promise<boolean> {
+  async compare(
+    plainPassword: string,
+    hashedPassword: string,
+  ): Promise<boolean> {
     if (!hashedPassword) return false;
-    
+
     if (this.isPlainText(hashedPassword)) {
       return plainPassword === hashedPassword;
     }
-    
+
     return bcrypt.compare(plainPassword, hashedPassword);
   }
 
@@ -23,7 +26,7 @@ export class PasswordService {
     return !password.startsWith('$2b$') && !password.startsWith('$2a$');
   }
 
-  async needsHashing(password: string): Promise<boolean> {
+  needsHashing(password: string): boolean {
     return this.isPlainText(password);
   }
 }
