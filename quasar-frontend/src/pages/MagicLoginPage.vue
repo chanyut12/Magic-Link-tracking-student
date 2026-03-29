@@ -53,15 +53,17 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { api } from 'boot/axios';
 import { useQuasar } from 'quasar';
-import { persistAuthFlag, persistUser } from '../composables/useUserStore';
+import { useAuthSession } from '../composables/useAuthSession';
+import { authService } from '../services/authService';
 import { getEffectivePermissions, getFirstAccessibleRoute } from '../constants/permissions';
+import type { AuthUser, MagicLoginVerifyResponse } from '../types/auth';
 
 const $q = useQuasar();
 const route = useRoute();
 const router = useRouter();
 const token = route.params.token as string;
+const { readMagicSessionToken, saveSession, writeMagicSessionToken } = useAuthSession();
 
 const loading = ref(true);
 const otpRequired = ref(false);
@@ -76,31 +78,52 @@ const countdownText = ref('--:--');
 const isExpired = ref(false);
 let timer: ReturnType<typeof setInterval> | null = null;
 
+function buildVirtualUser(
+  payload: MagicLoginVerifyResponse,
+  magicSessionToken: string,
+): AuthUser | null {
+  if (!payload.id) {
+    return null;
+  }
+
+  return {
+    id: payload.id,
+    username: payload.username || payload.email || `magic-${token}`,
+    FirstName: payload.FirstName ?? null,
+    LastName: payload.LastName ?? null,
+    roles: payload.roles || [],
+    labels: payload.labels,
+    permissions: payload.permissions || [],
+    data_scope: payload.data_scope,
+    PersonID_Onec: payload.PersonID_Onec,
+    affiliation: payload.affiliation ?? null,
+    virtual_login: true,
+    magic_link_token: token,
+    magic_session_token: magicSessionToken || undefined,
+  };
+}
+
 const checkLoginStatus = async () => {
   loading.value = true;
   try {
-    const savedToken = localStorage.getItem(`magic_session_${token}`);
-    const res = await api.get(`/api/tasks/${token}/login-verify`, {
-      headers: savedToken ? { 'x-magic-session': savedToken } : {}
-    });
-    if (res.data.otp_required) {
+    const savedToken = readMagicSessionToken(token, 'local');
+    const payload = await authService.verifyMagicLogin(token, savedToken || undefined);
+
+    if (payload.otp_required) {
       otpRequired.value = true;
-      emailToVerify.value = res.data.email || '';
-      assignedToName.value = res.data.assigned_to_name || '';
-      expiresAt.value = res.data.expires_at || null;
-      if (res.data.expires_at) {
-        startCountdown(res.data.expires_at);
+      emailToVerify.value = payload.email || '';
+      assignedToName.value = payload.assigned_to_name || '';
+      expiresAt.value = payload.expires_at || null;
+      if (payload.expires_at) {
+        startCountdown(payload.expires_at);
       }
-    } else if (res.data.id) {
-      // Normal Login Flow (No OTP needed)
-      const virtualUser = {
-        ...res.data,
-        virtual_login: true,
-        magic_link_token: token,
-        magic_session_token: savedToken || undefined,
-      };
-      persistAuthFlag('session');
-      persistUser(virtualUser, 'session');
+    } else {
+      const virtualUser = buildVirtualUser(payload, savedToken);
+      if (!virtualUser) {
+        throw new Error('Invalid virtual user payload');
+      }
+
+      saveSession(virtualUser, { target: 'session', hasAdminAccess: true });
       $q.notify({ message: 'เข้าสู่ระบบสำเร็จ', color: 'positive', icon: 'check' });
       const targetRoute = getFirstAccessibleRoute(
         getEffectivePermissions(virtualUser.roles || [], virtualUser.permissions || []),
@@ -119,7 +142,7 @@ const checkLoginStatus = async () => {
 const sendOtp = async () => {
   otpLoading.value = true;
   try {
-    await api.post(`/api/tasks/${token}/otp`);
+    await authService.requestMagicOtp(token);
     otpSent.value = true;
     $q.notify({ message: 'ส่งรหัส OTP เรียบร้อยแล้ว', color: 'positive', icon: 'check' });
   } catch (err) {
@@ -134,9 +157,9 @@ const verifyDirectOtp = async () => {
   if (otpInput.value.length !== 6) return;
   otpLoading.value = true;
   try {
-    const res = await api.post(`/api/tasks/${token}/verify`, { otp: otpInput.value });
-    if (res.data.session_token) {
-      localStorage.setItem(`magic_session_${token}`, res.data.session_token);
+    const response = await authService.verifyMagicOtp(token, otpInput.value);
+    if (response.session_token) {
+      writeMagicSessionToken(token, response.session_token, 'local');
     }
     $q.notify({ message: 'ยืนยันรหัสสำเร็จ', color: 'positive', icon: 'check' });
     // Retry login-verify to fetch virtual user payload

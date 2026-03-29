@@ -67,7 +67,7 @@ const routes: RouteRecordRaw[] = [
       },
       { 
         path: 'my-attendance', 
-        component: () => import('pages/StudentSelfPage.vue'), 
+        component: () => import('pages/StudentInformationPage.vue'), 
         meta: { requiresAuth: true, permission: 'student-self' } 
       },
       { 
@@ -118,7 +118,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'forbidden',
         component: () => import('pages/ForbiddenPage.vue'),
-        meta: { hideNav: false }
+        meta: { hideNav: true }
       },
     ],
   },

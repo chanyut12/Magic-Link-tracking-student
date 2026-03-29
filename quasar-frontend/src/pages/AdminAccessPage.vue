@@ -70,6 +70,8 @@
             color="primary" 
             class="full-width q-py-md btn-thaid" 
             unelevated
+            :loading="thaidLoading"
+            @click="handleThaIdClick"
           >
             <div class="row items-center no-wrap">
               <span>เข้าสู่ระบบด้วย ThaID</span>
@@ -78,28 +80,77 @@
         </q-form>
       </div>
     </div>
+
+    <q-dialog v-model="thaidDialog" persistent>
+      <q-card class="thaid-dialog">
+        <q-card-section class="q-pb-sm">
+          <div class="text-h6 text-weight-bold">ThaID Mock Login</div>
+          <div class="text-body2 text-grey-7 q-mt-xs">
+            โหมดทดสอบ: กรอกเลขบัตรประชาชน 13 หลักเพื่อจำลองการเข้าสู่ระบบนักเรียน
+          </div>
+        </q-card-section>
+
+        <q-card-section class="q-pt-none">
+          <q-input
+            v-model="thaidPersonId"
+            outlined
+            dense
+            maxlength="13"
+            inputmode="numeric"
+            label="เลขบัตรประชาชน"
+            placeholder="กรอก PersonID_Onec 13 หลัก"
+          />
+        </q-card-section>
+
+        <q-card-actions align="right" class="q-px-md q-pb-md">
+          <q-btn flat label="ยกเลิก" color="grey-7" @click="thaidDialog = false" />
+          <q-btn
+            unelevated
+            color="primary"
+            label="เข้าสู่ระบบ"
+            :loading="thaidLoading"
+            @click="handleThaIdMockLogin"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue';
-import { useRouter } from 'vue-router';
-import { api } from 'boot/axios';
+import { useRoute, useRouter } from 'vue-router';
 import { useQuasar } from 'quasar';
 import { AxiosError } from 'axios';
-import {
-  persistAuthFlag,
-  persistUser,
-  type User,
-} from '../composables/useUserStore';
+import { useAuthSession } from '../composables/useAuthSession';
+import { authService } from '../services/authService';
 import { getEffectivePermissions, getFirstAccessibleRoute } from '../constants/permissions';
 
 const router = useRouter();
+const route = useRoute();
 const $q = useQuasar();
+const { saveSession } = useAuthSession();
 const username = ref('');
 const password = ref('');
 const showPassword = ref(false);
 const loading = ref(false);
+const thaidDialog = ref(false);
+const thaidLoading = ref(false);
+const thaidPersonId = ref('');
+const isMockThaIdMode = process.env.THAID_MODE === 'mock';
+
+function resolvePostLoginTarget(userPermissions: string[]): string {
+  const nextRoute = typeof route.query.next === 'string' ? route.query.next : '';
+  if (nextRoute.startsWith('/')) {
+    return nextRoute;
+  }
+
+  if (userPermissions.includes('student-self')) {
+    return '/my-attendance';
+  }
+
+  return getFirstAccessibleRoute(userPermissions);
+}
 
 const handleLogin = async () => {
   if (!username.value || !password.value) {
@@ -113,15 +164,12 @@ const handleLogin = async () => {
 
   loading.value = true;
   try {
-    const response = await api.post<User>('/api/users/login', {
+    const user = await authService.login({
       username: username.value,
-      password: password.value
+      password: password.value,
     });
 
-    const user = response.data;
-    
-    persistAuthFlag('local');
-    persistUser(user, 'local');
+    saveSession(user, { target: 'local', hasAdminAccess: true });
     
     $q.notify({
       message: `ยินดีต้อนรับคุณ ${user.FirstName || user.username}`,
@@ -129,7 +177,7 @@ const handleLogin = async () => {
       position: 'top'
     });
 
-    const targetRoute = getFirstAccessibleRoute(
+    const targetRoute = resolvePostLoginTarget(
       getEffectivePermissions(user.roles || [], user.permissions || []),
     );
     void router.push(targetRoute);
@@ -148,6 +196,64 @@ const handleLogin = async () => {
     });
   } finally {
     loading.value = false;
+  }
+};
+
+const handleThaIdClick = () => {
+  if (!isMockThaIdMode) {
+    $q.notify({
+      message: 'ThaID mock mode ยังไม่ได้เปิดใช้งานใน environment นี้',
+      color: 'warning',
+      position: 'top',
+    });
+    return;
+  }
+
+  thaidDialog.value = true;
+};
+
+const handleThaIdMockLogin = async () => {
+  const personId = thaidPersonId.value.replace(/\D/g, '').trim();
+  if (!/^\d{13}$/.test(personId)) {
+    $q.notify({
+      message: 'กรุณากรอกเลขบัตรประชาชน 13 หลัก',
+      color: 'negative',
+      position: 'top',
+    });
+    return;
+  }
+
+  thaidLoading.value = true;
+  try {
+    const user = await authService.loginWithMockThaId({ personId });
+    saveSession(user, { target: 'local', hasAdminAccess: true });
+    thaidDialog.value = false;
+
+    $q.notify({
+      message: `เข้าสู่ระบบนักเรียนสำเร็จ ${user.FirstName || user.username}`,
+      color: 'positive',
+      position: 'top',
+    });
+
+    const targetRoute = resolvePostLoginTarget(
+      getEffectivePermissions(user.roles || [], user.permissions || []),
+    );
+    void router.push(targetRoute);
+  } catch (error) {
+    console.error('ThaID mock login error:', error);
+    let errorMsg = 'ไม่สามารถเข้าสู่ระบบด้วย ThaID mock ได้';
+
+    if (error instanceof AxiosError && error.response?.data?.message) {
+      errorMsg = error.response.data.message;
+    }
+
+    $q.notify({
+      message: errorMsg,
+      color: 'negative',
+      position: 'top',
+    });
+  } finally {
+    thaidLoading.value = false;
   }
 };
 </script>
@@ -251,6 +357,11 @@ const handleLogin = async () => {
   font-weight: 700;
   border: none;
   font-size: 1rem;
+}
+
+.thaid-dialog {
+  width: min(92vw, 420px);
+  border-radius: 24px;
 }
 
 .divider {

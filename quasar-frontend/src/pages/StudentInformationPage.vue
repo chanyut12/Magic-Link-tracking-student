@@ -35,7 +35,10 @@
                     </div>
                   </div>
 
-                  <div class="col-12 col-sm-4 text-center text-md-right q-mt-md q-sm-mt-none row justify-end items-center q-gutter-sm">
+                  <div
+                    v-if="!isSelfView"
+                    class="col-12 col-sm-4 text-center text-md-right q-mt-md q-sm-mt-none row justify-end items-center q-gutter-sm"
+                  >
                     <q-btn
                       unelevated
                       rounded
@@ -251,26 +254,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useRoute } from 'vue-router';
-import { api } from 'boot/axios';
+import { useUserStore } from '../composables/useUserStore';
+import { studentService } from '../services/studentService';
+import type {
+  StudentAttendanceCalendarRecord,
+  StudentCase,
+  StudentDetail,
+} from '../types/student';
 
 const route = useRoute();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const student = ref<any>(null);
+const { user, loadUser } = useUserStore();
+const student = ref<StudentDetail | null>(null);
 const loading = ref(true);
-
-interface StudentCase {
-  id: string | number;
-  created_at: string;
-  reason_flagged: string;
-  status: string;
-}
-
-interface AttendanceRecord {
-  date: string;
-  status: number;
-}
 
 const cases = ref<StudentCase[]>([]);
 const loadingCases = ref(false);
@@ -287,32 +284,71 @@ const getTodayFormatted = () => {
 const attendanceDate = ref(getTodayFormatted());
 const attendanceRecords = ref<Record<string, string>>({});
 
+const isSelfView = computed(() => route.path === '/my-attendance');
+const resolvedStudentId = computed(() => {
+  const routeId =
+    typeof route.params.id === 'string' ? route.params.id.trim() : '';
+
+  if (routeId) {
+    return routeId;
+  }
+
+  return isSelfView.value ? user.value?.PersonID_Onec?.trim() : undefined;
+});
+
 const attendanceEvents = computed(() => Object.keys(attendanceRecords.value));
 
 const getAttendanceColor = (dateString: string) => {
   return attendanceRecords.value[dateString] || 'grey-3';
 };
 
+const resetStudentViewState = () => {
+  student.value = null;
+  cases.value = [];
+  attendanceRecords.value = {};
+  showAllCasesDialog.value = false;
+};
+
+const getStudentFullName = (detail: StudentDetail | null) => {
+  if (!detail) {
+    return '';
+  }
+
+  return `${detail.FirstName_Onec || ''} ${detail.LastName_Onec || ''}`.trim();
+};
+
+const formatAttendanceDate = (dateString: string) => {
+  if (!dateString) {
+    return null;
+  }
+
+  const date = new Date(dateString);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+
+  return `${year}/${month}/${day}`;
+};
+
+const getAttendanceStatusColor = (status: number) => {
+  if (status === 1) return 'positive';
+  if (status === 2) return 'warning';
+  if (status === 3) return 'negative';
+  return 'grey-3';
+};
+
 const fetchAttendance = async (id: string) => {
   try {
-    const res = await api.get(`/api/students/attendance/${id}`);
-    const records = res.data;
     const newMapping: Record<string, string> = {};
+    const records = await studentService.getStudentAttendance(id);
 
-    records.forEach((record: AttendanceRecord) => {
-      if (!record.date) return;
-      const d = new Date(record.date);
-      const year = d.getFullYear();
-      const month = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
-      const formattedDate = `${year}/${month}/${day}`;
+    records.forEach((record: StudentAttendanceCalendarRecord) => {
+      const formattedDate = formatAttendanceDate(record.date);
+      if (!formattedDate) {
+        return;
+      }
 
-      let color = 'grey-3';
-      if (record.status === 1) color = 'positive';
-      else if (record.status === 2) color = 'warning';
-      else if (record.status === 3) color = 'negative';
-
-      newMapping[formattedDate] = color;
+      newMapping[formattedDate] = getAttendanceStatusColor(record.status);
     });
 
     attendanceRecords.value = newMapping;
@@ -343,8 +379,7 @@ const formatDate = (dateString: string) => {
 const fetchCases = async (name: string) => {
   loadingCases.value = true;
   try {
-    const res = await api.get(`/api/students/cases/by-name/${name}`);
-    cases.value = res.data;
+    cases.value = await studentService.getStudentCasesByName(name);
   } catch (error) {
     console.error('Error fetching cases:', error);
   } finally {
@@ -354,23 +389,17 @@ const fetchCases = async (name: string) => {
 
 const fetchStudent = async (id: string) => {
   loading.value = true;
-  student.value = null;
-  cases.value = [];
-  attendanceRecords.value = {};
-  showAllCasesDialog.value = false;
+  resetStudentViewState();
 
   try {
-    const res = await api.get(`/api/students/${id}`);
-    student.value = res.data;
+    const studentDetail = await studentService.getStudentById(id);
+    student.value = studentDetail;
 
-    if (student.value) {
-      const fullName = `${student.value.FirstName_Onec || ''} ${student.value.LastName_Onec || ''}`.trim();
-      if (fullName) {
-        await fetchCases(fullName);
-      }
-    }
-
-    await fetchAttendance(id);
+    const fullName = getStudentFullName(studentDetail);
+    await Promise.all([
+      fetchAttendance(id),
+      fullName ? fetchCases(fullName) : Promise.resolve(),
+    ]);
   } catch (error) {
     console.error('Error fetching student:', error);
   } finally {
@@ -379,13 +408,11 @@ const fetchStudent = async (id: string) => {
 };
 
 watch(
-  () => route.params.id as string | undefined,
+  () => resolvedStudentId.value,
   (id) => {
     if (!id) {
-      loading.value = false;
-      student.value = null;
-      cases.value = [];
-      attendanceRecords.value = {};
+      resetStudentViewState();
+      loading.value = isSelfView.value;
       return;
     }
 
@@ -393,6 +420,12 @@ watch(
   },
   { immediate: true },
 );
+
+onMounted(() => {
+  if (isSelfView.value) {
+    loadUser();
+  }
+});
 </script>
 
 <style scoped>

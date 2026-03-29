@@ -3,7 +3,7 @@
 
 import { defineConfig } from '#q-app/wrappers';
 
-export default defineConfig((/* ctx */) => {
+export default defineConfig((ctx) => {
   return {
     // https://v2.quasar.dev/quasar-cli-vite/prefetch-feature
     // preFetch: true,
@@ -11,7 +11,7 @@ export default defineConfig((/* ctx */) => {
     // app boot file (/src/boot)
     // --> boot files are part of "main.js"
     // https://v2.quasar.dev/quasar-cli-vite/boot-files
-    boot: ['axios'],
+    boot: ['pinia', 'axios'],
 
     // https://v2.quasar.dev/quasar-cli-vite/quasar-config-file#css
     css: ['app.scss'],
@@ -55,6 +55,7 @@ export default defineConfig((/* ctx */) => {
       // analyze: true,
       env: {
         API_BASE_URL: process.env.API_BASE_URL || process.env.BACKEND_URL || '',
+        THAID_MODE: process.env.THAID_MODE || (ctx.dev ? 'mock' : 'disabled'),
       },
       // rawDefine: {}
       // ignorePublicFolder: true,

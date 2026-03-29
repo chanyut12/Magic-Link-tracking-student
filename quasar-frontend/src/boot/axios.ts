@@ -1,5 +1,7 @@
 import { boot } from 'quasar/wrappers';
 import axios, { type AxiosInstance } from 'axios';
+import { getStoredAuthUser } from '../composables/authSessionState';
+import type { AuthUser } from '../types/auth';
 
 declare module '@vue/runtime-core' {
   interface ComponentCustomProperties {
@@ -43,28 +45,8 @@ function resolveApiBaseURL(): string {
 // Be careful when using SSR for global axios instances
 const api = axios.create({ baseURL: resolveApiBaseURL() });
 
-function getCurrentStoredUser(): {
-  id?: number;
-  data_scope?: unknown;
-  virtual_login?: boolean;
-  magic_link_token?: string;
-  magic_session_token?: string;
-} | null {
-  const userStr = sessionStorage.getItem('sts_user') || localStorage.getItem('sts_user');
-  if (!userStr) return null;
-
-  try {
-    return JSON.parse(userStr) as {
-      id?: number;
-      data_scope?: unknown;
-      virtual_login?: boolean;
-      magic_link_token?: string;
-      magic_session_token?: string;
-    };
-  } catch (e) {
-    console.warn('Failed to inject scope header', e);
-    return null;
-  }
+function getCurrentStoredUser(): AuthUser | null {
+  return getStoredAuthUser();
 }
 
 function encodeScopeHeader(scope: unknown): string | null {
@@ -83,6 +65,8 @@ api.interceptors.request.use((config) => {
     if (currentUser.magic_session_token) {
       config.headers['x-magic-session'] = currentUser.magic_session_token;
     }
+  } else if (currentUser?.virtual_login && currentUser.virtual_auth_token) {
+    config.headers['x-virtual-auth'] = currentUser.virtual_auth_token;
   } else if (currentUser?.id) {
     config.headers['x-user-id'] = String(currentUser.id);
   }

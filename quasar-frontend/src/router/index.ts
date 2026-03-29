@@ -7,27 +7,17 @@ import {
 } from 'vue-router';
 import routes from './routes';
 import { getEffectivePermissions } from '../constants/permissions';
+import {
+  getStoredAdminAccess,
+  getStoredAuthUser,
+} from '../composables/authSessionState';
+import type { AuthUser } from '../types/auth';
 
-interface User {
-  id: number;
-  username: string;
-  roles: string[];
-  permissions: string[];
+function getUser(): AuthUser | null {
+  return getStoredAuthUser();
 }
 
-function getUser(): User | null {
-  const userStr = sessionStorage.getItem('sts_user') || localStorage.getItem('sts_user');
-  if (userStr) {
-    try {
-      return JSON.parse(userStr) as User;
-    } catch {
-      return null;
-    }
-  }
-  return null;
-}
-
-function hasPermission(user: User | null, permission: string): boolean {
+function hasPermission(user: AuthUser | null, permission: string): boolean {
   if (!user) return false;
 
   const roles = user.roles || [];
@@ -35,6 +25,10 @@ function hasPermission(user: User | null, permission: string): boolean {
   const effectivePermissions = getEffectivePermissions(roles, customPermissions);
 
   return effectivePermissions.includes(permission);
+}
+
+function isAuthenticated(): boolean {
+  return Boolean(getStoredAdminAccess() && getStoredAuthUser());
 }
 
 export default defineRouter(function (/* { store, ssrContext } */) {
@@ -52,7 +46,7 @@ export default defineRouter(function (/* { store, ssrContext } */) {
   });
 
   Router.beforeEach((to) => {
-    const isAdmin = (sessionStorage.getItem('admin_access') === 'true') || (localStorage.getItem('admin_access') === 'true');
+    const isAdmin = isAuthenticated();
     const user = getUser();
     
     if (to.matched.some(record => record.meta.requiresAuth)) {

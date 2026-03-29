@@ -17,14 +17,14 @@
               {{ studentInitial }}
             </div>
             <div class="student-info">
-              <h2>{{ studentInfo.FirstName }} {{ studentInfo.LastName }}</h2>
+              <h2>{{ studentDisplayName }}</h2>
               <div class="student-meta">
                 <span><i class="fas fa-id-card"></i> {{ studentInfo.PersonID_Onec }}</span>
                 <span><i class="fas fa-school"></i> {{ studentInfo.school_name || '-' }}</span>
               </div>
               <div class="student-meta">
-                <span><i class="fas fa-graduation-cap"></i> ชั้น {{ studentInfo.grade_label || '-' }}</span>
-                <span><i class="fas fa-door-open"></i> ห้อง {{ studentInfo.room || '-' }}</span>
+                <span><i class="fas fa-graduation-cap"></i> ชั้น {{ studentInfo.grade_label || studentInfo.grade || '-' }}</span>
+                <span><i class="fas fa-door-open"></i> {{ formatStudentRoom(studentInfo.room) }}</span>
               </div>
             </div>
           </div>
@@ -71,8 +71,8 @@
 
           <div v-else class="history-list">
             <div 
-              v-for="record in attendanceHistory" 
-              :key="record.id" 
+              v-for="(record, index) in attendanceHistory" 
+              :key="`${record.id ?? 'record'}-${record.date}-${index}`" 
               class="history-item"
               :class="record.status.toLowerCase()"
             >
@@ -105,62 +105,52 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
-import { api } from 'boot/axios';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useUserStore } from '../composables/useUserStore';
+import { studentService } from '../services/studentService';
+import type {
+  StudentAttendanceHistoryRecord,
+  StudentAttendanceSummaryStats,
+  StudentDetail,
+} from '../types/student';
+import {
+  formatStudentRoom,
+  getStudentAvatarGradient,
+} from '../utils/studentPresentation';
 
-interface StudentInfo {
-  PersonID_Onec: string;
-  FirstName: string;
-  LastName: string;
-  school_name?: string;
-  grade_label?: string;
-  room?: string;
-}
-
-interface AttendanceRecord {
-  id: number;
-  date: string;
-  status: string;
-  subject?: string;
-}
-
-const { user } = useUserStore();
-const loading = ref(true);
-const studentInfo = ref<StudentInfo | null>(null);
-const attendanceHistory = ref<AttendanceRecord[]>([]);
-const attendanceStats = ref({
+const EMPTY_ATTENDANCE_STATS: StudentAttendanceSummaryStats = {
   present: 0,
   absent: 0,
   late: 0,
-  total: 0
+  total: 0,
+};
+
+const { user, loadUser } = useUserStore();
+const loading = ref(true);
+const studentInfo = ref<StudentDetail | null>(null);
+const attendanceHistory = ref<StudentAttendanceHistoryRecord[]>([]);
+const attendanceStats = ref<StudentAttendanceSummaryStats>({ ...EMPTY_ATTENDANCE_STATS });
+
+const studentDisplayName = computed(() => {
+  if (!studentInfo.value) {
+    return '-';
+  }
+
+  const firstName = studentInfo.value.FirstName_Onec || studentInfo.value.FirstName || '';
+  const lastName = studentInfo.value.LastName_Onec || studentInfo.value.LastName || '';
+  const fullName = `${firstName} ${lastName}`.trim();
+
+  return fullName || studentInfo.value.PersonID_Onec;
 });
 
 const studentInitial = computed(() => {
-  if (studentInfo.value?.FirstName) {
-    return studentInfo.value.FirstName.charAt(0).toUpperCase();
+  if (studentDisplayName.value && studentDisplayName.value !== '-') {
+    return studentDisplayName.value.charAt(0).toUpperCase();
   }
   return '?';
 });
 
-const avatarStyle = computed(() => {
-  const colors = [
-    ['#6366f1', '#8b5cf6'],
-    ['#ec4899', '#f43f5e'],
-    ['#14b8a6', '#06b6d4'],
-    ['#f59e0b', '#f97316'],
-  ] as const;
-  const name = studentInfo.value?.FirstName || '';
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  const colorPair = colors[Math.abs(hash) % colors.length] || colors[0];
-  return {
-    background: `linear-gradient(135deg, ${colorPair[0]}, ${colorPair[1]})`,
-    color: 'white',
-  };
-});
+const avatarStyle = computed(() => getStudentAvatarGradient(studentDisplayName.value));
 
 const attendanceRate = computed(() => {
   if (attendanceStats.value.total === 0) return 0;
@@ -185,48 +175,53 @@ function getStatusLabel(status: string): string {
     ABSENT: 'ขาดเรียน',
     LATE: 'มาสาย',
     LEAVE: 'ลา',
-    UNKNOWN: 'ไม่ทราบ'
+    UNKNOWN: 'ไม่ทราบ',
   };
   return labels[status.toUpperCase()] || status;
 }
 
-async function fetchStudentData() {
-  if (!user.value?.PersonID_Onec) {
-    loading.value = false;
-    return;
-  }
-
-  try {
-    const res = await api.get(`/api/students/${user.value.PersonID_Onec}`);
-    studentInfo.value = res.data;
-  } catch (err) {
-    console.error('Failed to fetch student info', err);
-  }
+function resetStudentSelfState() {
+  studentInfo.value = null;
+  attendanceHistory.value = [];
+  attendanceStats.value = { ...EMPTY_ATTENDANCE_STATS };
 }
 
-async function fetchAttendanceData() {
-  if (!user.value?.PersonID_Onec) return;
-
-  try {
-    const res = await api.get(`/api/attendance/student/${user.value.PersonID_Onec}`);
-    const data = res.data || {};
-    
-    attendanceHistory.value = (data.records || []).slice(0, 20);
-    attendanceStats.value = {
-      present: data.stats?.present || 0,
-      absent: data.stats?.absent || 0,
-      late: data.stats?.late || 0,
-      total: data.stats?.total || 0
-    };
-  } catch (err) {
-    console.error('Failed to fetch attendance data', err);
-  }
-}
-
-onMounted(async () => {
+async function fetchStudentSelf(studentId: string) {
   loading.value = true;
-  await Promise.all([fetchStudentData(), fetchAttendanceData()]);
-  loading.value = false;
+  resetStudentSelfState();
+
+  try {
+    const [studentDetail, attendanceSummary] = await Promise.all([
+      studentService.getStudentById(studentId),
+      studentService.getStudentAttendanceSummary(studentId),
+    ]);
+
+    studentInfo.value = studentDetail;
+    attendanceHistory.value = attendanceSummary.records.slice(0, 20);
+    attendanceStats.value = attendanceSummary.stats;
+  } catch (err) {
+    console.error('Failed to fetch student self data', err);
+  } finally {
+    loading.value = false;
+  }
+}
+
+watch(
+  () => user.value?.PersonID_Onec,
+  (studentId) => {
+    if (!studentId) {
+      resetStudentSelfState();
+      loading.value = false;
+      return;
+    }
+
+    void fetchStudentSelf(studentId);
+  },
+  { immediate: true },
+);
+
+onMounted(() => {
+  loadUser();
 });
 </script>
 
