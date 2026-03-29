@@ -1,10 +1,16 @@
 import { Module } from '@nestjs/common';
 import { AutomationService } from './automation.service';
-import { DatabaseModule } from '../database/database.module';
+import { AbsenceMonitorService } from './absence-monitor.service';
+import { AutomationRepository } from './automation.repository';
+import { AutomationSchedulerService } from './automation-scheduler.service';
 
 @Module({
-  imports: [DatabaseModule],
-  providers: [AutomationService],
+  providers: [
+    AutomationService,
+    AutomationRepository,
+    AbsenceMonitorService,
+    AutomationSchedulerService,
+  ],
   exports: [AutomationService],
 })
 export class AutomationModule {}

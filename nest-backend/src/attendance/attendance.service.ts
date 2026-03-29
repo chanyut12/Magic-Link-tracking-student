@@ -1,333 +1,61 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { DatabaseService } from '../database/database.service';
-import { buildDataScopeQuery, DataScope } from '../common/utils/authorization';
-import { AutomationService, NewCase } from '../automation/automation.service';
+import { Injectable } from '@nestjs/common';
+import type { DataScope } from '../common/utils/authorization';
+import { AttendanceLookupService } from './attendance-lookup.service';
+import { AttendanceReadService } from './attendance-read.service';
+import { AttendanceWriteService } from './attendance-write.service';
+import type { AttendanceSaveRecordInput } from './attendance.types';
 
 @Injectable()
 export class AttendanceService {
-  private readonly logger = new Logger(AttendanceService.name);
-
   constructor(
-    private readonly db: DatabaseService,
-    private readonly automationService: AutomationService
-  ) { }
+    private readonly attendanceLookupService: AttendanceLookupService,
+    private readonly attendanceReadService: AttendanceReadService,
+    private readonly attendanceWriteService: AttendanceWriteService,
+  ) {}
 
   async getGradeLevels() {
-    try {
-      const result = await this.db.query(
-        'SELECT id, label, category FROM grade_levels ORDER BY id',
-      );
-      return { success: true, data: result.rows };
-    } catch (err) {
-      this.logger.error(`getGradeLevels error: ${err.message}`);
-      throw err;
-    }
+    return await this.attendanceLookupService.getGradeLevels();
   }
 
   async getSchools(province?: string, district?: string, subDistrict?: string) {
-    try {
-      let query =
-        'SELECT id, name, province, district, sub_district FROM schools WHERE 1=1';
-      const params: any[] = [];
-
-      if (province) {
-        params.push(province);
-        query += ` AND province = $${params.length}`;
-      }
-      if (district) {
-        params.push(district);
-        query += ` AND district = $${params.length}`;
-      }
-      if (subDistrict) {
-        params.push(subDistrict);
-        query += ` AND sub_district = $${params.length}`;
-      }
-
-      query += ' ORDER BY name ASC';
-      const result = await this.db.query(query, params);
-      return { success: true, data: result.rows };
-    } catch (err) {
-      this.logger.error(`getSchools error: ${err.message}`);
-      throw err;
-    }
+    return await this.attendanceLookupService.getSchools(
+      province,
+      district,
+      subDistrict,
+    );
   }
 
   async getLocations() {
-    try {
-      // Get unique provinces
-      const provinceRes = await this.db.query(
-        'SELECT DISTINCT province FROM schools ORDER BY province ASC',
-      );
-      // Get unique districts
-      const districtRes = await this.db.query(
-        'SELECT DISTINCT province, district FROM schools ORDER BY province ASC, district ASC',
-      );
-      // Get unique sub-districts
-      const subDistrictRes = await this.db.query(
-        'SELECT DISTINCT province, district, sub_district FROM schools ORDER BY province ASC, district ASC, sub_district ASC',
-      );
-
-      return {
-        success: true,
-        data: {
-          provinces: provinceRes.rows.map(
-            (r: { province: string }) => r.province,
-          ),
-          districts: districtRes.rows,
-          subDistricts: subDistrictRes.rows,
-        },
-      };
-    } catch (err) {
-      this.logger.error(`getLocations error: ${err.message}`);
-      throw err;
-    }
+    return await this.attendanceLookupService.getLocations();
   }
 
-  async getStudents(grade?: string, room?: string, schoolId?: string, userScope?: DataScope) {
-    try {
-      let query = `
-        SELECT 
-          s."PersonID_Onec" as id,
-          (s."FirstName_Onec" || ' ' || s."LastName_Onec") as name,
-          COALESCE(gl.label, 'ไม่ทราบ') as grade,
-          s."RoomID_Onec"::text as room,
-          s."SchoolID_Onec" as school_id,
-          sc.name as school_name,
-          (SELECT COUNT(*) FROM attendance a WHERE a."PersonID_Onec" = s."PersonID_Onec" AND a."AttendanceStatus" = 3) as total_late,
-          (SELECT COUNT(*) FROM attendance a WHERE a."PersonID_Onec" = s."PersonID_Onec" AND a."AttendanceStatus" = 2) as total_absent
-        FROM student_term s
-        LEFT JOIN grade_levels gl ON s."GradeLevelID_Onec" = gl.id
-        LEFT JOIN schools sc ON s."SchoolID_Onec" = sc.id
-        WHERE 1=1
-      `;
-      const params: any[] = [];
-
-      // Apply Data Scope Filter
-      if (userScope) {
-        const scopeRes = buildDataScopeQuery(userScope, {
-          school_id: `s."SchoolID_Onec"`,
-          grade: `s."GradeLevelID_Onec"`,
-          room: `s."RoomID_Onec"::text`,
-          province: `sc.province`,
-          district: `sc.district`,
-          sub_district: `sc.sub_district`,
-        }, params.length + 1);
-
-        if (scopeRes.sql !== '1=1') {
-          query += ` AND (${scopeRes.sql})`;
-          params.push(...scopeRes.params);
-        }
-      }
-
-      if (grade && grade !== 'ALL') {
-        params.push(grade);
-        query += ` AND gl.label = $${params.length}`;
-      }
-      if (room && room !== 'all' && room !== 'ALL') {
-        params.push(parseInt(room, 10));
-        query += ` AND s."RoomID_Onec" = $${params.length}`;
-      }
-      if (schoolId) {
-        params.push(parseInt(schoolId, 10));
-        query += ` AND s."SchoolID_Onec" = $${params.length}`;
-      }
-
-      query += ` ORDER BY s."GradeLevelID_Onec" ASC, s."RoomID_Onec" ASC, s."PersonID_Onec" ASC`;
-
-      const result = await this.db.query(query, params);
-      return { success: true, data: result.rows };
-    } catch (err) {
-      this.logger.error(`getStudents error: ${err.message}`);
-      throw err;
-    }
+  async getStudents(
+    grade?: string,
+    room?: string,
+    schoolId?: string,
+    userScope?: DataScope,
+  ) {
+    return await this.attendanceReadService.getStudents(
+      grade,
+      room,
+      schoolId,
+      userScope,
+    );
   }
 
   async getHistory(date: string, userScope?: DataScope) {
-    try {
-      let query = `
-        SELECT 
-          a.*, 
-          a."SchoolID_Onec" as school_id,
-          (s."FirstName_Onec" || ' ' || s."LastName_Onec") as name,
-          COALESCE(gl.label, 'ไม่ทราบ') as grade,
-          s."RoomID_Onec"::text as room,
-          a."AttendanceStatus" as status
-        FROM attendance a
-        JOIN student_term s ON s."PersonID_Onec" = a."PersonID_Onec"
-        LEFT JOIN grade_levels gl ON s."GradeLevelID_Onec" = gl.id
-        LEFT JOIN schools sc ON s."SchoolID_Onec" = sc.id
-        WHERE a."AttendanceDate" = $1
-      `;
-      const params: any[] = [date];
-
-      if (userScope) {
-        const scopeRes = buildDataScopeQuery(userScope, {
-          school_id: `a."SchoolID_Onec"`,
-          grade: `s."GradeLevelID_Onec"`,
-          room: `s."RoomID_Onec"::text`,
-          province: `sc.province`,
-          district: `sc.district`,
-          sub_district: `sc.sub_district`,
-        }, params.length + 1);
-
-        if (scopeRes.sql !== '1=1') {
-          query += ` AND (${scopeRes.sql})`;
-          params.push(...scopeRes.params);
-        }
-      }
-
-      query += ` ORDER BY s."GradeLevelID_Onec" ASC, s."RoomID_Onec" ASC`;
-
-      const result = await this.db.query(query, params);
-
-      // Map back to frontend expected status strings if needed,
-      // but let's keep them as integers or map here
-      const mapped = result.rows.map((r: any) => ({
-        ...r,
-        status:
-          r.status === 1
-            ? 'P_PRESENT'
-            : r.status === 2
-              ? 'P_ABSENT'
-              : r.status === 3
-                ? 'P_LATE'
-                : 'NONE',
-      }));
-
-      return { success: true, data: mapped };
-    } catch (err) {
-      this.logger.error(`getHistory error: ${err.message}`);
-      throw err;
-    }
+    return await this.attendanceReadService.getHistory(date, userScope);
   }
 
-  async saveAttendance(records: { student_id: string; status: string }[]) {
-    const today = new Date().toISOString().split('T')[0];
-    try {
-      await this.db.transaction(async (client) => {
-        // Only delete existing records for the students in this specific batch for today
-        const studentIds = records.map((r) => r.student_id);
-        if (studentIds.length > 0) {
-          await client.query(
-            `
-            DELETE FROM attendance 
-            WHERE "AttendanceDate" = $1 AND "PersonID_Onec" = ANY($2)
-          `,
-            [today, studentIds],
-          );
-        }
-
-        for (const record of records) {
-          // Fetch student metadata to satisfy the attendance table constraints
-          const studentRes = await client.query(
-            `
-            SELECT "SchoolID_Onec", "GradeLevelID_Onec", "RoomID_Onec", "AcademicYear_Onec", "Semester_Onec"
-            FROM student_term 
-            WHERE "PersonID_Onec" = $1
-          `,
-            [record.student_id],
-          );
-
-          if (studentRes.rows.length === 0) continue;
-          const s = studentRes.rows[0];
-
-          // Map status: P_PRESENT=1, P_ABSENT=2, P_LATE=3
-          let statusCode = 1;
-          if (record.status === 'P_ABSENT') statusCode = 2;
-          else if (record.status === 'P_LATE') statusCode = 3;
-
-          await client.query(
-            `
-            INSERT INTO attendance (
-              "PersonID_Onec", "SchoolID_Onec", "GradeLevelID_Onec", "RoomID_Onec", 
-              "AcademicYear_Onec", "Semester_Onec", "AttendanceDate", "Period", 
-              "AttendanceStatus", "RecordedBy"
-            )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-          `,
-            [
-              record.student_id,
-              s.SchoolID_Onec,
-              s.GradeLevelID_Onec,
-              s.RoomID_Onec,
-              s.AcademicYear_Onec,
-              s.Semester_Onec,
-              today,
-              1, // Default to Period 1 for now
-              statusCode,
-              'Admin',
-            ],
-          );
-        }
-      });
-
-      // Post-transaction: Check if we need to run Immediate Automation
-      const triggerRes = await this.db.query("SELECT setting_value FROM system_settings WHERE setting_key = 'ALERT_TRIGGER_TYPE'");
-      const triggerType = triggerRes.rowCount > 0 ? triggerRes.rows[0].setting_value : 'SCHEDULED';
-
-      let newCases: NewCase[] = [];
-      if (triggerType === 'IMMEDIATE') {
-        this.logger.log('Attendance saved. Trigger Type is IMMEDIATE. Executing absence check...');
-        newCases = await this.automationService.checkConsecutiveAbsences();
-      }
-
-      return { success: true, newCases };
-    } catch (err) {
-      this.logger.error(`saveAttendance error: ${err.message}`);
-      throw err;
-    }
+  async saveAttendance(records: AttendanceSaveRecordInput[]) {
+    return await this.attendanceWriteService.saveAttendance(records);
   }
 
-  async getAttendanceTasks() {
-    try {
-      const result = await this.db.query(`
-        SELECT 
-          t.id as task_id,
-          t.task_type,
-          t.target_grade,
-          t.target_room,
-          t.status as task_status,
-          t.created_at,
-          tl.id as active_link_id,
-          tl.magic_link as active_link,
-          tl.assigned_to_name as link_assigned_to,
-          COALESCE(tl.admin_locked, 0) as active_link_locked,
-          tl.admin_lock_reason as active_link_lock_reason,
-          tl.admin_lock_at as active_link_lock_at
-        FROM tasks t
-        LEFT JOIN task_links tl ON tl.task_id = t.id AND tl.status = 'ACTIVE'
-        ORDER BY t.created_at DESC
-      `);
-      return result.rows;
-    } catch (err) {
-      this.logger.error(`getAttendanceTasks error: ${err.message}`);
-      throw err;
-    }
+  async getAttendanceTasks(userScope?: DataScope) {
+    return await this.attendanceReadService.getAttendanceTasks(userScope);
   }
+
   async getRooms(gradeLabel: string, schoolId?: string) {
-    try {
-      let query = `
-        SELECT DISTINCT s."RoomID_Onec"::text as room
-        FROM student_term s
-        JOIN grade_levels gl ON s."GradeLevelID_Onec" = gl.id
-        WHERE gl.label = $1
-      `;
-      const params: any[] = [gradeLabel];
-
-      if (schoolId) {
-        params.push(parseInt(schoolId, 10));
-        query += ` AND s."SchoolID_Onec" = $${params.length}`;
-      }
-
-      query += ` ORDER BY room ASC`;
-      const result = await this.db.query(query, params);
-      return {
-        success: true,
-        data: result.rows.map((r: { room: string }) => r.room),
-      };
-    } catch (err) {
-      this.logger.error(`getRooms error: ${err.message}`);
-      throw err;
-    }
+    return await this.attendanceLookupService.getRooms(gradeLabel, schoolId);
   }
 }

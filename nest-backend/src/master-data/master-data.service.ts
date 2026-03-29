@@ -1,64 +1,77 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { DatabaseService } from '../database/database.service';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { UpsertMasterDataItemDto } from './dto/master-data.dto';
+import { MasterDataRepository } from './master-data.repository';
+import {
+  getMasterDataValueColumn,
+  isMasterDataTable,
+  type MasterDataTable,
+} from './master-data.types';
 
 @Injectable()
 export class MasterDataService {
   private readonly logger = new Logger(MasterDataService.name);
 
-  constructor(private readonly db: DatabaseService) {}
+  constructor(private readonly masterDataRepository: MasterDataRepository) {}
 
-  // Helpers to prevent SQL injection by whitelisting table names
-  private validateTableName(table: string): string {
-    const allowed = ['risk_factors', 'dropout_reasons', 'assistance_measures', 'related_agencies', 'schools', 'educational_areas'];
-    if (!allowed.includes(table)) {
-      throw new Error('Invalid master data table');
+  private validateTableName(table: string): MasterDataTable {
+    if (!isMasterDataTable(table)) {
+      this.logger.warn(`Rejected invalid master-data table: ${table}`);
+      throw new BadRequestException('Invalid master data table');
     }
+
     return table;
+  }
+
+  private resolveValue(data: UpsertMasterDataItemDto): string {
+    const rawValue =
+      typeof data.label === 'string' && data.label.trim().length > 0
+        ? data.label
+        : data.name;
+
+    if (typeof rawValue !== 'string' || rawValue.trim().length === 0) {
+      throw new BadRequestException('Master data value is required');
+    }
+
+    return rawValue.trim();
   }
 
   async getAll(table: string) {
     const validTable = this.validateTableName(table);
-    const sql = `SELECT * FROM ${validTable} ORDER BY id ASC`;
-    const result = await this.db.query(sql);
-    return result.rows;
+    return await this.masterDataRepository.listRows(validTable);
   }
 
   async getById(table: string, id: number) {
     const validTable = this.validateTableName(table);
-    const sql = `SELECT * FROM ${validTable} WHERE id = $1`;
-    const result = await this.db.query(sql, [id]);
-    return result.rows[0];
+    return await this.masterDataRepository.findRowById(validTable, id);
   }
 
-  async create(table: string, data: any) {
+  async create(table: string, data: UpsertMasterDataItemDto) {
     const validTable = this.validateTableName(table);
-    const labelColumn = ['related_agencies', 'schools', 'educational_areas'].includes(table) ? 'name' : 'label';
-    const sql = `
-      INSERT INTO ${validTable} (${labelColumn})
-      VALUES ($1)
-      RETURNING *;
-    `;
-    const result = await this.db.query(sql, [data.label || data.name]);
-    return result.rows[0];
+    const value = this.resolveValue(data);
+    const valueColumn = getMasterDataValueColumn(validTable);
+
+    return await this.masterDataRepository.createRow(
+      validTable,
+      valueColumn,
+      value,
+    );
   }
 
-  async update(table: string, id: number, data: any) {
+  async update(table: string, id: number, data: UpsertMasterDataItemDto) {
     const validTable = this.validateTableName(table);
-    const labelColumn = ['related_agencies', 'schools', 'educational_areas'].includes(table) ? 'name' : 'label';
-    const sql = `
-      UPDATE ${validTable}
-      SET ${labelColumn} = $1
-      WHERE id = $2
-      RETURNING *;
-    `;
-    const result = await this.db.query(sql, [data.label || data.name, id]);
-    return result.rows[0];
+    const value = this.resolveValue(data);
+    const valueColumn = getMasterDataValueColumn(validTable);
+
+    return await this.masterDataRepository.updateRow(
+      validTable,
+      id,
+      valueColumn,
+      value,
+    );
   }
 
   async remove(table: string, id: number) {
     const validTable = this.validateTableName(table);
-    const sql = `DELETE FROM ${validTable} WHERE id = $1 RETURNING *`;
-    const result = await this.db.query(sql, [id]);
-    return result.rows[0];
+    return await this.masterDataRepository.deleteRow(validTable, id);
   }
 }

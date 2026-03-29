@@ -1,6 +1,20 @@
-import { Controller, Get, Post, Put, Delete, Param, Body, ParseIntPipe } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseIntPipe,
+  Post,
+  Put,
+  UseGuards,
+} from '@nestjs/common';
+import { AuthGuard, PermissionsGuard, RequirePermission } from '../auth';
+import { UpsertMasterDataItemDto } from './dto/master-data.dto';
 import { MasterDataService } from './master-data.service';
 
+@UseGuards(AuthGuard, PermissionsGuard)
+@RequirePermission('settings')
 @Controller('api/master-data')
 export class MasterDataController {
   constructor(private readonly masterDataService: MasterDataService) {}
@@ -11,17 +25,24 @@ export class MasterDataController {
   }
 
   @Get(':table/:id')
-  getById(@Param('table') table: string, @Param('id', ParseIntPipe) id: number) {
+  getById(
+    @Param('table') table: string,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
     return this.masterDataService.getById(table, id);
   }
 
   @Post(':table')
-  create(@Param('table') table: string, @Body() body: any) {
+  create(@Param('table') table: string, @Body() body: UpsertMasterDataItemDto) {
     return this.masterDataService.create(table, body);
   }
 
   @Put(':table/:id')
-  update(@Param('table') table: string, @Param('id', ParseIntPipe) id: number, @Body() body: any) {
+  update(
+    @Param('table') table: string,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: UpsertMasterDataItemDto,
+  ) {
     return this.masterDataService.update(table, id, body);
   }
 

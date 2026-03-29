@@ -1,28 +1,111 @@
 import { Injectable, BadRequestException, Logger } from '@nestjs/common';
-import { DatabaseService } from '../database/database.service';
 import * as xlsx from 'xlsx';
-
-export interface ManualSchool {
-  id: number;
-  name: string;
-  province?: string;
-  district?: string;
-  sub_district?: string;
-}
+import { ImportsRepository } from './imports.repository';
+import {
+  isImportTarget,
+  type ImportTarget,
+  type ManualSchool,
+  type SheetRow,
+} from './imports.types';
 
 @Injectable()
 export class ImportsService {
   private readonly logger = new Logger(ImportsService.name);
 
-  constructor(private readonly databaseService: DatabaseService) {}
+  constructor(private readonly importsRepository: ImportsRepository) {}
+
+  private normalizeScalar(value: unknown): string {
+    if (typeof value === 'string' || typeof value === 'number') {
+      return String(value).trim();
+    }
+
+    return '';
+  }
+
+  private readWorksheetRows(file: Express.Multer.File): SheetRow[] {
+    const workbook = xlsx.read(file.buffer, { type: 'buffer' });
+    const sheetName = workbook.SheetNames[0];
+    if (!sheetName) {
+      return [];
+    }
+
+    return xlsx.utils.sheet_to_json<SheetRow>(workbook.Sheets[sheetName]);
+  }
+
+  private parseMapping(mappingStr: string): Record<string, string> {
+    try {
+      const parsed = JSON.parse(mappingStr) as Record<string, unknown>;
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        throw new Error('invalid');
+      }
+
+      return Object.fromEntries(
+        Object.entries(parsed).filter(
+          (entry): entry is [string, string] =>
+            typeof entry[0] === 'string' && typeof entry[1] === 'string',
+        ),
+      );
+    } catch {
+      throw new BadRequestException('Invalid JSON in mapping');
+    }
+  }
+
+  private parseManualSchools(schoolsStr?: string): ManualSchool[] {
+    if (!schoolsStr) {
+      return [];
+    }
+
+    try {
+      const parsed = JSON.parse(schoolsStr) as unknown;
+      if (!Array.isArray(parsed)) {
+        throw new Error('invalid');
+      }
+
+      return parsed.map((item) => {
+        if (!item || typeof item !== 'object') {
+          throw new Error('invalid');
+        }
+
+        const source = item as Record<string, unknown>;
+        const id = Number(source.id);
+        const name = typeof source.name === 'string' ? source.name.trim() : '';
+
+        if (!Number.isInteger(id) || name.length === 0) {
+          throw new Error('invalid');
+        }
+
+        return {
+          id,
+          name,
+          province:
+            typeof source.province === 'string' ? source.province : undefined,
+          district:
+            typeof source.district === 'string' ? source.district : undefined,
+          sub_district:
+            typeof source.sub_district === 'string'
+              ? source.sub_district
+              : undefined,
+        };
+      });
+    } catch {
+      throw new BadRequestException('Invalid JSON in schools');
+    }
+  }
+
+  private parseTarget(target: string): ImportTarget {
+    if (!isImportTarget(target)) {
+      throw new BadRequestException('Invalid target database');
+    }
+
+    return target;
+  }
 
   async checkMissingSchools(
     file: Express.Multer.File,
-    mapping: Record<string, string>,
+    mappingStr: string,
   ): Promise<{ missingSchools: Array<{ id: number }> }> {
-    const workbook = xlsx.read(file.buffer, { type: 'buffer' });
-    const sheetName = workbook.SheetNames[0];
-    const data: any[] = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
+    const mapping = this.parseMapping(mappingStr);
+    const data = this.readWorksheetRows(file);
 
     const schoolIdCsvHeader = mapping['SchoolID_Onec'];
     if (!schoolIdCsvHeader) {
@@ -30,18 +113,27 @@ export class ImportsService {
     }
 
     const uniqueSchoolIds = [
-      ...new Set(data.map((row) => row[schoolIdCsvHeader]).filter(Boolean)),
+      ...new Set(
+        data
+          .map((row) => row[schoolIdCsvHeader])
+          .filter(
+            (value): value is string | number =>
+              value !== null &&
+              value !== undefined &&
+              this.normalizeScalar(value).length > 0,
+          )
+          .map((value) => Number(value))
+          .filter((value) => Number.isInteger(value)),
+      ),
     ];
     if (uniqueSchoolIds.length === 0) {
       return { missingSchools: [] };
     }
 
-    const result = await this.databaseService.query(
-      `SELECT id FROM schools WHERE id = ANY($1::int[])`,
-      [uniqueSchoolIds.map(Number)],
+    const existingIds = new Set(
+      await this.importsRepository.findExistingSchoolIds(uniqueSchoolIds),
     );
-    const existingIds = new Set(result.rows.map((r: { id: number }) => Number(r.id)));
-    const missingIds = uniqueSchoolIds.filter((id) => !existingIds.has(Number(id)));
+    const missingIds = uniqueSchoolIds.filter((id) => !existingIds.has(id));
 
     return { missingSchools: missingIds.map((id) => ({ id: Number(id) })) };
   }
@@ -49,40 +141,29 @@ export class ImportsService {
   async processImport(
     file: Express.Multer.File,
     target: string,
-    mapping: Record<string, string>,
-    manualSchools: ManualSchool[] = [],
+    mappingStr: string,
+    schoolsStr?: string,
   ) {
-    if (target !== 'student_term' && target !== 'student_dropouts') {
-      throw new BadRequestException('Invalid target database');
-    }
+    const validTarget = this.parseTarget(target);
+    const mapping = this.parseMapping(mappingStr);
+    const manualSchools = this.parseManualSchools(schoolsStr);
 
-    this.logger.log(`Parsing file: ${file.originalname} for target: ${target}`);
-
-    const workbook = xlsx.read(file.buffer, { type: 'buffer' });
-    const sheetName = workbook.SheetNames[0];
-    const data: any[] = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
+    this.logger.log(
+      `Parsing file: ${file.originalname} for target: ${validTarget}`,
+    );
+    const data = this.readWorksheetRows(file);
 
     if (!data || data.length === 0) {
       throw new BadRequestException('The uploaded file is empty or unreadable');
     }
 
-    this.logger.log(`Found ${data.length} rows. Mapping to ${target}...`);
+    this.logger.log(`Found ${data.length} rows. Mapping to ${validTarget}...`);
 
     const validDbColumns = Object.keys(mapping);
 
-    return await this.databaseService.transaction(async (client) => {
-      // Insert manual schools provided by user first
+    return await this.importsRepository.withTransaction(async (executor) => {
       for (const school of manualSchools) {
-        await client.query(
-          `INSERT INTO schools (id, name, province, district, sub_district)
-           VALUES ($1, $2, $3, $4, $5)
-           ON CONFLICT (id) DO UPDATE SET
-             name = EXCLUDED.name,
-             province = EXCLUDED.province,
-             district = EXCLUDED.district,
-             sub_district = EXCLUDED.sub_district`,
-          [school.id, school.name, school.province ?? null, school.district ?? null, school.sub_district ?? null],
-        );
+        await this.importsRepository.upsertManualSchool(school, executor);
       }
 
       let inserted = 0;
@@ -94,7 +175,7 @@ export class ImportsService {
       }
 
       for (const row of data) {
-        const dbRow: Record<string, any> = {};
+        const dbRow: Record<string, unknown> = {};
 
         for (const dbCol of validDbColumns) {
           const csvHeader = mapping[dbCol];
@@ -105,26 +186,23 @@ export class ImportsService {
           }
         }
 
-        if (!dbRow['PersonID_Onec']) {
+        const personId = dbRow['PersonID_Onec'];
+        if (this.normalizeScalar(personId).length === 0) {
           skipped++;
           continue;
         }
 
-        const columns = Object.keys(dbRow);
-        const values = Object.values(dbRow);
-
-        const placeholders = columns.map((_, i) => `$${i + 1}`).join(', ');
-        const queryStr = `
-          INSERT INTO ${target} (${columns.map((c) => `"${c}"`).join(', ')})
-          VALUES (${placeholders})
-          ON CONFLICT ("PersonID_Onec") DO NOTHING
-        `;
-
-        await client.query(queryStr, values);
+        await this.importsRepository.insertImportRow(
+          validTarget,
+          dbRow,
+          executor,
+        );
         inserted++;
       }
 
-      this.logger.log(`Successfully completed import of ${inserted} rows into ${target} (skipped: ${skipped})`);
+      this.logger.log(
+        `Successfully completed import of ${inserted} rows into ${validTarget} (skipped: ${skipped})`,
+      );
       return {
         success: true,
         rowsProcessed: data.length,

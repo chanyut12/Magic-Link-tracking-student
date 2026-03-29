@@ -1,16 +1,20 @@
+import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
 import {
-  Controller,
-  Get,
-  Post,
-  Body,
-  Query,
-  HttpException,
-  HttpStatus,
-  Headers,
-} from '@nestjs/common';
+  AuthGuard,
+  CurrentUser,
+  normalizeDataScope,
+  type AuthenticatedRequestUser,
+} from '../auth';
 import { AttendanceService } from './attendance.service';
-import { parseScopeHeader } from '../common/utils/authorization';
+import {
+  GetHistoryQueryDto,
+  GetRoomsQueryDto,
+  GetSchoolsQueryDto,
+  GetStudentsQueryDto,
+  SaveAttendanceDto,
+} from './dto/attendance.dto';
 
+@UseGuards(AuthGuard)
 @Controller('api/attendance')
 export class AttendanceController {
   constructor(private readonly attendanceService: AttendanceService) {}
@@ -21,15 +25,11 @@ export class AttendanceController {
   }
 
   @Get('schools')
-  async getSchools(
-    @Query('province') province?: string,
-    @Query('district') district?: string,
-    @Query('subDistrict') subDistrict?: string,
-  ) {
+  async getSchools(@Query() query: GetSchoolsQueryDto) {
     return await this.attendanceService.getSchools(
-      province,
-      district,
-      subDistrict,
+      query.province,
+      query.district,
+      query.subDistrict,
     );
   }
 
@@ -40,50 +40,42 @@ export class AttendanceController {
 
   @Get('students')
   async getStudents(
-    @Query('grade') grade?: string,
-    @Query('room') room?: string,
-    @Query('schoolId') schoolId?: string,
-    @Headers('x-user-scope') scopeHeader?: string,
+    @Query() query: GetStudentsQueryDto,
+    @CurrentUser() actor?: AuthenticatedRequestUser,
   ) {
-    const userScope = parseScopeHeader(scopeHeader);
-    return await this.attendanceService.getStudents(grade, room, schoolId, userScope);
+    return await this.attendanceService.getStudents(
+      query.grade,
+      query.room,
+      query.schoolId,
+      normalizeDataScope(actor?.data_scope),
+    );
   }
 
   @Get('history')
   async getHistory(
-    @Query('date') date: string,
-    @Headers('x-user-scope') scopeHeader?: string,
+    @Query() query: GetHistoryQueryDto,
+    @CurrentUser() actor?: AuthenticatedRequestUser,
   ) {
-    if (!date) {
-      throw new HttpException('Date is required', HttpStatus.BAD_REQUEST);
-    }
-    const userScope = parseScopeHeader(scopeHeader);
-    return await this.attendanceService.getHistory(date, userScope);
+    return await this.attendanceService.getHistory(
+      query.date,
+      normalizeDataScope(actor?.data_scope),
+    );
   }
 
   @Post()
-  async saveAttendance(
-    @Body() body: { records: { student_id: string; status: string }[] },
-  ) {
-    if (!body.records || !Array.isArray(body.records)) {
-      throw new HttpException('Invalid records', HttpStatus.BAD_REQUEST);
-    }
+  async saveAttendance(@Body() body: SaveAttendanceDto) {
     return await this.attendanceService.saveAttendance(body.records);
   }
 
   @Get('tasks')
-  async getAttendanceTasks() {
-    return await this.attendanceService.getAttendanceTasks();
+  async getAttendanceTasks(@CurrentUser() actor?: AuthenticatedRequestUser) {
+    return await this.attendanceService.getAttendanceTasks(
+      normalizeDataScope(actor?.data_scope),
+    );
   }
 
   @Get('rooms')
-  async getRooms(
-    @Query('grade') grade: string,
-    @Query('schoolId') schoolId?: string,
-  ) {
-    if (!grade) {
-      throw new HttpException('Grade is required', HttpStatus.BAD_REQUEST);
-    }
-    return await this.attendanceService.getRooms(grade, schoolId);
+  async getRooms(@Query() query: GetRoomsQueryDto) {
+    return await this.attendanceService.getRooms(query.grade, query.schoolId);
   }
 }

@@ -1,13 +1,13 @@
 import { Module } from '@nestjs/common';
 import { SettingsService } from './settings.service';
 import { SettingsController } from './settings.controller';
-import { DatabaseModule } from '../database/database.module';
 import { AutomationModule } from '../automation/automation.module';
+import { SettingsRepository } from './settings.repository';
 
 @Module({
-  imports: [DatabaseModule, AutomationModule],
+  imports: [AutomationModule],
   controllers: [SettingsController],
-  providers: [SettingsService],
+  providers: [SettingsService, SettingsRepository],
   exports: [SettingsService],
 })
 export class SettingsModule {}
