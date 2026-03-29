@@ -1,3 +1,8 @@
+import type {
+  RoleScopeMode,
+  RoleScopePreset,
+} from '../types/role';
+
 export interface DataScope {
   provinces?: string[];
   districts?: string[];
@@ -16,40 +21,12 @@ export interface MenuItem {
   children?: MenuItem[];
 }
 
-export type RoleScopeMode =
-  | 'flexible'
-  | 'global'
-  | 'province'
-  | 'district'
-  | 'sub_district'
-  | 'school';
-
-export interface RoleDefinition {
-  id: number;
-  name: string;
-  label: string;
-  rank: number;
-  default_permissions: string[];
-  scope_mode: RoleScopeMode;
-  is_system: boolean;
-  user_count?: number;
-  login_link_count?: number;
-}
-
-export type ScopeFormField =
-  | 'province'
-  | 'district'
-  | 'sub_district'
-  | 'school_id'
-  | 'grade_level'
-  | 'room';
-
-export interface RoleScopePreset {
-  mode: RoleScopeMode;
-  allowedFields: ScopeFormField[];
-  requiredFields: ScopeFormField[];
-  hint: string;
-}
+export type {
+  RoleDefinition,
+  RoleScopeMode,
+  RoleScopePreset,
+  ScopeFormField,
+} from '../types/role';
 
 export type PermissionDeltaState =
   | 'default'
