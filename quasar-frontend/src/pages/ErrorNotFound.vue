@@ -1,24 +1,16 @@
 <template>
-  <div class="fullscreen bg-blue text-white text-center q-pa-md flex flex-center">
-    <div>
-      <div style="font-size: 30vh">404</div>
-
-      <div class="text-h2" style="opacity: 0.4">ไม่พบหน้านี้</div>
-      <div class="text-body1 q-mt-md" style="opacity: 0.6">หน้าที่คุณค้นหาอาจถูกลบหรือย้ายไปแล้ว</div>
-
-      <q-btn
-        class="q-mt-xl"
-        color="white"
-        text-color="blue"
-        unelevated
-        to="/"
-        label="กลับหน้าหลัก"
-        no-caps
-      />
-    </div>
-  </div>
+  <StatusPageView
+    code="404"
+    tone="neutral"
+    icon="search_off"
+    title="ไม่พบหน้านี้"
+    message="หน้าที่คุณค้นหาอาจถูกลบ ย้าย หรือไม่พร้อมใช้งานในเส้นทางนี้แล้ว"
+    note="ตรวจสอบลิงก์อีกครั้ง หรือกลับไปเริ่มต้นจากหน้าหลักของระบบ"
+    primary-label="กลับหน้าหลัก"
+    primary-to="/"
+  />
 </template>
 
 <script setup lang="ts">
-//
+import StatusPageView from '../components/status/StatusPageView.vue';
 </script>
